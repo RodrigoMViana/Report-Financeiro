@@ -21,6 +21,12 @@
   .month-picker { display:flex; flex-direction:column; gap:6px; }
   .month-picker label { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#9fb8dd; font-weight:600; }
   .month-picker select { font-size:15px; font-weight:700; padding:10px 16px; border-radius:8px; border:none; background:#fff; color:var(--navy); cursor:pointer; min-width:180px; }
+  .gestor-picker { display:flex; flex-direction:column; gap:6px; }
+  .gestor-picker label { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#9fb8dd; font-weight:600; }
+  .gestor-toggle { display:flex; background:rgba(255,255,255,0.12); border-radius:8px; padding:3px; gap:3px; }
+  .gestor-btn { font-size:13px; font-weight:700; padding:8px 16px; border-radius:6px; border:none; background:transparent; color:#c7d6ec; cursor:pointer; white-space:nowrap; }
+  .gestor-btn.active { background:#fff; color:var(--navy); }
+  .gestor-btn:not(.active):hover { background:rgba(255,255,255,0.1); }
   .main-tabs { display:flex; gap:4px; margin:0 0 24px; border-bottom:2px solid var(--border); }
   .tab-btn { padding:12px 22px; background:none; border:none; font-size:14px; font-weight:600; color:var(--slate); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; font-family:inherit; }
   .tab-btn:hover { color:var(--navy); }
@@ -136,9 +142,16 @@
       <h1>Comparativo PR vs Pre Cierre</h1>
       <p id="header-sub">18 projetos analisados &middot; Pre Cierre base: Junho/2026 (UPA)</p>
     </div>
+    <div class="gestor-picker">
+      <label>Gestor</label>
+      <div class="gestor-toggle">
+        <button type="button" class="gestor-btn active" data-gestor="Rodrigo" onclick="setGestor('Rodrigo')">Rodrigo</button>
+        <button type="button" class="gestor-btn" data-gestor="Dinart" onclick="setGestor('Dinart')">Dinart</button>
+      </div>
+    </div>
     <div class="month-picker">
       <label for="month-select">Mes de referencia</label>
-      <select id="month-select" onchange="renderMonth(this.value)">
+      <select id="month-select" onchange="renderAllTabs(this.value)">
         <option value="JAN" >Janeiro/2026</option>
 <option value="FEV" >Fevereiro/2026</option>
 <option value="MAR" >Março/2026</option>
@@ -244,7 +257,7 @@
   </div>
 
 
-<details class="project-card" data-code="22AP09">
+<details class="project-card" data-gestor="Rodrigo" data-code="22AP09">
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP09</span>
@@ -335,7 +348,7 @@
 </details>
 
 
-<details class="project-card" data-code="25AP11">
+<details class="project-card" data-gestor="Rodrigo" data-code="25AP11">
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP11</span>
@@ -426,7 +439,7 @@
 </details>
 
 
-<details class="project-card" data-code="23AP28">
+<details class="project-card" data-gestor="Rodrigo" data-code="23AP28">
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP28</span>
@@ -517,7 +530,7 @@
 </details>
 
 
-<details class="project-card" data-code="23AP05">
+<details class="project-card" data-gestor="Rodrigo" data-code="23AP05">
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP05</span>
@@ -608,7 +621,7 @@
 </details>
 
 
-<details class="project-card" data-code="26AP08">
+<details class="project-card" data-gestor="Rodrigo" data-code="26AP08">
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP08</span>
@@ -699,7 +712,7 @@
 </details>
 
 
-<details class="project-card" data-code="26AP01">
+<details class="project-card" data-gestor="Rodrigo" data-code="26AP01">
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP01</span>
@@ -790,7 +803,7 @@
 </details>
 
 
-<details class="project-card" data-code="26AP02">
+<details class="project-card" data-gestor="Rodrigo" data-code="26AP02">
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP02</span>
@@ -881,7 +894,7 @@
 </details>
 
 
-<details class="project-card" data-code="26AP03">
+<details class="project-card" data-gestor="Rodrigo" data-code="26AP03">
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP03</span>
@@ -972,7 +985,7 @@
 </details>
 
 
-<details class="project-card" data-code="26AP04">
+<details class="project-card" data-gestor="Rodrigo" data-code="26AP04">
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP04</span>
@@ -1063,7 +1076,7 @@
 </details>
 
 
-<details class="project-card" data-code="24AP17">
+<details class="project-card" data-gestor="Rodrigo" data-code="24AP17">
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP17</span>
@@ -1154,7 +1167,7 @@
 </details>
 
 
-<details class="project-card" data-code="23AP38">
+<details class="project-card" data-gestor="Rodrigo" data-code="23AP38">
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP38</span>
@@ -1245,7 +1258,7 @@
 </details>
 
 
-<details class="project-card" data-code="24AP07">
+<details class="project-card" data-gestor="Rodrigo" data-code="24AP07">
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP07</span>
@@ -1336,7 +1349,7 @@
 </details>
 
 
-<details class="project-card" data-code="24AP36">
+<details class="project-card" data-gestor="Rodrigo" data-code="24AP36">
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP36</span>
@@ -1427,7 +1440,7 @@
 </details>
 
 
-<details class="project-card" data-code="24AP04">
+<details class="project-card" data-gestor="Rodrigo" data-code="24AP04">
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP04</span>
@@ -1518,7 +1531,7 @@
 </details>
 
 
-<details class="project-card" data-code="25AP06">
+<details class="project-card" data-gestor="Rodrigo" data-code="25AP06">
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP06</span>
@@ -1609,7 +1622,7 @@
 </details>
 
 
-<details class="project-card" data-code="23AP03">
+<details class="project-card" data-gestor="Rodrigo" data-code="23AP03">
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP03</span>
@@ -1700,7 +1713,7 @@
 </details>
 
 
-<details class="project-card" data-code="24AP05">
+<details class="project-card" data-gestor="Rodrigo" data-code="24AP05">
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP05</span>
@@ -1791,7 +1804,7 @@
 </details>
 
 
-<details class="project-card" data-code="22AP15">
+<details class="project-card" data-gestor="Rodrigo" data-code="22AP15">
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP15</span>
@@ -1944,6 +1957,25 @@ const DATA = [{"code": "22AP09", "name": "(RA) Sustentação das soluções admi
 const FICHA = {"22AP09":{"JAN":{"fat":357073.5,"cob":0},"FEV":{"fat":357073.5,"cob":0},"MAR":{"fat":357073.5,"cob":357073.5},"ABR":{"fat":357073.5,"cob":0},"MAI":{"fat":363911.46,"cob":714147.0},"JUN":{"fat":369140.5,"cob":0},"JUL":{"fat":369140.5,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"22AP15":{"JAN":{"fat":1072425.8,"cob":0},"FEV":{"fat":510312.02,"cob":1072425.8},"MAR":{"fat":518541.14,"cob":510312.02},"ABR":{"fat":779756.04,"cob":518541.14},"MAI":{"fat":566351.21,"cob":1346107.25},"JUN":{"fat":631488.51,"cob":0},"JUL":{"fat":0,"cob":631488.51},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"23AP03":{"JAN":{"fat":88515.83,"cob":0},"FEV":{"fat":56276.61,"cob":88515.83},"MAR":{"fat":57259.54,"cob":56276.61},"ABR":{"fat":57874.64,"cob":57259.54},"MAI":{"fat":68520.57,"cob":126395.21},"JUN":{"fat":68552.0,"cob":0},"JUL":{"fat":0,"cob":68552.0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"23AP05":{"JAN":{"fat":1083057.78,"cob":1083057.78},"FEV":{"fat":994039.63,"cob":0},"MAR":{"fat":1074110.11,"cob":994039.63},"ABR":{"fat":1075351.5,"cob":1074110.11},"MAI":{"fat":1091463.47,"cob":1075351.5},"JUN":{"fat":0,"cob":1091463.47},"JUL":{"fat":0,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"23AP28":{"JAN":{"fat":0,"cob":0},"FEV":{"fat":0,"cob":0},"MAR":{"fat":0,"cob":0},"ABR":{"fat":0,"cob":0},"MAI":{"fat":0,"cob":0},"JUN":{"fat":0,"cob":0},"JUL":{"fat":0,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"23AP38":{"JAN":{"fat":131516.67,"cob":717567.75},"FEV":{"fat":0,"cob":0},"MAR":{"fat":66630.85,"cob":131516.67},"ABR":{"fat":262588.37,"cob":66630.85},"MAI":{"fat":75923.07,"cob":262588.37},"JUN":{"fat":114047.0,"cob":9180.99},"JUL":{"fat":0,"cob":66742.08},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"24AP04":{"JAN":{"fat":149368.32,"cob":158976.0},"FEV":{"fat":276406.56,"cob":0},"MAR":{"fat":1092963.97,"cob":0},"ABR":{"fat":298702.08,"cob":276406.56},"MAI":{"fat":272678.4,"cob":562909.82},"JUN":{"fat":282558.4,"cob":549504.0},"JUL":{"fat":0,"cob":272678.4},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"24AP05":{"JAN":{"fat":261377.28,"cob":0},"FEV":{"fat":261377.28,"cob":0},"MAR":{"fat":267973.92,"cob":0},"ABR":{"fat":265524.48,"cob":261377.28},"MAI":{"fat":240537.6,"cob":533498.4},"JUN":{"fat":210656.22,"cob":0},"JUL":{"fat":0,"cob":240537.6},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"24AP07":{"JAN":{"fat":0,"cob":0},"FEV":{"fat":438646.0,"cob":0},"MAR":{"fat":479684.0,"cob":0},"ABR":{"fat":0,"cob":0},"MAI":{"fat":126215.03,"cob":438646.0},"JUN":{"fat":0,"cob":0},"JUL":{"fat":0,"cob":479684.0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"24AP17":{"JAN":{"fat":278777.44,"cob":278777.44},"FEV":{"fat":290606.56,"cob":278777.44},"MAR":{"fat":251398.24,"cob":290606.56},"ABR":{"fat":306822.88,"cob":251398.24},"MAI":{"fat":273816.16,"cob":306822.88},"JUN":{"fat":259764.16,"cob":273816.16},"JUL":{"fat":317308.0,"cob":259764.16},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"24AP36":{"JAN":{"fat":17599.44,"cob":0},"FEV":{"fat":83361.33,"cob":0},"MAR":{"fat":50016.46,"cob":100960.77},"ABR":{"fat":85928.94,"cob":0},"MAI":{"fat":0,"cob":22642.16},"JUN":{"fat":0,"cob":0},"JUL":{"fat":0,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"25AP06":{"JAN":{"fat":113912.4,"cob":49519.26},"FEV":{"fat":366271.55,"cob":0},"MAR":{"fat":223532.15,"cob":0},"ABR":{"fat":230197.2,"cob":537744.6},"MAI":{"fat":99503.1,"cob":302458.35},"JUN":{"fat":300864.9,"cob":0},"JUL":{"fat":339642.1,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"25AP11":{"JAN":{"fat":562716.0,"cob":0},"FEV":{"fat":124070.0,"cob":0},"MAR":{"fat":83032.0,"cob":0},"ABR":{"fat":562716.0,"cob":0},"MAI":{"fat":598000.0,"cob":124070.0},"JUN":{"fat":469214.7,"cob":0},"JUL":{"fat":459314.7,"cob":83032.0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"26AP01":{"JAN":{"fat":0,"cob":0},"FEV":{"fat":0,"cob":0},"MAR":{"fat":0,"cob":0},"ABR":{"fat":0,"cob":0},"MAI":{"fat":0,"cob":0},"JUN":{"fat":0,"cob":0},"JUL":{"fat":0,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"26AP02":{"JAN":{"fat":0,"cob":0},"FEV":{"fat":0,"cob":0},"MAR":{"fat":41576.16,"cob":0},"ABR":{"fat":0,"cob":0},"MAI":{"fat":0,"cob":41576.16},"JUN":{"fat":64424.32,"cob":0},"JUL":{"fat":302232.46,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"26AP03":{"JAN":{"fat":0,"cob":0},"FEV":{"fat":0,"cob":0},"MAR":{"fat":71615.87,"cob":0},"ABR":{"fat":156715.9,"cob":0},"MAI":{"fat":105476.1,"cob":71615.87},"JUN":{"fat":122668.4,"cob":0},"JUL":{"fat":72282.58,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"26AP04":{"JAN":{"fat":0,"cob":0},"FEV":{"fat":0,"cob":0},"MAR":{"fat":0,"cob":0},"ABR":{"fat":0,"cob":0},"MAI":{"fat":0,"cob":0},"JUN":{"fat":0,"cob":0},"JUL":{"fat":0,"cob":0},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}},"26AP08":{"JAN":{"fat":0,"cob":0},"FEV":{"fat":0,"cob":0},"MAR":{"fat":0,"cob":0},"ABR":{"fat":0,"cob":0},"MAI":{"fat":0,"cob":0},"JUN":{"fat":1198553.97,"cob":0},"JUL":{"fat":0,"cob":1198553.97},"AGO":{"fat":0,"cob":0},"SET":{"fat":0,"cob":0},"OUT":{"fat":0,"cob":0},"NOV":{"fat":0,"cob":0},"DEZ":{"fat":0,"cob":0}}};
 const MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
+DATA.forEach(function(p){ if (!p.gestor) p.gestor = 'Rodrigo'; });
+
+var CURRENT_GESTOR = (function(){
+  try { return localStorage.getItem('pr_current_gestor') || 'Rodrigo'; } catch(e) { return 'Rodrigo'; }
+})();
+
+function currentProjects() {
+  return DATA.filter(function(p){ return (p.gestor || 'Rodrigo') === CURRENT_GESTOR; });
+}
+
+function setGestor(g) {
+  CURRENT_GESTOR = g;
+  try { localStorage.setItem('pr_current_gestor', g); } catch(e) {}
+  document.querySelectorAll('.gestor-btn').forEach(function(b){
+    b.classList.toggle('active', b.getAttribute('data-gestor') === g);
+  });
+  renderAllTabs(document.getElementById('month-select').value);
+}
+
 function brl(v) {
   if (v === null || v === undefined) return "-";
   const neg = v < 0; v = Math.abs(v);
@@ -1989,9 +2021,10 @@ function buildMonthRows(m) {
 }
 
 function renderMonth(mkey) {
+  const projs = currentProjects();
   let tot = {ing_pr:0, ing_fc:0, ing_poa:0, mb_pr:0, mb_fc:0, dpf_up:0, dpf_down:0, dpf_flat:0};
   let ing_ano_pr=0, ing_ano_fc=0;
-  DATA.forEach(p => {
+  projs.forEach(p => {
     const m = p.months[mkey];
     tot.ing_pr += m.ingreso.pr; tot.ing_fc += m.ingreso.fc; tot.ing_poa += m.ingreso.poa;
     tot.mb_pr += m.margem.pr; tot.mb_fc += m.margem.fc;
@@ -2023,7 +2056,7 @@ function renderMonth(mkey) {
   document.getElementById('kpi-dpf').textContent = tot.dpf_up + ' subindo';
   document.getElementById('kpi-dpf-sub').textContent = tot.dpf_down + ' caindo · ' + tot.dpf_flat + ' estaveis';
 
-  const sorted = [...DATA].sort((a,b) => {
+  const sorted = [...projs].sort((a,b) => {
     const da = Math.abs(a.months[mkey].ingreso.pr - a.months[mkey].ingreso.fc);
     const db = Math.abs(b.months[mkey].ingreso.pr - b.months[mkey].ingreso.fc);
     return db - da;
@@ -2058,7 +2091,7 @@ function renderMonth(mkey) {
     document.getElementById('month-table-'+p.code).innerHTML = buildMonthRows(m);
   });
 
-  document.getElementById('header-sub').textContent = DATA.length + ' projetos analisados · mes de referencia: ' + DATA[0].months[mkey].nome + '/2026';
+  document.getElementById('header-sub').textContent = projs.length + ' projetos analisados (' + CURRENT_GESTOR + ') · mes de referencia: ' + DATA[0].months[mkey].nome + '/2026';
   loadNotesForMonth(mkey);
 }
 
@@ -2251,8 +2284,9 @@ function saveEmailConfig() {
 }
 
 function buildSummaryText(mkey) {
+  const projs = currentProjects();
   let tot = {ing_pr:0, ing_fc:0, mb_pr:0, mb_fc:0, dpf_up:0, dpf_down:0, dpf_flat:0};
-  DATA.forEach(p => {
+  projs.forEach(p => {
     const m = p.months[mkey];
     tot.ing_pr += m.ingreso.pr; tot.ing_fc += m.ingreso.fc;
     tot.mb_pr += m.margem.pr; tot.mb_fc += m.margem.fc;
@@ -2264,7 +2298,7 @@ function buildSummaryText(mkey) {
   const mbp_fc = tot.ing_fc ? tot.mb_fc/tot.ing_fc*100 : 0;
   const mnome = DATA[0].months[mkey].nome;
 
-  const sorted = [...DATA].sort((a,b) => {
+  const sorted = [...projs].sort((a,b) => {
     const da = Math.abs(a.months[mkey].ingreso.pr - a.months[mkey].ingreso.fc);
     const db = Math.abs(b.months[mkey].ingreso.pr - b.months[mkey].ingreso.fc);
     return db - da;
@@ -2293,8 +2327,9 @@ function classifyColor(v) {
 }
 
 function buildSummaryHTML(mkey) {
+  const projs = currentProjects();
   let tot = {ing_pr:0, ing_fc:0, mb_pr:0, mb_fc:0, dpf_up:0, dpf_down:0, dpf_flat:0};
-  DATA.forEach(p => {
+  projs.forEach(p => {
     const m = p.months[mkey];
     tot.ing_pr += m.ingreso.pr; tot.ing_fc += m.ingreso.fc;
     tot.mb_pr += m.margem.pr; tot.mb_fc += m.margem.fc;
@@ -2308,7 +2343,7 @@ function buildSummaryHTML(mkey) {
   const mbDeltaPP = mbp_pr - mbp_fc;
   const mnome = DATA[0].months[mkey].nome;
 
-  const sorted = [...DATA].sort((a,b) => {
+  const sorted = [...projs].sort((a,b) => {
     const da = Math.abs(a.months[mkey].ingreso.pr - a.months[mkey].ingreso.fc);
     const db = Math.abs(b.months[mkey].ingreso.pr - b.months[mkey].ingreso.fc);
     return db - da;
@@ -2339,7 +2374,7 @@ function buildSummaryHTML(mkey) {
   const ING_DIFF_THRESHOLD = 100000; // R$
   const MARGEM_DIFF_THRESHOLD = 2; // pontos percentuais
 
-  const flaggedProjects = DATA.filter(p => {
+  const flaggedProjects = projs.filter(p => {
     const m = p.months[mkey];
     const ingDiffAbs = Math.abs(m.ingreso.pr - m.ingreso.fc);
     const mbDiffAbs = Math.abs(m.margem_pct.diff_fc_pp);
@@ -2432,7 +2467,7 @@ function buildSummaryHTML(mkey) {
           <td style="background:${navy};padding:28px 32px;">
             <div style="color:#9fb8dd;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;font-weight:bold;">Revisao de Projetos &middot; AAPP Sanidad</div>
             <div style="color:#ffffff;font-size:22px;font-weight:bold;margin-top:8px;">Comparativo PR vs Pre Cierre</div>
-            <div style="color:#c7d6ec;font-size:13px;margin-top:4px;">Mes de referencia: ${mnome}/2026 &middot; ${DATA.length} projetos</div>
+            <div style="color:#c7d6ec;font-size:13px;margin-top:4px;">Mes de referencia: ${mnome}/2026 &middot; ${projs.length} projetos (${CURRENT_GESTOR})</div>
           </td>
         </tr>
         <tr>
@@ -2530,10 +2565,12 @@ function filterProjects() {
   var cards = document.querySelectorAll('.project-card');
   var visible = 0;
   cards.forEach(function(card) {
+    var gestorMatch = (card.getAttribute('data-gestor') || 'Rodrigo') === CURRENT_GESTOR;
     var code = normalizeText(card.getAttribute('data-code'));
     var nameEl = card.querySelector('.proj-name');
     var name = normalizeText(nameEl ? nameEl.textContent : '');
-    var match = !q || code.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+    var textMatch = !q || code.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+    var match = gestorMatch && textMatch;
     card.style.display = match ? '' : 'none';
     if (match) visible++;
   });
@@ -2565,7 +2602,7 @@ function renderProgressTab(kind, mkey) {
   var fichaField = kind === 'faturamento' ? 'fat' : 'cob';
 
   var totalMeta = 0, totalReal = 0;
-  var rows = DATA.map(function(p) {
+  var rows = currentProjects().map(function(p) {
     var meta = p.months[mkey][metaField].pr;
     var fichaMonth = (FICHA[p.code] && FICHA[p.code][mkey]) ? FICHA[p.code][mkey] : null;
     var real = fichaMonth ? fichaMonth[fichaField] : 0;
@@ -2621,6 +2658,10 @@ function renderProgressTab(kind, mkey) {
   }
 
   document.getElementById(prefix + '-count').textContent = rows.length;
+  if (rows.length === 0) {
+    document.getElementById(prefix + '-projects-list').innerHTML = '<div class="no-results" style="display:block;">Nenhum projeto para ' + CURRENT_GESTOR + ' neste mes.</div>';
+    return;
+  }
   document.getElementById(prefix + '-projects-list').innerHTML = rows.map(function(r) {
     return `
       <div class="progress-row" data-code="${r.code}">
@@ -2987,6 +3028,9 @@ function loadFichaOverridesFromSupabase() {
 }
 
 document.getElementById('month-select').setAttribute('onchange', "renderAllTabs(this.value)");
+document.querySelectorAll('.gestor-btn').forEach(function(b){
+  b.classList.toggle('active', b.getAttribute('data-gestor') === CURRENT_GESTOR);
+});
 renderAllTabs(document.getElementById('month-select').value);
 loadFichaOverridesFromSupabase();
 </script>
