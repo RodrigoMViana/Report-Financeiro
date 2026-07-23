@@ -66,6 +66,11 @@
   .small-note { color:var(--neutral); font-size:11px; }
   .year-title { font-size:13px; font-weight:700; color:var(--navy); margin:18px 0 8px; text-transform:uppercase; letter-spacing:0.4px; }
   .legend { display:flex; gap:18px; font-size:12px; color:var(--slate); margin:10px 0 6px; flex-wrap:wrap; }
+  .project-filter { display:flex; align-items:center; gap:10px; margin:14px 0 6px; }
+  .project-filter input[type=text] { flex:1; max-width:360px; padding:10px 14px; border:1px solid var(--border); border-radius:8px; font-size:14px; }
+  .project-filter .clear-filter { background:none; border:1px solid var(--border); border-radius:8px; padding:9px 14px; font-size:13px; color:var(--slate); cursor:pointer; }
+  .project-filter .clear-filter:hover { background:var(--ice); }
+  .no-results { display:none; padding:30px; text-align:center; color:var(--slate); font-size:14px; }
   .legend span.dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
   .dot.ok { background:var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); }
   .obs-block { margin-top:16px; padding-top:14px; border-top:1px dashed var(--border); }
@@ -198,14 +203,18 @@
   <div class="section-title">Maiores divergencias (Ingreso do mes, PR vs Pre Cierre) <span class="count">Top 5</span></div>
   <div class="divergence-box" id="top-div-list"></div>
 
-  <div class="section-title">Projetos <span class="count">18</span></div>
+  <div class="section-title">Projetos <span class="count" id="proj-count">18</span></div>
   <div class="legend">
     <span><span class="dot ok"></span>Divergencia pequena</span>
     <span><span class="dot warn"></span>Atencao</span>
     <span><span class="dot bad"></span>Divergencia relevante</span>
   </div>
+  <div class="project-filter">
+    <input type="text" id="project-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProjects()">
+    <button type="button" class="clear-filter" onclick="clearProjectFilter()">Limpar</button>
+  </div>
 
-  
+
 <details class="project-card" data-code="22AP09">
   <summary>
     <div class="summary-left">
@@ -1843,6 +1852,7 @@
   </div>
 </details>
 
+  <div class="no-results" id="no-results-msg">Nenhum projeto encontrado para este filtro.</div>
 
   <div class="footer-note">
     Gerado automaticamente a partir das planilhas de PR (aba RESUMO) e do Pre Cierre (aba FC) &middot; AAPP Sanidad
@@ -2429,7 +2439,35 @@ function enviarEmail() {
   });
 }
 
+function normalizeText(s) {
+  return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function filterProjects() {
+  var q = normalizeText(document.getElementById('project-search').value.trim());
+  var cards = document.querySelectorAll('.project-card');
+  var visible = 0;
+  cards.forEach(function(card) {
+    var code = normalizeText(card.getAttribute('data-code'));
+    var nameEl = card.querySelector('.proj-name');
+    var name = normalizeText(nameEl ? nameEl.textContent : '');
+    var match = !q || code.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+    card.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  var countEl = document.getElementById('proj-count');
+  if (countEl) countEl.textContent = visible;
+  var noResults = document.getElementById('no-results-msg');
+  if (noResults) noResults.style.display = visible === 0 ? 'block' : 'none';
+}
+
+function clearProjectFilter() {
+  document.getElementById('project-search').value = '';
+  filterProjects();
+}
+
 renderMonth(document.getElementById('month-select').value);
+filterProjects();
 </script>
 
 </body>
