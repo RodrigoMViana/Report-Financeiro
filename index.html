@@ -1896,6 +1896,10 @@
       </div>
     </div>
     <div class="section-title">Avanco de Faturamento por projeto <span class="count" id="fat-count">18</span></div>
+    <div class="project-filter">
+      <input type="text" id="fat-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('fat')">
+      <button type="button" class="clear-filter" onclick="clearProgressFilter('fat')">Limpar</button>
+    </div>
     <div id="fat-projects-list"></div>
   </div>
 
@@ -1916,6 +1920,10 @@
       </div>
     </div>
     <div class="section-title">Avanco de Cobro por projeto <span class="count" id="cob-count">18</span></div>
+    <div class="project-filter">
+      <input type="text" id="cob-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('cob')">
+      <button type="button" class="clear-filter" onclick="clearProgressFilter('cob')">Limpar</button>
+    </div>
     <div id="cob-projects-list"></div>
   </div>
 
@@ -2631,6 +2639,13 @@ function renderProgressTab(kind, mkey) {
           </div>
         </div>
         <div class="progress-bar-track"><div class="progress-bar-fill ${r.barCls}" style="width:${r.barWidth}%;"></div></div>
+        <div class="obs-block">
+          <div class="obs-header">
+            <label>Status do ${prefix === 'fat' ? 'faturamento' : 'pagamento'}</label>
+            <span class="obs-status" id="status-${prefix}-status-${r.code}"></span>
+          </div>
+          <textarea id="status-${prefix}-${r.code}" class="obs-textarea" placeholder="Digite aqui como esta o status deste ${prefix === 'fat' ? 'faturamento' : 'pagamento'}..." oninput="saveStatus('${r.code}','${prefix}')"></textarea>
+        </div>
       </div>`;
   }).join('');
 }
@@ -2639,7 +2654,108 @@ function renderAllTabs(mkey) {
   renderMonth(mkey);
   renderProgressTab('faturamento', mkey);
   renderProgressTab('cobro', mkey);
+  loadStatusForMonth('fat', mkey);
+  loadStatusForMonth('cob', mkey);
   filterProjects();
+  filterProgress('fat');
+  filterProgress('cob');
+}
+
+// ---------- Status de faturamento/cobro (reaproveita a tabela 'notes' do Supabase) ----------
+const _statusSaveTimers = {};
+
+function statusComposite(code, kind) {
+  return code + '::status_' + kind;
+}
+
+function statusLocalKey(code, kind, mkey) {
+  return NOTES_PREFIX + statusComposite(code, kind) + '::' + mkey;
+}
+
+function saveStatus(code, kind) {
+  const mkey = document.getElementById('month-select').value;
+  const ta = document.getElementById('status-' + kind + '-' + code);
+  if (!ta) return;
+  const text = ta.value;
+  const statusEl = document.getElementById('status-' + kind + '-status-' + code);
+  const composite = statusComposite(code, kind);
+
+  try { localStorage.setItem(statusLocalKey(code, kind, mkey), text); } catch (e) {}
+
+  const timerKey = kind + ':' + code;
+  clearTimeout(_statusSaveTimers[timerKey]);
+  _statusSaveTimers[timerKey] = setTimeout(() => {
+    if (!SUPABASE_CONFIGURED) {
+      if (statusEl) {
+        statusEl.textContent = 'Salvo neste navegador ' + new Date().toLocaleTimeString('pt-BR');
+        statusEl.classList.add('show');
+        clearTimeout(statusEl._t);
+        statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 2000);
+      }
+      return;
+    }
+    if (statusEl) { statusEl.textContent = 'Salvando...'; statusEl.classList.add('show'); }
+    sb.from('notes').upsert({ code: composite, month: mkey, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' })
+      .then(({ error }) => {
+        if (!statusEl) return;
+        statusEl.textContent = error ? 'Salvo neste navegador (falha ao sincronizar)' : 'Salvo e sincronizado ' + new Date().toLocaleTimeString('pt-BR');
+        clearTimeout(statusEl._t);
+        statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 2500);
+      });
+  }, 800);
+}
+
+function loadStatusForMonth(kind, mkey) {
+  DATA.forEach(p => {
+    const ta = document.getElementById('status-' + kind + '-' + p.code);
+    if (!ta) return;
+    let val = '';
+    try { val = localStorage.getItem(statusLocalKey(p.code, kind, mkey)) || ''; } catch (e) {}
+    ta.value = val;
+  });
+
+  if (!SUPABASE_CONFIGURED) return;
+
+  const composites = DATA.map(p => statusComposite(p.code, kind));
+  sb.from('notes').select('code,text').eq('month', mkey).in('code', composites).then(({ data, error }) => {
+    if (error || !data) return;
+    const map = {};
+    data.forEach(row => { map[row.code] = row.text; });
+    DATA.forEach(p => {
+      const composite = statusComposite(p.code, kind);
+      const ta = document.getElementById('status-' + kind + '-' + p.code);
+      if (!ta) return;
+      if (Object.prototype.hasOwnProperty.call(map, composite)) {
+        ta.value = map[composite];
+        try { localStorage.setItem(statusLocalKey(p.code, kind, mkey), map[composite]); } catch (e) {}
+      }
+    });
+  });
+}
+
+// ---------- Filtro por projeto nas abas de Faturamento/Cobro ----------
+function filterProgress(prefix) {
+  const searchEl = document.getElementById(prefix + '-search');
+  if (!searchEl) return;
+  const q = normalizeText(searchEl.value.trim());
+  const rows = document.querySelectorAll('#' + prefix + '-projects-list .progress-row');
+  let visible = 0;
+  rows.forEach(function(row) {
+    const code = normalizeText(row.getAttribute('data-code'));
+    const nameEl = row.querySelector('.proj-name');
+    const name = normalizeText(nameEl ? nameEl.textContent : '');
+    const match = !q || code.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const countEl = document.getElementById(prefix + '-count');
+  if (countEl) countEl.textContent = visible;
+}
+
+function clearProgressFilter(prefix) {
+  const searchEl = document.getElementById(prefix + '-search');
+  if (searchEl) searchEl.value = '';
+  filterProgress(prefix);
 }
 
 document.getElementById('month-select').setAttribute('onchange', "renderAllTabs(this.value)");
