@@ -155,6 +155,12 @@
     </div>
   </div>
 
+  <div class="report-bar" style="align-items:center;">
+    <button type="button" class="secondary" onclick="document.getElementById('ficha-file-input').click()">Atualizar fichas</button>
+    <input type="file" id="ficha-file-input" accept=".xls" multiple style="display:none" onchange="handleFichaFiles(event)">
+    <span class="email-status" id="ficha-update-status"></span>
+  </div>
+
   <div class="main-tabs">
     <button type="button" class="tab-btn active" data-tab="geral" onclick="showTab('geral')">Comparativo Geral</button>
     <button type="button" class="tab-btn" data-tab="faturamento" onclick="showTab('faturamento')">Faturamento</button>
@@ -2758,8 +2764,231 @@ function clearProgressFilter(prefix) {
   filterProgress(prefix);
 }
 
+// ---------- Parser client-side das Fichas (Oracle BI Publisher, exportadas como .xls MHTML) ----------
+function decodeQuotedPrintable(str) {
+  str = str.replace(/=\r\n/g, '').replace(/=\n/g, '');
+  str = str.replace(/=([0-9A-Fa-f]{2})/g, function(m, hex) {
+    return String.fromCharCode(parseInt(hex, 16));
+  });
+  return str;
+}
+
+function extractHtmlPart(raw) {
+  const ctIdx = raw.search(/Content-Type:\s*text\/html/i);
+  if (ctIdx === -1) return null;
+  let headerEndIdx = raw.indexOf('\r\n\r\n', ctIdx);
+  let sepLen = 4;
+  if (headerEndIdx === -1) { headerEndIdx = raw.indexOf('\n\n', ctIdx); sepLen = 2; }
+  if (headerEndIdx === -1) return null;
+
+  const boundaries = [];
+  const bre = /boundary="([^"]+)"/g;
+  let bm;
+  while ((bm = bre.exec(raw)) !== null) {
+    if (boundaries.indexOf(bm[1]) === -1) boundaries.push(bm[1]);
+  }
+
+  const bodyStart = headerEndIdx + sepLen;
+  let bodyEnd = raw.length;
+  boundaries.forEach(function(b) {
+    const idx = raw.indexOf('--' + b, bodyStart);
+    if (idx !== -1 && idx < bodyEnd) bodyEnd = idx;
+  });
+
+  const encoded = raw.slice(bodyStart, bodyEnd);
+  const latin1Decoded = decodeQuotedPrintable(encoded);
+  // O charset declarado no header (ISO8859-15) esta incorreto nestes exports --
+  // o conteudo real esta em UTF-8. Reinterpretamos os bytes como UTF-8.
+  const bytes = new Uint8Array(latin1Decoded.length);
+  for (let bi = 0; bi < latin1Decoded.length; bi++) bytes[bi] = latin1Decoded.charCodeAt(bi) & 0xFF;
+  try { return new TextDecoder('utf-8').decode(bytes); } catch (e) { return latin1Decoded; }
+}
+
+function htmlUnescapeFicha(s) {
+  return s.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+
+function tokenizeFichaParagraphs(html) {
+  const tokens = [];
+  const re = /<p[^>]*>([\s\S]*?)<\/p>/g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    let t = m[1].replace(/<[^>]+>/g, '');
+    t = htmlUnescapeFicha(t).replace(/ /g, ' ').trim();
+    if (t !== '') tokens.push(t);
+  }
+  return tokens;
+}
+
+const FICHA_MONTHS_PT = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+const FICHA_CODE_RE = /^(\d{2}AP\d{1,3})\s+(.*)$/;
+
+function parseFichaHtml(html) {
+  const tokens = tokenizeFichaParagraphs(html);
+  const results = {};
+  let i = 0;
+  const n = tokens.length;
+  while (i < n) {
+    if (tokens[i] === 'Proyecto:') {
+      const rawProj = tokens[i + 1] || '';
+      const m = FICHA_CODE_RE.exec(rawProj);
+      const code = m ? m[1] : rawProj;
+      const name = m ? m[2] : '';
+
+      let j = i + 2;
+      let conceptosIdx = -1;
+      while (j < n && tokens[j] !== 'Proyecto:') {
+        if (tokens[j] === 'Conceptos') { conceptosIdx = j; break; }
+        j++;
+      }
+
+      const months = {};
+      if (conceptosIdx !== -1) {
+        let k = conceptosIdx + 16;
+        let scanned = 0;
+        while (k < n && tokens[k] !== 'Proyecto:' && scanned < 30) {
+          const label = tokens[k];
+          const row = tokens.slice(k, k + 16);
+          if (row.length < 16) break;
+          if (label === 'Faturação' || label.indexOf('Cobranças') === 0) {
+            const vals = row.slice(2, 14);
+            const key = label === 'Faturação' ? 'fat' : 'cob';
+            for (let mi = 0; mi < 12; mi++) {
+              const pt = FICHA_MONTHS_PT[mi];
+              if (!months[pt]) months[pt] = {};
+              months[pt][key] = vals[mi];
+            }
+          }
+          k += 16;
+          scanned++;
+        }
+      }
+      results[code] = { name: name, months: months };
+      i = j;
+    } else {
+      i++;
+    }
+  }
+  return results;
+}
+
+function parseFichaNum(s) {
+  if (s === undefined || s === null || s === '') return 0;
+  s = String(s).trim();
+  const neg = s.indexOf('-') === 0;
+  if (neg) s = s.slice(1);
+  s = s.replace(/\./g, '').replace(',', '.');
+  const v = parseFloat(s);
+  if (isNaN(v)) return 0;
+  return neg ? -v : v;
+}
+
+// ---------- Upload / sincronizacao das fichas ----------
+function fichaOverrideCode(code, kind) {
+  return code + '::ficha_' + kind;
+}
+
+async function handleFichaFiles(event) {
+  const files = Array.from(event.target.files || []);
+  const statusEl = document.getElementById('ficha-update-status');
+  event.target.value = '';
+  if (!files.length) return;
+
+  statusEl.className = 'email-status';
+  statusEl.textContent = 'Processando ' + files.length + ' arquivo(s)...';
+
+  const dataCodes = new Set(DATA.map(p => p.code));
+  const merged = {};
+  let parseErrors = 0;
+
+  for (const file of files) {
+    try {
+      const buf = await file.arrayBuffer();
+      const raw = new TextDecoder('iso-8859-1').decode(buf);
+      const html = extractHtmlPart(raw);
+      if (!html) { parseErrors++; continue; }
+      const parsed = parseFichaHtml(html);
+      Object.keys(parsed).forEach(code => {
+        if (!dataCodes.has(code)) return; // ignora projetos fora do dashboard
+        merged[code] = parsed[code];
+      });
+    } catch (e) {
+      parseErrors++;
+    }
+  }
+
+  const foundCodes = Object.keys(merged);
+  if (!foundCodes.length) {
+    statusEl.className = 'email-status bad';
+    statusEl.textContent = 'Nao encontrei nenhum projeto reconhecido nos arquivos selecionados.';
+    return;
+  }
+
+  // atualiza em memoria e re-renderiza na hora
+  foundCodes.forEach(code => {
+    if (!FICHA[code]) FICHA[code] = {};
+    FICHA_MONTHS_PT.forEach(mk => {
+      const v = merged[code].months[mk];
+      FICHA[code][mk] = {
+        fat: v ? parseFichaNum(v.fat) : (FICHA[code][mk] ? FICHA[code][mk].fat : 0),
+        cob: v ? parseFichaNum(v.cob) : (FICHA[code][mk] ? FICHA[code][mk].cob : 0),
+      };
+    });
+  });
+  renderAllTabs(document.getElementById('month-select').value);
+
+  if (!SUPABASE_CONFIGURED) {
+    statusEl.className = 'email-status ok';
+    statusEl.textContent = foundCodes.length + ' projeto(s) atualizados neste navegador (Supabase nao configurado, nao sincroniza).';
+    return;
+  }
+
+  statusEl.textContent = 'Sincronizando ' + foundCodes.length + ' projeto(s)...';
+  const rows = [];
+  foundCodes.forEach(code => {
+    FICHA_MONTHS_PT.forEach(mk => {
+      const v = FICHA[code][mk];
+      rows.push({ code: fichaOverrideCode(code, 'fat'), month: mk, text: String(v.fat), updated_at: new Date().toISOString() });
+      rows.push({ code: fichaOverrideCode(code, 'cob'), month: mk, text: String(v.cob), updated_at: new Date().toISOString() });
+    });
+  });
+
+  sb.from('notes').upsert(rows, { onConflict: 'code,month' }).then(({ error }) => {
+    if (error) {
+      statusEl.className = 'email-status bad';
+      statusEl.textContent = 'Atualizado neste navegador, mas falhou ao sincronizar (' + foundCodes.length + ' projetos). ' + (parseErrors ? parseErrors + ' arquivo(s) com erro.' : '');
+    } else {
+      statusEl.className = 'email-status ok';
+      statusEl.textContent = foundCodes.length + ' projeto(s) atualizados e sincronizados ' + new Date().toLocaleTimeString('pt-BR') + (parseErrors ? ' (' + parseErrors + ' arquivo(s) ignorado(s))' : '');
+    }
+  });
+}
+
+function loadFichaOverridesFromSupabase() {
+  if (!SUPABASE_CONFIGURED) return;
+  sb.from('notes').select('code,month,text').like('code', '%::ficha_%').then(({ data, error }) => {
+    if (error || !data || !data.length) return;
+    let touched = false;
+    data.forEach(row => {
+      const idx = row.code.lastIndexOf('::ficha_');
+      if (idx === -1) return;
+      const code = row.code.slice(0, idx);
+      const kind = row.code.slice(idx + 8); // 'fat' ou 'cob'
+      if (!DATA.some(p => p.code === code)) return;
+      if (!FICHA[code]) FICHA[code] = {};
+      if (!FICHA[code][row.month]) FICHA[code][row.month] = { fat: 0, cob: 0 };
+      const parsedNum = parseFloat(row.text);
+      FICHA[code][row.month][kind] = isNaN(parsedNum) ? 0 : parsedNum;
+      touched = true;
+    });
+    if (touched) renderAllTabs(document.getElementById('month-select').value);
+  });
+}
+
 document.getElementById('month-select').setAttribute('onchange', "renderAllTabs(this.value)");
 renderAllTabs(document.getElementById('month-select').value);
+loadFichaOverridesFromSupabase();
 </script>
 
 </body>
