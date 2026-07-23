@@ -1879,19 +1879,15 @@ function ppf(v, d=1) {
   const sign = v > 0 ? "+" : "";
   return sign + v.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d}) + " p.p.";
 }
-function clsPct(v, warn=3, bad=10) {
+function clsPct(v) {
+  // Desvio para cima (PR maior que o previsto) = melhora = verde.
+  // Desvio para baixo (PR menor que o previsto) = piora = vermelho.
   if (v === null || v === undefined) return "neutral";
-  const av = Math.abs(v);
-  if (av <= warn) return "ok";
-  if (av <= bad) return "warn";
-  return "bad";
+  return v >= 0 ? "ok" : "bad";
 }
-function clsPP(v, warn=1, bad=3) {
+function clsPP(v) {
   if (v === null || v === undefined) return "neutral";
-  const av = Math.abs(v);
-  if (av <= warn) return "ok";
-  if (av <= bad) return "warn";
-  return "bad";
+  return v >= 0 ? "ok" : "bad";
 }
 function dpfBadge(trend) {
   if (trend === 'up') return '<span class="dpf-badge dpf-up">&#9650; Subindo</span>';
@@ -1964,7 +1960,7 @@ function renderMonth(mkey) {
       <div class="div-item-bottom">
         <span>PR: <strong>${brl(m.ingreso.pr)}</strong></span>
         <span>Pre Cierre: <strong>${brl(m.ingreso.fc)}</strong></span>
-        <span class="${diff!==0?'bad':'ok'}">${brl(Math.abs(diff))} ${dir}</span>
+        <span class="${diff<0?'bad':'ok'}">${brl(Math.abs(diff))} ${dir}</span>
       </div>
     </div>`;
   }).join('');
@@ -2211,12 +2207,9 @@ function buildSummaryText(mkey) {
   return txt;
 }
 
-function classifyColor(v, warnT, badT) {
+function classifyColor(v) {
   if (v === null || v === undefined) return '#8a94a3';
-  const av = Math.abs(v);
-  if (av <= warnT) return '#1e8e5a';
-  if (av <= badT) return '#a3690a';
-  return '#b3261e';
+  return v >= 0 ? '#1e8e5a' : '#b3261e';
 }
 
 function buildSummaryHTML(mkey) {
@@ -2411,13 +2404,22 @@ function enviarEmail() {
     status.className = 'email-status bad';
     return;
   }
-  const to = document.getElementById('email-to').value.trim();
+  const toRaw = document.getElementById('email-to').value.trim();
   const subject = document.getElementById('email-subject').value.trim();
-  if (!to) {
+  if (!toRaw) {
     status.textContent = 'Informe pelo menos um destinatario.';
     status.className = 'email-status bad';
     return;
   }
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const toList = toRaw.split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+  const invalidos = toList.filter(function(e){ return !emailRegex.test(e); });
+  if (invalidos.length) {
+    status.textContent = 'E-mail(s) invalido(s): ' + invalidos.join(', ');
+    status.className = 'email-status bad';
+    return;
+  }
+  const to = toList.join(',');
   const mkey = document.getElementById('month-select').value;
   const message = buildSummaryText(mkey);
   const message_html = buildSummaryHTML(mkey);
