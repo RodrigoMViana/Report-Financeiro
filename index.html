@@ -40,6 +40,7 @@
   .progress-bar-track { background:var(--ice); border-radius:20px; height:10px; overflow:hidden; }
   .progress-bar-fill { height:100%; border-radius:20px; background:var(--ok); transition:width .3s; }
   .progress-bar-fill.bad { background:var(--bad); }
+  .progress-bar-fill.warn { background:var(--warn); }
   .progress-bar-fill.neutral { background:var(--neutral); }
   .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
   .kpi-grid.kpi-grid-3 { grid-template-columns:repeat(3,1fr); }
@@ -5840,7 +5841,7 @@ function renderProgressTab(kind, mkey) {
     var cls = 'neutral';
     var pctText = '—';
     if (pct !== null) {
-      cls = pct >= 100 ? 'ok' : 'bad';
+      cls = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'bad');
       pctText = pct.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
     } else if (meta === 0 && real > 0) {
       pctText = 'sem meta';
