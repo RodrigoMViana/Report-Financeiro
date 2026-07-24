@@ -5,6 +5,7 @@
 <title>Comparativo PR vs Pre Cierre</title>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   :root {
     --navy: #0b2545; --navy-2: #13315c; --ice: #eaf1fb; --slate: #5c6b7a;
@@ -172,7 +173,12 @@
   <div class="report-bar" style="align-items:center;">
     <button type="button" class="secondary" onclick="document.getElementById('ficha-file-input').click()">Atualizar fichas</button>
     <input type="file" id="ficha-file-input" accept=".xls" multiple style="display:none" onchange="handleFichaFiles(event)">
+    <button type="button" class="secondary" onclick="document.getElementById('pc-file-input').click()">Subir Pre Cierre</button>
+    <input type="file" id="pc-file-input" accept=".xlsx" style="display:none" onchange="handlePreCierreFile(event)">
+    <button type="button" class="secondary" onclick="document.getElementById('pr-file-input').click()">Subir PRs</button>
+    <input type="file" id="pr-file-input" accept=".xlsb,.xlsx" multiple style="display:none" onchange="handlePrFiles(event)">
     <span class="email-status" id="ficha-update-status"></span>
+    <span class="email-status" id="xlsx-update-status"></span>
   </div>
 
   <div class="main-tabs">
@@ -6247,12 +6253,422 @@ function loadFichaOverridesFromSupabase() {
   });
 }
 
+// ---------- Upload de Pre Cierre e PRs (parser client-side via SheetJS) ----------
+const MESES_ES_PC = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const PT_TO_ES_PC = Object.fromEntries(MESES.map((m,i) => [m, MESES_ES_PC[i]]));
+const MESES_NOMES_PC = {JAN:'Janeiro',FEV:'Fevereiro',MAR:'Março',ABR:'Abril',MAI:'Maio',JUN:'Junho',JUL:'Julho',AGO:'Agosto',SET:'Setembro',OUT:'Outubro',NOV:'Novembro',DEZ:'Dezembro'};
+
+const PC_CONCEPT_OFFSETS = {carteira:0,contratacion:1,ingresos:2,coste:3,margen:4,margen_pct:5,clientes:6,dpf:7,alo:8,existencias:9,mov_existencias:10,facturacion:11,cobros:12};
+const PC_DESC_COLS = {operacion:4,descr:7,cliente:9,estado:15,status:16,regiao:17,gerente:19,gestor:20};
+const PC_MANAGER_MAP = {'de melo viana rodrigo':'Rodrigo','de melo viana, rodrigo':'Rodrigo','moreira filho, dinart':'Dinart'};
+const PR_ROWS_MAP = {ventas:10,existencias:11,costes:13,margem:58,margem_pct:59,facturacion:61,cobros:62,dpf:63,alo:64};
+
+function normalizeManagerPC(raw){ if (!raw) return null; return PC_MANAGER_MAP[String(raw).trim().toLowerCase()] || null; }
+function numOrZero(v){ return typeof v === 'number' ? v : 0; }
+function pctDiffCalc(a,b){ if (b===null||b===undefined||b===0) return null; return (a-b)/Math.abs(b)*100; }
+function trendCalcPC(cur, prev){ if (prev===null||prev===undefined) return 'na'; if (Math.abs(cur-prev)<0.01) return 'flat'; return cur>prev?'up':'down'; }
+function escHtml(s){ return (s===null||s===undefined) ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function xlsxSheetRows(ws){ return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null}); }
+
+function pcFindLabelPositions(row, label){ const out=[]; row.forEach(function(v,i){ if (v===label) out.push(i); }); return out; }
+
+function mapPrecierreColumnsJS(rows){
+  const row2 = rows[1] || [];
+  const row3 = rows[2] || [];
+  const poaPositions = pcFindLabelPositions(row2,'POA');
+  const realPositions = pcFindLabelPositions(row2,'REAL');
+  const fcPositions = pcFindLabelPositions(row2,'FC');
+  const poaStart = poaPositions.length ? poaPositions[0] : null;
+  const realStart = realPositions.length ? realPositions[0] : null;
+  let fcSplit = null;
+  if (realStart !== null){
+    for (const pos of fcPositions){ if (realStart < pos && pos <= realStart+11){ fcSplit = pos; break; } }
+  }
+  const result = {};
+  if (poaStart !== null){
+    const poaMonths = {};
+    for (let k=0;k<12;k++){ const mname = row3[poaStart+k]; poaMonths[mname] = poaStart+k+1; }
+    result.poa = poaMonths; result.poa_ano = poaStart+12+1;
+  }
+  if (realStart !== null){
+    const fcMonths = {}, fcStatus = {};
+    for (let k=0;k<12;k++){
+      const col0 = realStart+k;
+      const mname = row3[col0];
+      fcMonths[mname] = col0+1;
+      fcStatus[mname] = fcSplit===null ? 'REAL' : (col0<fcSplit ? 'REAL' : 'FCST');
+    }
+    result.fc = fcMonths; result.fc_status = fcStatus; result.fc_ano = realStart+12+1;
+  }
+  return result;
+}
+
+function buildPrecierreIndexJS(rows){
+  const index = {};
+  let currentCode = null, startRow = null;
+  for (let i=36; i<rows.length; i++){
+    const row = rows[i] || [];
+    const code = row[5];
+    if (code !== currentCode){
+      if (currentCode !== null && !(currentCode in index)) index[currentCode] = startRow;
+      currentCode = code;
+      startRow = i+1;
+    }
+  }
+  if (currentCode !== null && !(currentCode in index)) index[currentCode] = startRow;
+  return index;
+}
+
+function getPrecierreProjectJS(rows, index, code, colmap){
+  if (!(code in index)) return null;
+  const start = index[code];
+  const block = [];
+  for (let r=start; r<=start+12; r++) block.push(rows[r-1] || []);
+  const data = {};
+  for (const [concept, offset] of Object.entries(PC_CONCEPT_OFFSETS)){
+    const row = block[offset] || [];
+    const vals = {};
+    for (const [mname,col] of Object.entries(colmap.fc||{})) vals['fc|'+mname] = row[col-1];
+    for (const [mname,col] of Object.entries(colmap.poa||{})) vals['poa|'+mname] = row[col-1];
+    if (colmap.fc_ano) vals['fc|ANO'] = row[colmap.fc_ano-1];
+    if (colmap.poa_ano) vals['poa|ANO'] = row[colmap.poa_ano-1];
+    data[concept] = vals;
+  }
+  const desc = {};
+  for (const [k,c] of Object.entries(PC_DESC_COLS)) desc[k] = block[0][c-1];
+  return {data, desc};
+}
+
+function pcFindMonthRow(rows, maxScan){
+  maxScan = maxScan || 12;
+  const monthSet = new Set(MESES);
+  for (let r=1;r<=maxScan;r++){
+    const row = rows[r-1] || [];
+    let hits=0;
+    for (const v of row){ if (typeof v==='string' && monthSet.has(v.trim().toUpperCase())) hits++; }
+    if (hits>=5) return {rowIdx:r, row:row};
+  }
+  throw new Error('Nao encontrei a linha de meses (JAN/FEV/...) na aba RESUMO');
+}
+
+function mapPrYearColumnsJS(rows, year){
+  const found = pcFindMonthRow(rows);
+  const monthRowIdx = found.rowIdx, rowMonths = found.row;
+  const yearRowIdx = monthRowIdx-2;
+  const statusRowIdx = monthRowIdx-1;
+  const rowYear = rows[yearRowIdx-1] || [];
+  const rowStatus = rows[statusRowIdx-1] || [];
+  const ystr = String(year);
+  let start = null;
+  for (let i=0;i<rowYear.length;i++){
+    const v = rowYear[i];
+    if (v!==null && v!==undefined && String(v).trim()===ystr){ start=i; break; }
+  }
+  if (start===null) return null;
+  const months={}, status={};
+  for (let k=0;k<12;k++){
+    const mname = rowMonths[start+k];
+    months[mname] = start+k+1;
+    status[mname] = rowStatus[start+k];
+  }
+  return {months:months, status:status, ano_col:start+12+1};
+}
+
+function getPrProjectJS(rows, colmap){
+  const data = {};
+  for (const [concept, r] of Object.entries(PR_ROWS_MAP)){
+    const row = rows[r-1] || [];
+    const vals = {};
+    for (const [mname,col] of Object.entries(colmap.months)) vals[mname] = row[col-1];
+    vals['ANO'] = row[colmap.ano_col-1];
+    data[concept] = vals;
+  }
+  return data;
+}
+
+function buildProjectFromPrPc(code, prData, pcData, desc){
+  const monthsData = {};
+  for (let idx=0; idx<MESES.length; idx++){
+    const mpt = MESES[idx];
+    const mes = PT_TO_ES_PC[mpt];
+    const prevMpt = idx>0 ? MESES[idx-1] : null;
+
+    const ingPr = numOrZero(prData.ventas[mpt]);
+    const ingFc = numOrZero(pcData.ingresos['fc|'+mes]);
+    const ingPoa = numOrZero(pcData.ingresos['poa|'+mes]);
+
+    const fatPr = numOrZero(prData.facturacion[mpt]);
+    const fatFc = numOrZero(pcData.facturacion['fc|'+mes]);
+
+    const cobPr = numOrZero(prData.cobros[mpt]);
+    const cobFc = numOrZero(pcData.cobros['fc|'+mes]);
+
+    const mbPr = numOrZero(prData.margem[mpt]);
+    const mbFc = numOrZero(pcData.margen['fc|'+mes]);
+    const mbPoa = numOrZero(pcData.margen['poa|'+mes]);
+
+    const mbpPr = numOrZero(prData.margem_pct[mpt])*100;
+    const mbpFc = numOrZero(pcData.margen_pct['fc|'+mes])*100;
+    const mbpPoa = numOrZero(pcData.margen_pct['poa|'+mes])*100;
+
+    const dpfPr = numOrZero(prData.dpf[mpt]);
+    const dpfPrev = prevMpt ? numOrZero(prData.dpf[prevMpt]) : null;
+    const dpfFc = numOrZero(pcData.dpf['fc|'+mes]);
+
+    const aloPr = numOrZero(prData.alo[mpt]);
+
+    monthsData[mpt] = {
+      nome: MESES_NOMES_PC[mpt],
+      ingreso: {pr:ingPr, fc:ingFc, poa:ingPoa, diff_fc_pct: pctDiffCalc(ingPr,ingFc), diff_poa_pct: pctDiffCalc(ingPr,ingPoa)},
+      faturamento: {pr:fatPr, fc:fatFc, diff_fc_pct: pctDiffCalc(fatPr,fatFc)},
+      cobro: {pr:cobPr, fc:cobFc, diff_fc_pct: pctDiffCalc(cobPr,cobFc)},
+      margem: {pr:mbPr, fc:mbFc, poa:mbPoa, diff_fc_pct: pctDiffCalc(mbPr,mbFc)},
+      margem_pct: {pr:mbpPr, fc:mbpFc, poa:mbpPoa, diff_fc_pp: mbpPr-mbpFc, diff_poa_pp: mbpPr-mbpPoa},
+      dpf: {pr:dpfPr, pr_prev:dpfPrev, fc:dpfFc, trend: trendCalcPC(dpfPr,dpfPrev)},
+      alo: {pr:aloPr},
+    };
+  }
+
+  const ingPrAno = numOrZero(prData.ventas['ANO']);
+  const ingFcAno = numOrZero(pcData.ingresos['fc|ANO']);
+  const ingPoaAno = numOrZero(pcData.ingresos['poa|ANO']);
+  const mbPrAno = numOrZero(prData.margem['ANO']);
+  const mbFcAno = numOrZero(pcData.margen['fc|ANO']);
+  const mbPoaAno = numOrZero(pcData.margen['poa|ANO']);
+  const mbpPrAno = numOrZero(prData.margem_pct['ANO'])*100;
+  const mbpFcAno = numOrZero(pcData.margen_pct['fc|ANO'])*100;
+  const mbpPoaAno = numOrZero(pcData.margen_pct['poa|ANO'])*100;
+
+  return {
+    code: code,
+    gestor: normalizeManagerPC(desc.gestor) || 'Rodrigo',
+    name: desc.descr || desc.operacion || code,
+    operacion: desc.operacion, cliente: desc.cliente,
+    estado: desc.estado, status: desc.status,
+    regiao: desc.regiao, gerente: desc.gerente,
+    months: monthsData,
+    year: {
+      ingreso: {pr:ingPrAno, fc:ingFcAno, poa:ingPoaAno, diff_fc_pct: pctDiffCalc(ingPrAno,ingFcAno), diff_poa_pct: pctDiffCalc(ingPrAno,ingPoaAno)},
+      margem: {pr:mbPrAno, fc:mbFcAno, poa:mbPoaAno},
+      margem_pct: {pr:mbpPrAno, fc:mbpFcAno, poa:mbpPoaAno, diff_fc_pp: mbpPrAno-mbpFcAno, diff_poa_pp: mbpPrAno-mbpPoaAno},
+    }
+  };
+}
+
+let PC_CACHE = {};
+let PR_CACHE = {};
+
+function pcCacheCode(code){ return code + '::pc_cache'; }
+function prCacheCode(code){ return code + '::pr_cache'; }
+
+function updateCardStaticFields(code){
+  const p = DATA.find(function(x){ return x.code === code; });
+  if (!p) return;
+  const card = document.querySelector('.project-card[data-code="'+CSS.escape(code)+'"]');
+  if (!card) return;
+  card.setAttribute('data-gestor', p.gestor || 'Rodrigo');
+  const nameEl = card.querySelector('.proj-name');
+  if (nameEl) nameEl.textContent = p.name;
+  const metaRow = card.querySelector('.meta-row');
+  if (metaRow){
+    metaRow.innerHTML =
+      '<span><strong>Regiao:</strong> ' + escHtml(p.regiao) + '</span>' +
+      '<span><strong>Status:</strong> <span class="status-badge">' + escHtml(p.status || p.estado) + '</span></span>' +
+      '<span><strong>Cliente:</strong> ' + escHtml(p.cliente) + '</span>' +
+      '<span><strong>Gerente:</strong> ' + escHtml(p.gerente) + '</span>';
+  }
+  const y = p.year;
+  const tables = card.querySelectorAll('.card-body table');
+  if (tables.length >= 2){
+    const yearRows = tables[1].querySelectorAll('tbody tr');
+    if (yearRows.length === 2){
+      const r0 = yearRows[0].querySelectorAll('td');
+      if (r0.length >= 5){
+        r0[1].textContent = brl(y.ingreso.pr); r0[2].textContent = brl(y.ingreso.fc);
+        r0[3].textContent = pctf(y.ingreso.diff_fc_pct); r0[3].className = clsPct(y.ingreso.diff_fc_pct);
+        r0[4].textContent = brl(y.ingreso.poa);
+      }
+      const r1 = yearRows[1].querySelectorAll('td');
+      if (r1.length >= 5){
+        r1[1].textContent = pctf(y.margem_pct.pr); r1[2].textContent = pctf(y.margem_pct.fc);
+        r1[3].textContent = ppf(y.margem_pct.diff_fc_pp); r1[3].className = clsPP(y.margem_pct.diff_fc_pp);
+        r1[4].textContent = pctf(y.margem_pct.poa);
+      }
+    }
+  }
+}
+
+function recomputeCodes(codes){
+  const updated = [];
+  const newCodes = [];
+  const uniq = Array.from(new Set(codes));
+  uniq.forEach(function(code){
+    const pc = PC_CACHE[code];
+    const pr = PR_CACHE[code];
+    if (!pc || !pr) return;
+    const built = buildProjectFromPrPc(code, pr, pc.data, pc.desc);
+    const idx = DATA.findIndex(function(p){ return p.code === code; });
+    if (idx === -1){ newCodes.push(code); return; }
+    const existing = DATA[idx];
+    Object.assign(existing, built);
+    updated.push(code);
+  });
+  return {updated: updated, newCodes: newCodes};
+}
+
+async function handlePreCierreFile(event){
+  const files = Array.from(event.target.files || []);
+  const statusEl = document.getElementById('xlsx-update-status');
+  event.target.value = '';
+  if (!files.length) return;
+  const file = files[0];
+  statusEl.className = 'email-status';
+  statusEl.textContent = 'Lendo Pre Cierre...';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(new Uint8Array(buf), {type:'array'});
+    const ws = wb.Sheets['FC'];
+    if (!ws) throw new Error('Aba FC nao encontrada no arquivo.');
+    const rows = xlsxSheetRows(ws);
+    const colmap = mapPrecierreColumnsJS(rows);
+    const index = buildPrecierreIndexJS(rows);
+
+    const touched = [];
+    Object.keys(index).forEach(function(code){
+      const result = getPrecierreProjectJS(rows, index, code, colmap);
+      if (!result) return;
+      const mgr = normalizeManagerPC(result.desc.gestor);
+      if (mgr !== 'Rodrigo' && mgr !== 'Dinart') return;
+      PC_CACHE[code] = result;
+      touched.push(code);
+    });
+
+    if (!touched.length){
+      statusEl.className = 'email-status bad';
+      statusEl.textContent = 'Nenhum projeto de Rodrigo/Dinart reconhecido no arquivo.';
+      return;
+    }
+
+    const rc = recomputeCodes(touched);
+    rc.updated.forEach(updateCardStaticFields);
+    renderAllTabs(document.getElementById('month-select').value);
+
+    let msg = touched.length + ' projeto(s) lidos do Pre Cierre, ' + rc.updated.length + ' atualizado(s) no site.';
+    if (rc.newCodes.length) msg += ' ' + rc.newCodes.length + ' codigo(s) novo(s) ainda sem PR carregada: ' + rc.newCodes.join(', ') + '.';
+    statusEl.className = 'email-status ok';
+    statusEl.textContent = msg;
+
+    if (SUPABASE_CONFIGURED){
+      const rowsToSave = touched.map(function(code){
+        return { code: pcCacheCode(code), month: 'ALL', text: JSON.stringify(PC_CACHE[code]), updated_at: new Date().toISOString() };
+      });
+      sb.from('notes').upsert(rowsToSave, {onConflict:'code,month'}).then(function(res){
+        if (res.error) statusEl.textContent += ' (falhou ao sincronizar)';
+        else statusEl.textContent += ' Sincronizado.';
+      });
+    }
+  } catch (e) {
+    statusEl.className = 'email-status bad';
+    statusEl.textContent = 'Erro ao processar Pre Cierre: ' + e.message;
+  }
+}
+
+async function handlePrFiles(event){
+  const files = Array.from(event.target.files || []);
+  const statusEl = document.getElementById('xlsx-update-status');
+  event.target.value = '';
+  if (!files.length) return;
+  statusEl.className = 'email-status';
+  statusEl.textContent = 'Processando ' + files.length + ' PR(s)...';
+
+  const touched = [];
+  const parseErrors = [];
+  const codeRe = /(\d{2}AP\d{1,3})/;
+
+  for (const file of files){
+    try {
+      const m = codeRe.exec(file.name);
+      if (!m){ parseErrors.push(file.name + ' (codigo nao identificado)'); continue; }
+      const code = m[1];
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(new Uint8Array(buf), {type:'array'});
+      const ws = wb.Sheets['RESUMO'];
+      if (!ws){ parseErrors.push(file.name + ' (aba RESUMO nao encontrada)'); continue; }
+      const rows = xlsxSheetRows(ws);
+      const colmap = mapPrYearColumnsJS(rows, 2026);
+      if (!colmap){ parseErrors.push(file.name + ' (ano 2026 nao encontrado)'); continue; }
+      PR_CACHE[code] = getPrProjectJS(rows, colmap);
+      touched.push(code);
+    } catch (e) {
+      parseErrors.push(file.name + ' (' + e.message + ')');
+    }
+  }
+
+  if (!touched.length){
+    statusEl.className = 'email-status bad';
+    statusEl.textContent = 'Nenhum arquivo processado com sucesso.' + (parseErrors.length ? ' Erros: ' + parseErrors.join('; ') : '');
+    return;
+  }
+
+  const rc = recomputeCodes(touched);
+  rc.updated.forEach(updateCardStaticFields);
+  renderAllTabs(document.getElementById('month-select').value);
+
+  const waiting = touched.filter(function(c){ return !PC_CACHE[c]; });
+  let msg = touched.length + ' PR(s) lida(s), ' + rc.updated.length + ' projeto(s) atualizado(s).';
+  if (waiting.length) msg += ' Aguardando Pre Cierre para: ' + waiting.join(', ') + '.';
+  if (rc.newCodes.length) msg += ' Codigo(s) nao cadastrado(s) no site (nao criado automaticamente): ' + rc.newCodes.join(', ') + '.';
+  if (parseErrors.length) msg += ' Erros: ' + parseErrors.join('; ') + '.';
+  statusEl.className = 'email-status ok';
+  statusEl.textContent = msg;
+
+  if (SUPABASE_CONFIGURED){
+    const rowsToSave = touched.map(function(code){
+      return { code: prCacheCode(code), month: 'ALL', text: JSON.stringify(PR_CACHE[code]), updated_at: new Date().toISOString() };
+    });
+    sb.from('notes').upsert(rowsToSave, {onConflict:'code,month'}).then(function(res){
+      if (res.error) statusEl.textContent += ' (falhou ao sincronizar)';
+      else statusEl.textContent += ' Sincronizado.';
+    });
+  }
+}
+
+function loadPrPcCacheFromSupabase(){
+  if (!SUPABASE_CONFIGURED) return;
+  Promise.all([
+    sb.from('notes').select('code,text').like('code', '%::pc_cache'),
+    sb.from('notes').select('code,text').like('code', '%::pr_cache'),
+  ]).then(function(results){
+    const pcRes = results[0], prRes = results[1];
+    const touched = new Set();
+    if (pcRes.data) pcRes.data.forEach(function(row){
+      const idx = row.code.lastIndexOf('::pc_cache');
+      if (idx === -1) return;
+      const code = row.code.slice(0, idx);
+      try { PC_CACHE[code] = JSON.parse(row.text); touched.add(code); } catch(e){}
+    });
+    if (prRes.data) prRes.data.forEach(function(row){
+      const idx = row.code.lastIndexOf('::pr_cache');
+      if (idx === -1) return;
+      const code = row.code.slice(0, idx);
+      try { PR_CACHE[code] = JSON.parse(row.text); touched.add(code); } catch(e){}
+    });
+    if (touched.size){
+      const rc = recomputeCodes(Array.from(touched));
+      rc.updated.forEach(updateCardStaticFields);
+      renderAllTabs(document.getElementById('month-select').value);
+    }
+  });
+}
+
 document.getElementById('month-select').setAttribute('onchange', "renderAllTabs(this.value)");
 document.querySelectorAll('.gestor-btn').forEach(function(b){
   b.classList.toggle('active', b.getAttribute('data-gestor') === CURRENT_GESTOR);
 });
 renderAllTabs(document.getElementById('month-select').value);
 loadFichaOverridesFromSupabase();
+loadPrPcCacheFromSupabase();
 </script>
 
 </body>
