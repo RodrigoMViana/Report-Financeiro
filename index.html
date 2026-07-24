@@ -5820,6 +5820,40 @@ function showTab(name) {
   });
 }
 
+function computeProgressRow(p, mkey, prefix, metaField, fichaField) {
+  var meta = p.months[mkey][metaField].pr;
+  var fichaMonth = (FICHA[p.code] && FICHA[p.code][mkey]) ? FICHA[p.code][mkey] : null;
+  var fichaBase = fichaMonth ? fichaMonth[fichaField] : 0;
+  var ex = getExtra(p.code, mkey, prefix);
+  var solicitado = ex.solicitado || 0;
+  var previsao = ex.previsao || 0;
+  var real = fichaBase + solicitado;
+
+  var pct = null;
+  if (meta > 0) {
+    pct = (real / meta) * 100;
+  } else {
+    pct = null; // sem meta definida, nao da para calcular %
+  }
+
+  var cls = 'neutral';
+  var pctText = '—';
+  if (pct !== null) {
+    cls = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'bad');
+    pctText = pct.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
+  } else if (meta === 0 && real > 0) {
+    pctText = 'sem meta';
+  }
+
+  var barWidth = pct !== null ? Math.min(pct, 100) : (real > 0 ? 100 : 0);
+  var barCls = pct !== null ? cls : 'neutral';
+
+  return {
+    code: p.code, name: p.name, meta: meta, fichaBase: fichaBase, solicitado: solicitado, previsao: previsao,
+    real: real, pct: pct, pctText: pctText, cls: cls, barWidth: barWidth, barCls: barCls
+  };
+}
+
 function renderProgressTab(kind, mkey) {
   // kind: 'faturamento' (usa m.faturamento.pr como meta e FICHA[code][mkey].fat como realizado)
   //       'cobro' (usa m.cobro.pr como meta e FICHA[code][mkey].cob como realizado)
@@ -5829,37 +5863,10 @@ function renderProgressTab(kind, mkey) {
 
   var totalMeta = 0, totalReal = 0;
   var rows = currentProjects().map(function(p) {
-    var meta = p.months[mkey][metaField].pr;
-    var fichaMonth = (FICHA[p.code] && FICHA[p.code][mkey]) ? FICHA[p.code][mkey] : null;
-    var real = fichaMonth ? fichaMonth[fichaField] : 0;
-    totalMeta += meta;
-    totalReal += real;
-
-    var pct = null;
-    if (meta > 0) {
-      pct = (real / meta) * 100;
-    } else if (real > 0) {
-      pct = null; // sem meta definida, nao da para calcular %
-    } else {
-      pct = null; // ambos zero
-    }
-
-    var cls = 'neutral';
-    var pctText = '—';
-    if (pct !== null) {
-      cls = pct >= 100 ? 'ok' : (pct >= 50 ? 'warn' : 'bad');
-      pctText = pct.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
-    } else if (meta === 0 && real > 0) {
-      pctText = 'sem meta';
-    }
-
-    var barWidth = pct !== null ? Math.min(pct, 100) : (real > 0 ? 100 : 0);
-    var barCls = pct !== null ? cls : 'neutral';
-
-    return {
-      code: p.code, name: p.name, meta: meta, real: real, pct: pct, pctText: pctText,
-      cls: cls, barWidth: barWidth, barCls: barCls
-    };
+    var r = computeProgressRow(p, mkey, prefix, metaField, fichaField);
+    totalMeta += r.meta;
+    totalReal += r.real;
+    return r;
   });
 
   rows.sort(function(a, b) {
@@ -5903,15 +5910,30 @@ function renderProgressTab(kind, mkey) {
             </div>
             <div class="mini-metric">
               <span class="mini-label">Realizado (Ficha)</span>
-              <span class="mini-value">${brl(r.real)}</span>
+              <span class="mini-value" id="real-val-${prefix}-${r.code}">${brl(r.real)}</span>
             </div>
             <div class="mini-metric">
               <span class="mini-label">Avanco</span>
-              <span class="mini-value ${r.cls}">${r.pctText}</span>
+              <span class="mini-value ${r.cls}" id="pct-val-${prefix}-${r.code}">${r.pctText}</span>
             </div>
           </div>
         </div>
-        <div class="progress-bar-track"><div class="progress-bar-fill ${r.barCls}" style="width:${r.barWidth}%;"></div></div>
+        <div class="progress-bar-track"><div class="progress-bar-fill ${r.barCls}" id="bar-${prefix}-${r.code}" style="width:${r.barWidth}%;"></div></div>
+        <div class="obs-block extra-block">
+          <div class="obs-header">
+            <label>Solicitado na ferramenta</label>
+            <span class="obs-status" id="solicitado-status-${prefix}-${r.code}"></span>
+          </div>
+          <input type="number" step="0.01" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? r.solicitado : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')">
+          <div class="small-note">Soma ao Realizado ate aparecer na ficha. Quando a ficha refletir, apague este valor manualmente.</div>
+        </div>
+        <div class="obs-block extra-block">
+          <div class="obs-header">
+            <label>Previsao</label>
+            <span class="obs-status" id="previsao-status-${prefix}-${r.code}"></span>
+          </div>
+          <input type="number" step="0.01" inputmode="decimal" id="previsao-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.previsao ? r.previsao : ''}" placeholder="Valor previsto (nao soma ao Realizado)" oninput="saveExtra('${r.code}','${prefix}','previsao')">
+        </div>
         <div class="obs-block">
           <div class="obs-header">
             <label>Status do ${prefix === 'fat' ? 'faturamento' : 'pagamento'}</label>
@@ -6003,6 +6025,154 @@ function loadStatusForMonth(kind, mkey) {
         try { localStorage.setItem(statusLocalKey(p.code, kind, mkey), map[composite]); } catch (e) {}
       }
     });
+  });
+}
+
+// ---------- Solicitado na ferramenta / Previsao (Faturamento e Cobro) ----------
+// EXTRA[code][mkey] = { fat: {solicitado, previsao}, cob: {solicitado, previsao} }
+// "solicitado" soma no Realizado enquanto a ficha nao reflete o valor pedido na ferramenta.
+// "previsao" e apenas informativo, nunca entra na soma do Realizado.
+let EXTRA = {};
+
+function extraComposite(code, field, kind) {
+  return code + '::' + field + '_' + kind;
+}
+
+function extraLocalKey(code, field, kind, mkey) {
+  return NOTES_PREFIX + extraComposite(code, field, kind) + '::' + mkey;
+}
+
+function getExtra(code, mkey, kind) {
+  if (!EXTRA[code]) EXTRA[code] = {};
+  if (!EXTRA[code][mkey]) EXTRA[code][mkey] = { fat: { solicitado: 0, previsao: 0 }, cob: { solicitado: 0, previsao: 0 } };
+  return EXTRA[code][mkey][kind];
+}
+
+function updateProgressRowDisplay(code, prefix, mkey) {
+  const p = DATA.find(function(x) { return x.code === code; });
+  if (!p) return;
+  const metaField = prefix === 'fat' ? 'faturamento' : 'cobro';
+  const fichaField = prefix;
+  const r = computeProgressRow(p, mkey, prefix, metaField, fichaField);
+
+  const realEl = document.getElementById('real-val-' + prefix + '-' + code);
+  if (realEl) realEl.textContent = brl(r.real);
+  const pctEl = document.getElementById('pct-val-' + prefix + '-' + code);
+  if (pctEl) { pctEl.textContent = r.pctText; pctEl.className = 'mini-value ' + r.cls; }
+  const barEl = document.getElementById('bar-' + prefix + '-' + code);
+  if (barEl) { barEl.style.width = r.barWidth + '%'; barEl.className = 'progress-bar-fill ' + r.barCls; }
+
+  // recalcula os totais/KPI do topo sem reconstruir a lista inteira (preserva o foco do campo)
+  let totalMeta = 0, totalReal = 0;
+  currentProjects().forEach(function(proj) {
+    const rr = computeProgressRow(proj, mkey, prefix, metaField, fichaField);
+    totalMeta += rr.meta;
+    totalReal += rr.real;
+  });
+  const metaTotalEl = document.getElementById(prefix + '-meta-total');
+  const realTotalEl = document.getElementById(prefix + '-real-total');
+  if (metaTotalEl) metaTotalEl.textContent = brl(totalMeta);
+  if (realTotalEl) realTotalEl.textContent = brl(totalReal);
+  const geralPct = totalMeta > 0 ? (totalReal / totalMeta) * 100 : null;
+  const geralEl = document.getElementById(prefix + '-avanco-geral');
+  const geralSub = document.getElementById(prefix + '-avanco-geral-sub');
+  if (geralEl && geralSub) {
+    if (geralPct !== null) {
+      geralEl.textContent = geralPct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+      geralSub.textContent = (geralPct >= 100 ? 'Meta atingida' : 'Abaixo da meta') + ' · ' + brl(totalReal - totalMeta) + ' de diferenca';
+      geralSub.className = 'kpi-sub ' + (geralPct >= 100 ? 'ok' : 'bad');
+    } else {
+      geralEl.textContent = '—';
+      geralSub.textContent = 'Sem meta definida para o mes';
+      geralSub.className = 'kpi-sub neutral';
+    }
+  }
+}
+
+const _extraSaveTimers = {};
+
+function saveExtra(code, kind, field) {
+  // kind: 'fat' | 'cob'; field: 'solicitado' | 'previsao'
+  const mkey = document.getElementById('month-select').value;
+  const el = document.getElementById(field + '-' + kind + '-' + code);
+  if (!el) return;
+  const parsed = parseFloat(el.value);
+  const num = isNaN(parsed) ? 0 : parsed;
+  const ex = getExtra(code, mkey, kind);
+  ex[field] = num;
+
+  try { localStorage.setItem(extraLocalKey(code, field, kind, mkey), String(num)); } catch (e) {}
+
+  updateProgressRowDisplay(code, kind, mkey);
+
+  const statusEl = document.getElementById(field + '-status-' + kind + '-' + code);
+  const timerKey = field + ':' + kind + ':' + code;
+  clearTimeout(_extraSaveTimers[timerKey]);
+  _extraSaveTimers[timerKey] = setTimeout(function() {
+    if (!SUPABASE_CONFIGURED) {
+      if (statusEl) {
+        statusEl.textContent = 'Salvo neste navegador ' + new Date().toLocaleTimeString('pt-BR');
+        statusEl.classList.add('show');
+        clearTimeout(statusEl._t);
+        statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 2000);
+      }
+      return;
+    }
+    if (statusEl) { statusEl.textContent = 'Salvando...'; statusEl.classList.add('show'); }
+    sb.from('notes').upsert(
+      { code: extraComposite(code, field, kind), month: mkey, text: String(num), updated_at: new Date().toISOString() },
+      { onConflict: 'code,month' }
+    ).then(({ error }) => {
+      if (!statusEl) return;
+      statusEl.textContent = error ? 'Salvo neste navegador (falha ao sincronizar)' : 'Salvo e sincronizado ' + new Date().toLocaleTimeString('pt-BR');
+      clearTimeout(statusEl._t);
+      statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 2500);
+    });
+  }, 800);
+}
+
+function loadExtraFromSupabase() {
+  // Carrega uma vez (todos os meses/projetos) igual ao padrao usado para FICHA.
+  DATA.forEach(function(p) {
+    ['solicitado', 'previsao'].forEach(function(field) {
+      ['fat', 'cob'].forEach(function(kind) {
+        MESES.forEach(function(mkey) {
+          let val = 0;
+          try { val = parseFloat(localStorage.getItem(extraLocalKey(p.code, field, kind, mkey))) || 0; } catch (e) {}
+          if (val) getExtra(p.code, mkey, kind)[field] = val;
+        });
+      });
+    });
+  });
+
+  if (!SUPABASE_CONFIGURED) return;
+
+  Promise.all([
+    sb.from('notes').select('code,month,text').like('code', '%::solicitado_fat'),
+    sb.from('notes').select('code,month,text').like('code', '%::solicitado_cob'),
+    sb.from('notes').select('code,month,text').like('code', '%::previsao_fat'),
+    sb.from('notes').select('code,month,text').like('code', '%::previsao_cob'),
+  ]).then(function(results) {
+    const specs = [
+      { res: results[0], suffix: '::solicitado_fat', field: 'solicitado', kind: 'fat' },
+      { res: results[1], suffix: '::solicitado_cob', field: 'solicitado', kind: 'cob' },
+      { res: results[2], suffix: '::previsao_fat', field: 'previsao', kind: 'fat' },
+      { res: results[3], suffix: '::previsao_cob', field: 'previsao', kind: 'cob' },
+    ];
+    let touched = false;
+    specs.forEach(function(spec) {
+      if (!spec.res.data) return;
+      spec.res.data.forEach(function(row) {
+        const idx = row.code.lastIndexOf(spec.suffix);
+        if (idx === -1) return;
+        const code = row.code.slice(0, idx);
+        if (!DATA.some(function(p) { return p.code === code; })) return;
+        const num = parseFloat(row.text);
+        getExtra(code, row.month, spec.kind)[spec.field] = isNaN(num) ? 0 : num;
+        touched = true;
+      });
+    });
+    if (touched) renderAllTabs(document.getElementById('month-select').value);
   });
 }
 
@@ -6711,6 +6881,7 @@ document.querySelectorAll('.gestor-btn').forEach(function(b){
 });
 renderAllTabs(document.getElementById('month-select').value);
 loadFichaOverridesFromSupabase();
+loadExtraFromSupabase();
 seedCachesFromData();
 loadPrPcCacheFromSupabase();
 </script>
