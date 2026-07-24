@@ -6462,6 +6462,49 @@ let PR_CACHE = {};
 function pcCacheCode(code){ return code + '::pc_cache'; }
 function prCacheCode(code){ return code + '::pr_cache'; }
 
+// Reconstroi um cache sintetico (PR e Pre Cierre) a partir dos dados ja calculados/publicados em DATA.
+// Isso garante que subir SO o Pre Cierre (ou SO as PRs) ja recalcula e atualiza o comparativo geral,
+// usando o lado que ainda nao foi re-enviado como base (em vez de exigir os dois arquivos sempre juntos).
+function seedCachesFromData(){
+  DATA.forEach(function(p){
+    const code = p.code;
+    if (!PR_CACHE[code]){
+      const ventas={}, facturacion={}, cobros={}, margem={}, margem_pct={}, dpf={}, alo={};
+      MESES.forEach(function(mpt){
+        const m = p.months[mpt];
+        ventas[mpt]=m.ingreso.pr; facturacion[mpt]=m.faturamento.pr; cobros[mpt]=m.cobro.pr;
+        margem[mpt]=m.margem.pr; margem_pct[mpt]=m.margem_pct.pr/100; dpf[mpt]=m.dpf.pr; alo[mpt]=m.alo.pr;
+      });
+      ventas['ANO']=p.year.ingreso.pr; margem['ANO']=p.year.margem.pr; margem_pct['ANO']=p.year.margem_pct.pr/100;
+      PR_CACHE[code] = {ventas:ventas, facturacion:facturacion, cobros:cobros, margem:margem, margem_pct:margem_pct, dpf:dpf, alo:alo};
+    }
+    if (!PC_CACHE[code]){
+      const ingresos={}, facturacion={}, cobros={}, margen={}, margen_pct={}, dpf={};
+      MESES.forEach(function(mpt){
+        const mes = PT_TO_ES_PC[mpt];
+        const m = p.months[mpt];
+        ingresos['fc|'+mes]=m.ingreso.fc; ingresos['poa|'+mes]=m.ingreso.poa;
+        facturacion['fc|'+mes]=m.faturamento.fc;
+        cobros['fc|'+mes]=m.cobro.fc;
+        margen['fc|'+mes]=m.margem.fc; margen['poa|'+mes]=m.margem.poa;
+        margen_pct['fc|'+mes]=m.margem_pct.fc/100; margen_pct['poa|'+mes]=m.margem_pct.poa/100;
+        dpf['fc|'+mes]=m.dpf.fc;
+      });
+      ingresos['fc|ANO']=p.year.ingreso.fc; ingresos['poa|ANO']=p.year.ingreso.poa;
+      margen['fc|ANO']=p.year.margem.fc; margen['poa|ANO']=p.year.margem.poa;
+      margen_pct['fc|ANO']=p.year.margem_pct.fc/100; margen_pct['poa|ANO']=p.year.margem_pct.poa/100;
+      PC_CACHE[code] = {
+        data: {ingresos:ingresos, facturacion:facturacion, cobros:cobros, margen:margen, margen_pct:margen_pct, dpf:dpf},
+        desc: {
+          operacion:p.operacion, descr:p.name, cliente:p.cliente, estado:p.estado, status:p.status,
+          regiao:p.regiao, gerente:p.gerente,
+          gestor: (p.gestor === 'Dinart' ? 'Moreira Filho, Dinart' : 'De Melo Viana, Rodrigo')
+        }
+      };
+    }
+  });
+}
+
 function updateCardStaticFields(code){
   const p = DATA.find(function(x){ return x.code === code; });
   if (!p) return;
@@ -6668,6 +6711,7 @@ document.querySelectorAll('.gestor-btn').forEach(function(b){
 });
 renderAllTabs(document.getElementById('month-select').value);
 loadFichaOverridesFromSupabase();
+seedCachesFromData();
 loadPrPcCacheFromSupabase();
 </script>
 
