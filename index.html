@@ -98,6 +98,8 @@
   .dot.ok { background:var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); }
   .obs-block { margin-top:16px; padding-top:14px; border-top:1px dashed var(--border); }
   .obs-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+  .extra-row { display:flex; gap:20px; flex-wrap:wrap; }
+  .extra-row .extra-block { flex:1; min-width:220px; }
   .obs-header label { font-size:12px; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:0.4px; }
   .obs-status { font-size:11px; color:var(--ok); opacity:0; transition:opacity 0.3s; }
   .obs-status.show { opacity:1; }
@@ -5205,7 +5207,7 @@ function setGestor(g) {
 function brl(v) {
   if (v === null || v === undefined) return "-";
   const neg = v < 0; v = Math.abs(v);
-  let s = v.toLocaleString('pt-BR', {maximumFractionDigits:0});
+  let s = v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
   return (neg ? "-R$ " : "R$ ") + s;
 }
 function pctf(v, d=1) {
@@ -5919,20 +5921,22 @@ function renderProgressTab(kind, mkey) {
           </div>
         </div>
         <div class="progress-bar-track"><div class="progress-bar-fill ${r.barCls}" id="bar-${prefix}-${r.code}" style="width:${r.barWidth}%;"></div></div>
-        <div class="obs-block extra-block">
-          <div class="obs-header">
-            <label>Solicitado na ferramenta</label>
-            <span class="obs-status" id="solicitado-status-${prefix}-${r.code}"></span>
+        <div class="extra-row">
+          <div class="obs-block extra-block">
+            <div class="obs-header">
+              <label>Solicitado na ferramenta</label>
+              <span class="obs-status" id="solicitado-status-${prefix}-${r.code}"></span>
+            </div>
+            <input type="number" step="0.01" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? r.solicitado : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')">
+            <div class="small-note">Soma ao Realizado ate aparecer na ficha. Quando a ficha refletir, apague este valor manualmente.</div>
           </div>
-          <input type="number" step="0.01" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? r.solicitado : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')">
-          <div class="small-note">Soma ao Realizado ate aparecer na ficha. Quando a ficha refletir, apague este valor manualmente.</div>
-        </div>
-        <div class="obs-block extra-block">
-          <div class="obs-header">
-            <label>Previsao</label>
-            <span class="obs-status" id="previsao-status-${prefix}-${r.code}"></span>
+          <div class="obs-block extra-block">
+            <div class="obs-header">
+              <label>Previsao</label>
+              <span class="obs-status" id="previsao-status-${prefix}-${r.code}"></span>
+            </div>
+            <input type="number" step="0.01" inputmode="decimal" id="previsao-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.previsao ? r.previsao : ''}" placeholder="Valor previsto (nao soma ao Realizado)" oninput="saveExtra('${r.code}','${prefix}','previsao')">
           </div>
-          <input type="number" step="0.01" inputmode="decimal" id="previsao-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.previsao ? r.previsao : ''}" placeholder="Valor previsto (nao soma ao Realizado)" oninput="saveExtra('${r.code}','${prefix}','previsao')">
         </div>
         <div class="obs-block">
           <div class="obs-header">
