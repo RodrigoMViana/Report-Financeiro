@@ -5210,6 +5210,24 @@ function brl(v) {
   let s = v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
   return (neg ? "-R$ " : "R$ ") + s;
 }
+// Igual a brl(), mas sem o prefixo "R$ " -- usado para preencher campos editaveis (input) no formato x.xxx.xxx,xx.
+function brlPlain(v) {
+  if (v === null || v === undefined || v === 0) return "";
+  const neg = v < 0; v = Math.abs(v);
+  let s = v.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  return (neg ? "-" : "") + s;
+}
+// Converte texto no formato brasileiro (1.285.765,17 ou 1500 ou 1500,5) para numero JS.
+function parseBRNum(s) {
+  if (s === undefined || s === null || s === '') return 0;
+  s = String(s).trim();
+  const neg = s.indexOf('-') === 0;
+  if (neg) s = s.slice(1);
+  s = s.replace(/\./g, '').replace(',', '.');
+  const v = parseFloat(s);
+  if (isNaN(v)) return 0;
+  return neg ? -v : v;
+}
 function pctf(v, d=1) {
   if (v === null || v === undefined) return "-";
   return v.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d}) + "%";
@@ -5927,7 +5945,7 @@ function renderProgressTab(kind, mkey) {
               <label>Solicitado na ferramenta</label>
               <span class="obs-status" id="solicitado-status-${prefix}-${r.code}"></span>
             </div>
-            <input type="number" step="0.01" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? r.solicitado : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')">
+            <input type="text" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? brlPlain(r.solicitado) : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')" onblur="blurExtra('${r.code}','${prefix}','solicitado')">
             <div class="small-note">Soma ao Realizado ate aparecer na ficha. Quando a ficha refletir, apague este valor manualmente.</div>
           </div>
           <div class="obs-block extra-block">
@@ -5935,7 +5953,7 @@ function renderProgressTab(kind, mkey) {
               <label>Previsao</label>
               <span class="obs-status" id="previsao-status-${prefix}-${r.code}"></span>
             </div>
-            <input type="number" step="0.01" inputmode="decimal" id="previsao-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.previsao ? r.previsao : ''}" placeholder="Valor previsto (nao soma ao Realizado)" oninput="saveExtra('${r.code}','${prefix}','previsao')">
+            <input type="text" inputmode="decimal" id="previsao-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.previsao ? brlPlain(r.previsao) : ''}" placeholder="Valor previsto (nao soma ao Realizado)" oninput="saveExtra('${r.code}','${prefix}','previsao')" onblur="blurExtra('${r.code}','${prefix}','previsao')">
           </div>
         </div>
         <div class="obs-block">
@@ -6100,8 +6118,7 @@ function saveExtra(code, kind, field) {
   const mkey = document.getElementById('month-select').value;
   const el = document.getElementById(field + '-' + kind + '-' + code);
   if (!el) return;
-  const parsed = parseFloat(el.value);
-  const num = isNaN(parsed) ? 0 : parsed;
+  const num = parseBRNum(el.value);
   const ex = getExtra(code, mkey, kind);
   ex[field] = num;
 
@@ -6133,6 +6150,15 @@ function saveExtra(code, kind, field) {
       statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 2500);
     });
   }, 800);
+}
+
+function blurExtra(code, kind, field) {
+  // Reformata o campo para x.xxx.xxx,xx assim que o usuario termina de digitar/colar.
+  const mkey = document.getElementById('month-select').value;
+  const el = document.getElementById(field + '-' + kind + '-' + code);
+  if (!el) return;
+  const ex = getExtra(code, mkey, kind);
+  el.value = brlPlain(ex[field]);
 }
 
 function loadExtraFromSupabase() {
