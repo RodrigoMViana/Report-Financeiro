@@ -187,6 +187,7 @@
     <button type="button" class="tab-btn active" data-tab="geral" onclick="showTab('geral')">Comparativo Geral</button>
     <button type="button" class="tab-btn" data-tab="faturamento" onclick="showTab('faturamento')">Faturamento</button>
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
+    <button type="button" class="tab-btn" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
   </div>
 
   <div id="tab-geral" class="tab-panel active">
@@ -5174,6 +5175,30 @@
     <div id="cob-projects-list"></div>
   </div>
 
+  <div id="tab-fechamento" class="tab-panel">
+    <div class="kpi-grid kpi-grid-3">
+      <div class="kpi-card">
+        <div class="kpi-label">Meta Margem % (PR)</div>
+        <div class="kpi-value" id="fech-meta-total">-</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Realizado/Previsto Margem %</div>
+        <div class="kpi-value" id="fech-real-total">-</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Diferenca (p.p.)</div>
+        <div class="kpi-value" id="fech-avanco-geral">-</div>
+        <div class="kpi-sub" id="fech-avanco-geral-sub"></div>
+      </div>
+    </div>
+    <div class="section-title">Fechamento por projeto <span class="count" id="fech-count">18</span></div>
+    <div class="project-filter">
+      <input type="text" id="fech-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('fech')">
+      <button type="button" class="clear-filter" onclick="clearProgressFilter('fech')">Limpar</button>
+    </div>
+    <div id="fech-projects-list"></div>
+  </div>
+
   <div class="footer-note">
     Gerado automaticamente a partir das planilhas de PR (aba RESUMO) e do Pre Cierre (aba FC) &middot; AAPP Sanidad
   </div>
@@ -5832,7 +5857,7 @@ function clearProjectFilter() {
 }
 
 function showTab(name) {
-  ['geral', 'faturamento', 'cobro'].forEach(function(t) {
+  ['geral', 'faturamento', 'cobro', 'fechamento'].forEach(function(t) {
     var panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
     var btn = document.querySelector('.tab-btn[data-tab="' + t + '"]');
@@ -5967,15 +5992,150 @@ function renderProgressTab(kind, mkey) {
   }).join('');
 }
 
+// ---------- Fechamento (margem % com custo/ingresso da Ficha Economica + previsoes manuais) ----------
+function fechInputRow(code, mkey, field, label, placeholder) {
+  const ex = getExtra(code, mkey, 'fech');
+  const val = ex[field];
+  return `
+          <div class="obs-block extra-block">
+            <div class="obs-header">
+              <label>${label}</label>
+              <span class="obs-status" id="${field}-status-fech-${code}"></span>
+            </div>
+            <input type="text" inputmode="decimal" id="${field}-fech-${code}" class="obs-textarea" style="min-height:auto;" value="${val ? brlPlain(val) : ''}" placeholder="${placeholder}" oninput="saveExtra('${code}','fech','${field}')" onblur="blurExtra('${code}','fech','${field}')">
+          </div>`;
+}
+
+function computeFechRow(p, mkey) {
+  const fichaMonth = (FICHA[p.code] && FICHA[p.code][mkey]) ? FICHA[p.code][mkey] : null;
+  const ingFicha = fichaMonth ? (fichaMonth.ing || 0) : 0;
+  const ingreso = ingFicha !== 0 ? ingFicha : p.months[mkey].ingreso.pr;
+  const custoFicha = fichaMonth ? (fichaMonth.cst || 0) : 0;
+
+  const ex = getExtra(p.code, mkey, 'fech');
+  const existencia = ex.existencia || 0;
+  const custoExtra = (ex.outros || 0) + (ex.miops || 0) + (ex.entreempresas || 0) + (ex.rateio || 0) + (ex.provisao || 0) + (ex.imposto || 0);
+  const custoTotal = custoFicha + custoExtra;
+
+  const metaPct = p.months[mkey].margem_pct.pr;
+  const realPct = ingreso !== 0 ? ((ingreso + existencia - custoTotal) / ingreso) * 100 : null;
+  const diffPp = (realPct !== null && metaPct !== null && metaPct !== undefined) ? (realPct - metaPct) : null;
+
+  return {
+    code: p.code, name: p.name,
+    ingreso: ingreso, custoTotal: custoTotal, existencia: existencia,
+    metaPct: metaPct, realPct: realPct, diffPp: diffPp,
+    cls: diffPp === null ? 'neutral' : (diffPp >= 0 ? 'ok' : 'bad'),
+  };
+}
+
+function fechAggregates(mkey) {
+  let totalIngreso = 0, totalCustoTotal = 0, totalExistencia = 0, totalMbPr = 0, totalIngPr = 0;
+  currentProjects().forEach(function(p) {
+    const r = computeFechRow(p, mkey);
+    totalIngreso += r.ingreso;
+    totalCustoTotal += r.custoTotal;
+    totalExistencia += r.existencia;
+    totalMbPr += p.months[mkey].margem.pr;
+    totalIngPr += p.months[mkey].ingreso.pr;
+  });
+  const metaGeralPct = totalIngPr !== 0 ? (totalMbPr / totalIngPr) * 100 : null;
+  const realGeralPct = totalIngreso !== 0 ? ((totalIngreso + totalExistencia - totalCustoTotal) / totalIngreso) * 100 : null;
+  const diffGeralPp = (metaGeralPct !== null && realGeralPct !== null) ? (realGeralPct - metaGeralPct) : null;
+  return { metaGeralPct: metaGeralPct, realGeralPct: realGeralPct, diffGeralPp: diffGeralPp };
+}
+
+function updateFechKpis(mkey) {
+  const agg = fechAggregates(mkey);
+  const metaTotalEl = document.getElementById('fech-meta-total');
+  const realTotalEl = document.getElementById('fech-real-total');
+  if (metaTotalEl) metaTotalEl.textContent = agg.metaGeralPct !== null ? pctf(agg.metaGeralPct) : '-';
+  if (realTotalEl) realTotalEl.textContent = agg.realGeralPct !== null ? pctf(agg.realGeralPct) : '-';
+  const geralEl = document.getElementById('fech-avanco-geral');
+  const geralSub = document.getElementById('fech-avanco-geral-sub');
+  if (geralEl && geralSub) {
+    if (agg.diffGeralPp !== null) {
+      geralEl.textContent = ppf(agg.diffGeralPp);
+      geralSub.textContent = agg.diffGeralPp >= 0 ? 'Acima da meta' : 'Abaixo da meta';
+      geralSub.className = 'kpi-sub ' + (agg.diffGeralPp >= 0 ? 'ok' : 'bad');
+    } else {
+      geralEl.textContent = '-';
+      geralSub.textContent = 'Sem dados suficientes';
+      geralSub.className = 'kpi-sub neutral';
+    }
+  }
+}
+
+function updateFechRowDisplay(code, mkey) {
+  const p = DATA.find(function(x) { return x.code === code; });
+  if (!p) return;
+  const r = computeFechRow(p, mkey);
+
+  const realEl = document.getElementById('fech-real-val-' + code);
+  if (realEl) realEl.textContent = r.realPct !== null ? pctf(r.realPct) : '-';
+  const diffEl = document.getElementById('fech-diff-val-' + code);
+  if (diffEl) { diffEl.textContent = r.diffPp !== null ? ppf(r.diffPp) : '-'; diffEl.className = 'mini-value ' + r.cls; }
+
+  updateFechKpis(mkey);
+}
+
+function renderFechTab(mkey) {
+  const rows = currentProjects().map(function(p) { return computeFechRow(p, mkey); });
+
+  rows.sort(function(a, b) {
+    const da = a.diffPp === null ? 999 : a.diffPp;
+    const db = b.diffPp === null ? 999 : b.diffPp;
+    return da - db;
+  });
+
+  updateFechKpis(mkey);
+
+  document.getElementById('fech-count').textContent = rows.length;
+  if (rows.length === 0) {
+    document.getElementById('fech-projects-list').innerHTML = '<div class="no-results" style="display:block;">Nenhum projeto para ' + CURRENT_GESTOR + ' neste mes.</div>';
+    return;
+  }
+
+  document.getElementById('fech-projects-list').innerHTML = rows.map(function(r) {
+    return `
+      <div class="progress-row" data-code="${r.code}">
+        <div class="progress-top">
+          <div class="progress-left">
+            <span class="proj-code">${r.code}</span>
+            <span class="proj-name">${r.name}</span>
+          </div>
+          <div class="progress-right">
+            <div class="mini-metric">
+              <span class="mini-label">Meta Margem % (PR)</span>
+              <span class="mini-value">${r.metaPct !== null && r.metaPct !== undefined ? pctf(r.metaPct) : '-'}</span>
+            </div>
+            <div class="mini-metric">
+              <span class="mini-label">Realizado/Previsto</span>
+              <span class="mini-value" id="fech-real-val-${r.code}">${r.realPct !== null ? pctf(r.realPct) : '-'}</span>
+            </div>
+            <div class="mini-metric">
+              <span class="mini-label">Diferenca</span>
+              <span class="mini-value ${r.cls}" id="fech-diff-val-${r.code}">${r.diffPp !== null ? ppf(r.diffPp) : '-'}</span>
+            </div>
+          </div>
+        </div>
+        <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechInputRow(r.code, mkey, 'outros', 'Outros', 'Custos nao cadastrados no MIOPS')}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
+        <div class="extra-row">${fechInputRow(r.code, mkey, 'entreempresas', 'Entre Empresas', 'Custo de transferencia entre empresas')}${fechInputRow(r.code, mkey, 'rateio', 'Rateio', 'Custos de rateio')}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}${fechInputRow(r.code, mkey, 'imposto', 'Imposto', 'Custos de imposto')}</div>
+      </div>`;
+  }).join('');
+}
+
 function renderAllTabs(mkey) {
   renderMonth(mkey);
   renderProgressTab('faturamento', mkey);
   renderProgressTab('cobro', mkey);
+  renderFechTab(mkey);
   loadStatusForMonth('fat', mkey);
   loadStatusForMonth('cob', mkey);
   filterProjects();
   filterProgress('fat');
   filterProgress('cob');
+  filterProgress('fech');
 }
 
 // ---------- Status de faturamento/cobro (reaproveita a tabela 'notes' do Supabase) ----------
@@ -6050,10 +6210,17 @@ function loadStatusForMonth(kind, mkey) {
   });
 }
 
-// ---------- Solicitado na ferramenta / Previsao (Faturamento e Cobro) ----------
-// EXTRA[code][mkey] = { fat: {solicitado, previsao}, cob: {solicitado, previsao} }
-// "solicitado" soma no Realizado enquanto a ficha nao reflete o valor pedido na ferramenta.
-// "previsao" e apenas informativo, nunca entra na soma do Realizado.
+// ---------- Campos editaveis extras (Faturamento/Cobro/Fechamento) ----------
+// EXTRA[code][mkey][kind] = { campo: valor, ... } -- kind = 'fat' | 'cob' | 'fech'
+// fat/cob: "solicitado" soma no Realizado enquanto a ficha nao reflete o valor pedido na ferramenta;
+//          "previsao" e apenas informativo, nunca entra na soma.
+// fech: os 6 campos de custo (outros/miops/entreempresas/rateio/provisao/imposto) somam ao custo
+//       da ficha; "existencia" soma junto com o ingresso -- todos usados na formula de margem prevista.
+const EXTRA_FIELDS = {
+  fat: ['solicitado', 'previsao'],
+  cob: ['solicitado', 'previsao'],
+  fech: ['existencia', 'outros', 'miops', 'entreempresas', 'rateio', 'provisao', 'imposto'],
+};
 let EXTRA = {};
 
 function extraComposite(code, field, kind) {
@@ -6064,9 +6231,16 @@ function extraLocalKey(code, field, kind, mkey) {
   return NOTES_PREFIX + extraComposite(code, field, kind) + '::' + mkey;
 }
 
+function emptyExtraForKind(kind) {
+  const obj = {};
+  (EXTRA_FIELDS[kind] || []).forEach(function(f) { obj[f] = 0; });
+  return obj;
+}
+
 function getExtra(code, mkey, kind) {
   if (!EXTRA[code]) EXTRA[code] = {};
-  if (!EXTRA[code][mkey]) EXTRA[code][mkey] = { fat: { solicitado: 0, previsao: 0 }, cob: { solicitado: 0, previsao: 0 } };
+  if (!EXTRA[code][mkey]) EXTRA[code][mkey] = {};
+  if (!EXTRA[code][mkey][kind]) EXTRA[code][mkey][kind] = emptyExtraForKind(kind);
   return EXTRA[code][mkey][kind];
 }
 
@@ -6124,7 +6298,11 @@ function saveExtra(code, kind, field) {
 
   try { localStorage.setItem(extraLocalKey(code, field, kind, mkey), String(num)); } catch (e) {}
 
-  updateProgressRowDisplay(code, kind, mkey);
+  if (kind === 'fech') {
+    updateFechRowDisplay(code, mkey);
+  } else {
+    updateProgressRowDisplay(code, kind, mkey);
+  }
 
   const statusEl = document.getElementById(field + '-status-' + kind + '-' + code);
   const timerKey = field + ':' + kind + ':' + code;
@@ -6164,8 +6342,8 @@ function blurExtra(code, kind, field) {
 function loadExtraFromSupabase() {
   // Carrega uma vez (todos os meses/projetos) igual ao padrao usado para FICHA.
   DATA.forEach(function(p) {
-    ['solicitado', 'previsao'].forEach(function(field) {
-      ['fat', 'cob'].forEach(function(kind) {
+    Object.keys(EXTRA_FIELDS).forEach(function(kind) {
+      EXTRA_FIELDS[kind].forEach(function(field) {
         MESES.forEach(function(mkey) {
           let val = 0;
           try { val = parseFloat(localStorage.getItem(extraLocalKey(p.code, field, kind, mkey))) || 0; } catch (e) {}
@@ -6177,28 +6355,29 @@ function loadExtraFromSupabase() {
 
   if (!SUPABASE_CONFIGURED) return;
 
-  Promise.all([
-    sb.from('notes').select('code,month,text').like('code', '%::solicitado_fat'),
-    sb.from('notes').select('code,month,text').like('code', '%::solicitado_cob'),
-    sb.from('notes').select('code,month,text').like('code', '%::previsao_fat'),
-    sb.from('notes').select('code,month,text').like('code', '%::previsao_cob'),
-  ]).then(function(results) {
-    const specs = [
-      { res: results[0], suffix: '::solicitado_fat', field: 'solicitado', kind: 'fat' },
-      { res: results[1], suffix: '::solicitado_cob', field: 'solicitado', kind: 'cob' },
-      { res: results[2], suffix: '::previsao_fat', field: 'previsao', kind: 'fat' },
-      { res: results[3], suffix: '::previsao_cob', field: 'previsao', kind: 'cob' },
-    ];
+  // Uma query por "kind" (sufixo _fat / _cob / _fech) basta -- pega todos os campos daquele kind de uma vez.
+  const kinds = Object.keys(EXTRA_FIELDS);
+  Promise.all(kinds.map(function(kind) {
+    return sb.from('notes').select('code,month,text').like('code', '%_' + kind);
+  })).then(function(results) {
     let touched = false;
-    specs.forEach(function(spec) {
-      if (!spec.res.data) return;
-      spec.res.data.forEach(function(row) {
-        const idx = row.code.lastIndexOf(spec.suffix);
-        if (idx === -1) return;
-        const code = row.code.slice(0, idx);
+    kinds.forEach(function(kind, i) {
+      const res = results[i];
+      if (!res || !res.data) return;
+      res.data.forEach(function(row) {
+        const dbl = row.code.lastIndexOf('::');
+        if (dbl === -1) return;
+        const code = row.code.slice(0, dbl);
+        const rest = row.code.slice(dbl + 2); // "<field>_<kind>"
+        const lastU = rest.lastIndexOf('_');
+        if (lastU === -1) return;
+        const field = rest.slice(0, lastU);
+        const parsedKind = rest.slice(lastU + 1);
+        if (parsedKind !== kind) return;
+        if ((EXTRA_FIELDS[kind] || []).indexOf(field) === -1) return;
         if (!DATA.some(function(p) { return p.code === code; })) return;
         const num = parseFloat(row.text);
-        getExtra(code, row.month, spec.kind)[spec.field] = isNaN(num) ? 0 : num;
+        getExtra(code, row.month, kind)[field] = isNaN(num) ? 0 : num;
         touched = true;
       });
     });
@@ -6312,15 +6491,18 @@ function parseFichaHtml(html) {
 
       const months = {};
       if (conceptosIdx !== -1) {
+        // O bloco de um projeto tem varias sub-tabelas (Proveitos, Outros Proveitos, Costes),
+        // cada uma com seu proprio cabecalho "Conceptos" repetido -- por isso o scan precisa
+        // percorrer bem alem da primeira ocorrencia para chegar em "Total Custos".
         let k = conceptosIdx + 16;
         let scanned = 0;
-        while (k < n && tokens[k] !== 'Proyecto:' && scanned < 30) {
+        while (k < n && tokens[k] !== 'Proyecto:' && scanned < 400) {
           const label = tokens[k];
           const row = tokens.slice(k, k + 16);
           if (row.length < 16) break;
-          if (label === 'Faturação' || label.indexOf('Cobranças') === 0) {
+          if (label === 'Faturação' || label.indexOf('Cobranças') === 0 || label === 'Vendas' || label === 'Total Custos') {
             const vals = row.slice(2, 14);
-            const key = label === 'Faturação' ? 'fat' : 'cob';
+            const key = label === 'Faturação' ? 'fat' : (label.indexOf('Cobranças') === 0 ? 'cob' : (label === 'Vendas' ? 'ing' : 'cst'));
             for (let mi = 0; mi < 12; mi++) {
               const pt = FICHA_MONTHS_PT[mi];
               if (!months[pt]) months[pt] = {};
@@ -6400,6 +6582,8 @@ async function handleFichaFiles(event) {
       FICHA[code][mk] = {
         fat: v ? parseFichaNum(v.fat) : (FICHA[code][mk] ? FICHA[code][mk].fat : 0),
         cob: v ? parseFichaNum(v.cob) : (FICHA[code][mk] ? FICHA[code][mk].cob : 0),
+        ing: v ? parseFichaNum(v.ing) : (FICHA[code][mk] ? FICHA[code][mk].ing : 0),
+        cst: v ? parseFichaNum(v.cst) : (FICHA[code][mk] ? FICHA[code][mk].cst : 0),
       };
     });
   });
@@ -6418,6 +6602,8 @@ async function handleFichaFiles(event) {
       const v = FICHA[code][mk];
       rows.push({ code: fichaOverrideCode(code, 'fat'), month: mk, text: String(v.fat), updated_at: new Date().toISOString() });
       rows.push({ code: fichaOverrideCode(code, 'cob'), month: mk, text: String(v.cob), updated_at: new Date().toISOString() });
+      rows.push({ code: fichaOverrideCode(code, 'ing'), month: mk, text: String(v.ing), updated_at: new Date().toISOString() });
+      rows.push({ code: fichaOverrideCode(code, 'cst'), month: mk, text: String(v.cst), updated_at: new Date().toISOString() });
     });
   });
 
@@ -6441,10 +6627,10 @@ function loadFichaOverridesFromSupabase() {
       const idx = row.code.lastIndexOf('::ficha_');
       if (idx === -1) return;
       const code = row.code.slice(0, idx);
-      const kind = row.code.slice(idx + 8); // 'fat' ou 'cob'
+      const kind = row.code.slice(idx + 8); // 'fat', 'cob', 'ing' ou 'cst'
       if (!DATA.some(p => p.code === code)) return;
       if (!FICHA[code]) FICHA[code] = {};
-      if (!FICHA[code][row.month]) FICHA[code][row.month] = { fat: 0, cob: 0 };
+      if (!FICHA[code][row.month]) FICHA[code][row.month] = { fat: 0, cob: 0, ing: 0, cst: 0 };
       const parsedNum = parseFloat(row.text);
       FICHA[code][row.month][kind] = isNaN(parsedNum) ? 0 : parsedNum;
       touched = true;
