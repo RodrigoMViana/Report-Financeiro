@@ -5942,13 +5942,13 @@ function renderProgressTab(kind, mkey) {
   }
   document.getElementById(prefix + '-projects-list').innerHTML = rows.map(function(r) {
     return `
-      <div class="progress-row" data-code="${r.code}">
-        <div class="progress-top">
-          <div class="progress-left">
+      <details class="project-card" data-code="${r.code}">
+        <summary>
+          <div class="summary-left">
             <span class="proj-code">${r.code}</span>
             <span class="proj-name">${r.name}</span>
           </div>
-          <div class="progress-right">
+          <div class="summary-right">
             <div class="mini-metric">
               <span class="mini-label">Meta (PR)</span>
               <span class="mini-value">${brl(r.meta)}</span>
@@ -5961,34 +5961,37 @@ function renderProgressTab(kind, mkey) {
               <span class="mini-label">Avanco</span>
               <span class="mini-value ${r.cls}" id="pct-val-${prefix}-${r.code}">${r.pctText}</span>
             </div>
+            <span class="chevron">&#9660;</span>
           </div>
-        </div>
-        <div class="progress-bar-track"><div class="progress-bar-fill ${r.barCls}" id="bar-${prefix}-${r.code}" style="width:${r.barWidth}%;"></div></div>
-        <div class="extra-row">
-          <div class="obs-block extra-block">
-            <div class="obs-header">
-              <label>${prefix === 'cob' ? 'Confirmado Recebimento' : 'Solicitado na ferramenta'}</label>
-              <span class="obs-status" id="solicitado-status-${prefix}-${r.code}"></span>
+        </summary>
+        <div class="card-body">
+          <div class="progress-bar-track" style="margin-bottom:16px;"><div class="progress-bar-fill ${r.barCls}" id="bar-${prefix}-${r.code}" style="width:${r.barWidth}%;"></div></div>
+          <div class="extra-row">
+            <div class="obs-block extra-block">
+              <div class="obs-header">
+                <label>${prefix === 'cob' ? 'Confirmado Recebimento' : 'Solicitado na ferramenta'}</label>
+                <span class="obs-status" id="solicitado-status-${prefix}-${r.code}"></span>
+              </div>
+              <input type="text" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? brlPlain(r.solicitado) : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')" onblur="blurExtra('${r.code}','${prefix}','solicitado')">
+              <div class="small-note">Soma ao Realizado ate aparecer na ficha. Quando a ficha refletir, apague este valor manualmente.</div>
             </div>
-            <input type="text" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? brlPlain(r.solicitado) : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')" onblur="blurExtra('${r.code}','${prefix}','solicitado')">
-            <div class="small-note">Soma ao Realizado ate aparecer na ficha. Quando a ficha refletir, apague este valor manualmente.</div>
-          </div>
-          <div class="obs-block extra-block">
-            <div class="obs-header">
-              <label>Previsao</label>
-              <span class="obs-status" id="previsao-status-${prefix}-${r.code}"></span>
+            <div class="obs-block extra-block">
+              <div class="obs-header">
+                <label>Previsao</label>
+                <span class="obs-status" id="previsao-status-${prefix}-${r.code}"></span>
+              </div>
+              <input type="text" inputmode="decimal" id="previsao-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.previsao ? brlPlain(r.previsao) : ''}" placeholder="Valor previsto (nao soma ao Realizado)" oninput="saveExtra('${r.code}','${prefix}','previsao')" onblur="blurExtra('${r.code}','${prefix}','previsao')">
             </div>
-            <input type="text" inputmode="decimal" id="previsao-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.previsao ? brlPlain(r.previsao) : ''}" placeholder="Valor previsto (nao soma ao Realizado)" oninput="saveExtra('${r.code}','${prefix}','previsao')" onblur="blurExtra('${r.code}','${prefix}','previsao')">
+          </div>
+          <div class="obs-block">
+            <div class="obs-header">
+              <label>Status do ${prefix === 'fat' ? 'faturamento' : 'pagamento'}</label>
+              <span class="obs-status" id="status-${prefix}-status-${r.code}"></span>
+            </div>
+            <textarea id="status-${prefix}-${r.code}" class="obs-textarea" placeholder="Digite aqui como esta o status deste ${prefix === 'fat' ? 'faturamento' : 'pagamento'}..." oninput="saveStatus('${r.code}','${prefix}')"></textarea>
           </div>
         </div>
-        <div class="obs-block">
-          <div class="obs-header">
-            <label>Status do ${prefix === 'fat' ? 'faturamento' : 'pagamento'}</label>
-            <span class="obs-status" id="status-${prefix}-status-${r.code}"></span>
-          </div>
-          <textarea id="status-${prefix}-${r.code}" class="obs-textarea" placeholder="Digite aqui como esta o status deste ${prefix === 'fat' ? 'faturamento' : 'pagamento'}..." oninput="saveStatus('${r.code}','${prefix}')"></textarea>
-        </div>
-      </div>`;
+      </details>`;
   }).join('');
 }
 
@@ -6098,13 +6101,13 @@ function renderFechTab(mkey) {
 
   document.getElementById('fech-projects-list').innerHTML = rows.map(function(r) {
     return `
-      <div class="progress-row" data-code="${r.code}">
-        <div class="progress-top">
-          <div class="progress-left">
+      <details class="project-card" data-code="${r.code}">
+        <summary>
+          <div class="summary-left">
             <span class="proj-code">${r.code}</span>
             <span class="proj-name">${r.name}</span>
           </div>
-          <div class="progress-right">
+          <div class="summary-right">
             <div class="mini-metric">
               <span class="mini-label">Meta Margem % (PR)</span>
               <span class="mini-value">${r.metaPct !== null && r.metaPct !== undefined ? pctf(r.metaPct) : '-'}</span>
@@ -6117,11 +6120,14 @@ function renderFechTab(mkey) {
               <span class="mini-label">Diferenca</span>
               <span class="mini-value ${r.cls}" id="fech-diff-val-${r.code}">${r.diffPp !== null ? ppf(r.diffPp) : '-'}</span>
             </div>
+            <span class="chevron">&#9660;</span>
           </div>
+        </summary>
+        <div class="card-body">
+          <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechInputRow(r.code, mkey, 'outros', 'Outros', 'Custos nao cadastrados no MIOPS')}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
+          <div class="extra-row">${fechInputRow(r.code, mkey, 'entreempresas', 'Entre Empresas', 'Custo de transferencia entre empresas')}${fechInputRow(r.code, mkey, 'rateio', 'Rateio', 'Custos de rateio')}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}${fechInputRow(r.code, mkey, 'imposto', 'Imposto', 'Custos de imposto')}</div>
         </div>
-        <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechInputRow(r.code, mkey, 'outros', 'Outros', 'Custos nao cadastrados no MIOPS')}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
-        <div class="extra-row">${fechInputRow(r.code, mkey, 'entreempresas', 'Entre Empresas', 'Custo de transferencia entre empresas')}${fechInputRow(r.code, mkey, 'rateio', 'Rateio', 'Custos de rateio')}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}${fechInputRow(r.code, mkey, 'imposto', 'Imposto', 'Custos de imposto')}</div>
-      </div>`;
+      </details>`;
   }).join('');
 }
 
@@ -6390,7 +6396,7 @@ function filterProgress(prefix) {
   const searchEl = document.getElementById(prefix + '-search');
   if (!searchEl) return;
   const q = normalizeText(searchEl.value.trim());
-  const rows = document.querySelectorAll('#' + prefix + '-projects-list .progress-row');
+  const rows = document.querySelectorAll('#' + prefix + '-projects-list .project-card');
   let visible = 0;
   rows.forEach(function(row) {
     const code = normalizeText(row.getAttribute('data-code'));
