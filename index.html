@@ -64,11 +64,11 @@
   .project-card { background:#fff; border:1px solid var(--border); border-radius:12px; margin-bottom:14px; overflow:hidden; }
   .project-card summary { list-style:none; cursor:pointer; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap; }
   .project-card summary::-webkit-details-marker { display:none; }
-  .summary-left { display:flex; align-items:center; gap:12px; min-width:260px; }
-  .proj-code { font-weight:700; color:var(--navy); background:var(--ice); padding:3px 9px; border-radius:6px; font-size:13px; white-space:nowrap; }
-  .proj-name { font-size:14px; font-weight:600; color:#1b2430; }
-  .flag-badge { background:var(--bad-bg); color:var(--bad); font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; }
-  .summary-right { display:flex; align-items:center; gap:26px; flex-wrap:wrap; }
+  .summary-left { display:flex; align-items:center; gap:12px; min-width:0; flex:1 1 220px; overflow:hidden; }
+  .proj-code { font-weight:700; color:var(--navy); background:var(--ice); padding:3px 9px; border-radius:6px; font-size:13px; white-space:nowrap; flex-shrink:0; }
+  .proj-name { font-size:14px; font-weight:600; color:#1b2430; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .flag-badge { background:var(--bad-bg); color:var(--bad); font-size:11px; font-weight:700; padding:3px 9px; border-radius:20px; white-space:nowrap; flex-shrink:0; }
+  .summary-right { display:flex; align-items:center; gap:26px; flex-wrap:wrap; flex-shrink:0; }
   .mini-metric { display:flex; flex-direction:column; align-items:flex-end; min-width:90px; }
   .mini-label { font-size:10px; text-transform:uppercase; color:var(--slate); letter-spacing:0.3px; }
   .mini-value { font-size:14px; font-weight:700; color:#1b2430; }
@@ -272,7 +272,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP09</span>
-      <span class="proj-name">(RA) Sustentação das soluções administrativas e tributárias da SEMEF (Manau</span>
+      <span class="proj-name" title="(RA) Sustentação das soluções administrativas e tributárias da SEMEF (Manau">(RA) Sustentação das soluções administrativas e tributárias da SEMEF (Manau</span>
       <span class="flag-badge" id="flag-22AP09" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -363,7 +363,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP11</span>
-      <span class="proj-name">DIC  - SEMEF</span>
+      <span class="proj-name" title="DIC  - SEMEF">DIC  - SEMEF</span>
       <span class="flag-badge" id="flag-25AP11" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -454,7 +454,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP28</span>
-      <span class="proj-name">Desenvolvimento e manutenção de soluções para PGM Manaus</span>
+      <span class="proj-name" title="Desenvolvimento e manutenção de soluções para PGM Manaus">Desenvolvimento e manutenção de soluções para PGM Manaus</span>
       <span class="flag-badge" id="flag-23AP28" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -545,7 +545,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP05</span>
-      <span class="proj-name">Serviço de Desenvolvimento para SES/GO</span>
+      <span class="proj-name" title="Serviço de Desenvolvimento para SES/GO">Serviço de Desenvolvimento para SES/GO</span>
       <span class="flag-badge" id="flag-23AP05" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -636,7 +636,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP08</span>
-      <span class="proj-name">Serviço de Desenvolvimento para SES/GO(novo)</span>
+      <span class="proj-name" title="Serviço de Desenvolvimento para SES/GO(novo)">Serviço de Desenvolvimento para SES/GO(novo)</span>
       <span class="flag-badge" id="flag-26AP08" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -727,7 +727,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP01</span>
-      <span class="proj-name">Serviços de GA - Lote 01 SUBGES</span>
+      <span class="proj-name" title="Serviços de GA - Lote 01 SUBGES">Serviços de GA - Lote 01 SUBGES</span>
       <span class="flag-badge" id="flag-26AP01" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -818,7 +818,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP02</span>
-      <span class="proj-name">Serviços de GA - Lote 02 SUBORP</span>
+      <span class="proj-name" title="Serviços de GA - Lote 02 SUBORP">Serviços de GA - Lote 02 SUBORP</span>
       <span class="flag-badge" id="flag-26AP02" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -909,7 +909,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP03</span>
-      <span class="proj-name">Serviços de GA - Lote 04 SUBTES</span>
+      <span class="proj-name" title="Serviços de GA - Lote 04 SUBTES">Serviços de GA - Lote 04 SUBTES</span>
       <span class="flag-badge" id="flag-26AP03" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1000,7 +1000,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP04</span>
-      <span class="proj-name">Serviços de GA - Lote 05 SUBTI</span>
+      <span class="proj-name" title="Serviços de GA - Lote 05 SUBTI">Serviços de GA - Lote 05 SUBTI</span>
       <span class="flag-badge" id="flag-26AP04" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1091,7 +1091,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP17</span>
-      <span class="proj-name">Serviços de GA MS Dynamics 365</span>
+      <span class="proj-name" title="Serviços de GA MS Dynamics 365">Serviços de GA MS Dynamics 365</span>
       <span class="flag-badge" id="flag-24AP17" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1182,7 +1182,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP38</span>
-      <span class="proj-name">Serviços de GA TCM-PA</span>
+      <span class="proj-name" title="Serviços de GA TCM-PA">Serviços de GA TCM-PA</span>
       <span class="flag-badge" id="flag-23AP38" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1273,7 +1273,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP07</span>
-      <span class="proj-name">Serviços de GA para a SEMEF</span>
+      <span class="proj-name" title="Serviços de GA para a SEMEF">Serviços de GA para a SEMEF</span>
       <span class="flag-badge" id="flag-24AP07" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1364,7 +1364,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP36</span>
-      <span class="proj-name">Serviços de GA para o TCE-TO (ATA MGI)</span>
+      <span class="proj-name" title="Serviços de GA para o TCE-TO (ATA MGI)">Serviços de GA para o TCE-TO (ATA MGI)</span>
       <span class="flag-badge" id="flag-24AP36" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1455,7 +1455,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP04</span>
-      <span class="proj-name">Serviços de GA-SEFAZ-AP</span>
+      <span class="proj-name" title="Serviços de GA-SEFAZ-AP">Serviços de GA-SEFAZ-AP</span>
       <span class="flag-badge" id="flag-24AP04" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1546,7 +1546,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP06</span>
-      <span class="proj-name">Serviços de GA-SEFAZ-AP-Adesão MGI</span>
+      <span class="proj-name" title="Serviços de GA-SEFAZ-AP-Adesão MGI">Serviços de GA-SEFAZ-AP-Adesão MGI</span>
       <span class="flag-badge" id="flag-25AP06" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1637,7 +1637,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP03</span>
-      <span class="proj-name">Serviços de Infraestrutura para o TCE GO</span>
+      <span class="proj-name" title="Serviços de Infraestrutura para o TCE GO">Serviços de Infraestrutura para o TCE GO</span>
       <span class="flag-badge" id="flag-23AP03" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1728,7 +1728,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP05</span>
-      <span class="proj-name">Serviçosd e GT-SEFAZ-AP</span>
+      <span class="proj-name" title="Serviçosd e GT-SEFAZ-AP">Serviçosd e GT-SEFAZ-AP</span>
       <span class="flag-badge" id="flag-24AP05" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1819,7 +1819,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP15</span>
-      <span class="proj-name">TCE-GO AM</span>
+      <span class="proj-name" title="TCE-GO AM">TCE-GO AM</span>
       <span class="flag-badge" id="flag-22AP15" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -1944,7 +1944,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP27</span>
-      <span class="proj-name">(NC) Desenvolvimento e Manutenção de Soluções (Adesão ATA ATI) - SEDUC/RECI</span>
+      <span class="proj-name" title="(NC) Desenvolvimento e Manutenção de Soluções (Adesão ATA ATI) - SEDUC/RECI">(NC) Desenvolvimento e Manutenção de Soluções (Adesão ATA ATI) - SEDUC/RECI</span>
       <span class="flag-badge" id="flag-22AP27" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2035,7 +2035,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP14</span>
-      <span class="proj-name">AM para SEECT-PB</span>
+      <span class="proj-name" title="AM para SEECT-PB">AM para SEECT-PB</span>
       <span class="flag-badge" id="flag-22AP14" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2126,7 +2126,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP17</span>
-      <span class="proj-name">Desenvolvimento e Sustentação de Solução (Adesão ATA ATI PE)</span>
+      <span class="proj-name" title="Desenvolvimento e Sustentação de Solução (Adesão ATA ATI PE)">Desenvolvimento e Sustentação de Solução (Adesão ATA ATI PE)</span>
       <span class="flag-badge" id="flag-22AP17" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2217,7 +2217,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP40</span>
-      <span class="proj-name">Desenvolvimento e manutenção de Software</span>
+      <span class="proj-name" title="Desenvolvimento e manutenção de Software">Desenvolvimento e manutenção de Software</span>
       <span class="flag-badge" id="flag-25AP40" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2308,7 +2308,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP38</span>
-      <span class="proj-name">Desenvolvimento, manutenção e sustentação para o Sistema de Pagamento (SISPAG)</span>
+      <span class="proj-name" title="Desenvolvimento, manutenção e sustentação para o Sistema de Pagamento (SISPAG)">Desenvolvimento, manutenção e sustentação para o Sistema de Pagamento (SISPAG)</span>
       <span class="flag-badge" id="flag-25AP38" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2399,7 +2399,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP28</span>
-      <span class="proj-name">Fábrica de Software do Tribunal de Contas Paraná</span>
+      <span class="proj-name" title="Fábrica de Software do Tribunal de Contas Paraná">Fábrica de Software do Tribunal de Contas Paraná</span>
       <span class="flag-badge" id="flag-24AP28" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2490,7 +2490,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP33</span>
-      <span class="proj-name">Fábrica de Software para EMATER</span>
+      <span class="proj-name" title="Fábrica de Software para EMATER">Fábrica de Software para EMATER</span>
       <span class="flag-badge" id="flag-23AP33" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2581,7 +2581,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP13</span>
-      <span class="proj-name">GA EMLURB</span>
+      <span class="proj-name" title="GA EMLURB">GA EMLURB</span>
       <span class="flag-badge" id="flag-23AP13" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2672,7 +2672,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP07</span>
-      <span class="proj-name">Manutenção SISAC para CGE PB</span>
+      <span class="proj-name" title="Manutenção SISAC para CGE PB">Manutenção SISAC para CGE PB</span>
       <span class="flag-badge" id="flag-25AP07" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2763,7 +2763,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP19</span>
-      <span class="proj-name">Manutenção e Desenvolvimento de soluções para a Secretaria de Educação PE</span>
+      <span class="proj-name" title="Manutenção e Desenvolvimento de soluções para a Secretaria de Educação PE">Manutenção e Desenvolvimento de soluções para a Secretaria de Educação PE</span>
       <span class="flag-badge" id="flag-22AP19" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2854,7 +2854,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">26AP09</span>
-      <span class="proj-name">Marinha - Adesão ATA/MGI - Fábrica Software</span>
+      <span class="proj-name" title="Marinha - Adesão ATA/MGI - Fábrica Software">Marinha - Adesão ATA/MGI - Fábrica Software</span>
       <span class="flag-badge" id="flag-26AP09" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -2945,7 +2945,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP33</span>
-      <span class="proj-name">Marinha - Adesão ATA/MGI - Fábrica Software</span>
+      <span class="proj-name" title="Marinha - Adesão ATA/MGI - Fábrica Software">Marinha - Adesão ATA/MGI - Fábrica Software</span>
       <span class="flag-badge" id="flag-24AP33" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3036,7 +3036,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP31</span>
-      <span class="proj-name">Projeto ESocial PAPEM</span>
+      <span class="proj-name" title="Projeto ESocial PAPEM">Projeto ESocial PAPEM</span>
       <span class="flag-badge" id="flag-24AP31" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3127,7 +3127,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP19</span>
-      <span class="proj-name">Projeto PROFISCO em atendimento a CGE</span>
+      <span class="proj-name" title="Projeto PROFISCO em atendimento a CGE">Projeto PROFISCO em atendimento a CGE</span>
       <span class="flag-badge" id="flag-24AP19" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3218,7 +3218,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP21</span>
-      <span class="proj-name">Projeto PROFISCO em atendimento a SEFAZ</span>
+      <span class="proj-name" title="Projeto PROFISCO em atendimento a SEFAZ">Projeto PROFISCO em atendimento a SEFAZ</span>
       <span class="flag-badge" id="flag-24AP21" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3309,7 +3309,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP32</span>
-      <span class="proj-name">Projeto de Cyber - ATI/MA</span>
+      <span class="proj-name" title="Projeto de Cyber - ATI/MA">Projeto de Cyber - ATI/MA</span>
       <span class="flag-badge" id="flag-24AP32" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3400,7 +3400,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP02</span>
-      <span class="proj-name">SERVIÇO DE DESENVOLVIMENTO E MANUTENÇÃO DE SOFTWARE</span>
+      <span class="proj-name" title="SERVIÇO DE DESENVOLVIMENTO E MANUTENÇÃO DE SOFTWARE">SERVIÇO DE DESENVOLVIMENTO E MANUTENÇÃO DE SOFTWARE</span>
       <span class="flag-badge" id="flag-25AP02" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3491,7 +3491,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP03</span>
-      <span class="proj-name">SIMOC - RUST CONSULTORIA</span>
+      <span class="proj-name" title="SIMOC - RUST CONSULTORIA">SIMOC - RUST CONSULTORIA</span>
       <span class="flag-badge" id="flag-25AP03" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3582,7 +3582,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP01</span>
-      <span class="proj-name">Service Desk e Field Service Sefaz</span>
+      <span class="proj-name" title="Service Desk e Field Service Sefaz">Service Desk e Field Service Sefaz</span>
       <span class="flag-badge" id="flag-24AP01" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3673,7 +3673,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP08</span>
-      <span class="proj-name">Serviço de AM para AGED-MA</span>
+      <span class="proj-name" title="Serviço de AM para AGED-MA">Serviço de AM para AGED-MA</span>
       <span class="flag-badge" id="flag-22AP08" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3764,7 +3764,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP39</span>
-      <span class="proj-name">Serviço de GU e GT - Prefeitura de São Paulo</span>
+      <span class="proj-name" title="Serviço de GU e GT - Prefeitura de São Paulo">Serviço de GU e GT - Prefeitura de São Paulo</span>
       <span class="flag-badge" id="flag-23AP39" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3855,7 +3855,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP32</span>
-      <span class="proj-name">Serviços ATT  - SEAD-RN</span>
+      <span class="proj-name" title="Serviços ATT  - SEAD-RN">Serviços ATT  - SEAD-RN</span>
       <span class="flag-badge" id="flag-23AP32" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -3946,7 +3946,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP10</span>
-      <span class="proj-name">Serviços Técnicos especializados para Implantação, Desenvolvimento e Manutenção</span>
+      <span class="proj-name" title="Serviços Técnicos especializados para Implantação, Desenvolvimento e Manutenção">Serviços Técnicos especializados para Implantação, Desenvolvimento e Manutenção</span>
       <span class="flag-badge" id="flag-25AP10" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4037,7 +4037,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP31</span>
-      <span class="proj-name">Serviços de AM para a SMS RECIFE</span>
+      <span class="proj-name" title="Serviços de AM para a SMS RECIFE">Serviços de AM para a SMS RECIFE</span>
       <span class="flag-badge" id="flag-23AP31" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4128,7 +4128,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP09</span>
-      <span class="proj-name">Serviços de AT para o TJPB</span>
+      <span class="proj-name" title="Serviços de AT para o TJPB">Serviços de AT para o TJPB</span>
       <span class="flag-badge" id="flag-23AP09" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4219,7 +4219,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP08</span>
-      <span class="proj-name">Serviços de GA</span>
+      <span class="proj-name" title="Serviços de GA">Serviços de GA</span>
       <span class="flag-badge" id="flag-23AP08" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4310,7 +4310,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP09</span>
-      <span class="proj-name">Serviços de GA (Interoperabilidade São Bernardo do Campo)</span>
+      <span class="proj-name" title="Serviços de GA (Interoperabilidade São Bernardo do Campo)">Serviços de GA (Interoperabilidade São Bernardo do Campo)</span>
       <span class="flag-badge" id="flag-24AP09" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4401,7 +4401,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP17</span>
-      <span class="proj-name">Serviços de GA para a SEFAZ-PB (Adesão Ata SESMA)</span>
+      <span class="proj-name" title="Serviços de GA para a SEFAZ-PB (Adesão Ata SESMA)">Serviços de GA para a SEFAZ-PB (Adesão Ata SESMA)</span>
       <span class="flag-badge" id="flag-23AP17" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4492,7 +4492,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP30</span>
-      <span class="proj-name">Serviços de GA para o TJAC</span>
+      <span class="proj-name" title="Serviços de GA para o TJAC">Serviços de GA para o TJAC</span>
       <span class="flag-badge" id="flag-24AP30" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4583,7 +4583,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">23AP11</span>
-      <span class="proj-name">Serviços de GT</span>
+      <span class="proj-name" title="Serviços de GT">Serviços de GT</span>
       <span class="flag-badge" id="flag-23AP11" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4674,7 +4674,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">25AP35</span>
-      <span class="proj-name">Serviços de GU para SEFAZ</span>
+      <span class="proj-name" title="Serviços de GU para SEFAZ">Serviços de GU para SEFAZ</span>
       <span class="flag-badge" id="flag-25AP35" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4765,7 +4765,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP14</span>
-      <span class="proj-name">Sustentação de soluções para a SEFAZ PB 1o Período</span>
+      <span class="proj-name" title="Sustentação de soluções para a SEFAZ PB 1o Período">Sustentação de soluções para a SEFAZ PB 1o Período</span>
       <span class="flag-badge" id="flag-24AP14" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4856,7 +4856,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP26</span>
-      <span class="proj-name">Sustentação sistemas do TJPB</span>
+      <span class="proj-name" title="Sustentação sistemas do TJPB">Sustentação sistemas do TJPB</span>
       <span class="flag-badge" id="flag-22AP26" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -4947,7 +4947,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">22AP11</span>
-      <span class="proj-name">Sustentação sistemas legados DETRAN-DF.</span>
+      <span class="proj-name" title="Sustentação sistemas legados DETRAN-DF.">Sustentação sistemas legados DETRAN-DF.</span>
       <span class="flag-badge" id="flag-22AP11" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -5038,7 +5038,7 @@
   <summary>
     <div class="summary-left">
       <span class="proj-code">24AP08</span>
-      <span class="proj-name">Venda de Licenças - SBC</span>
+      <span class="proj-name" title="Venda de Licenças - SBC">Venda de Licenças - SBC</span>
       <span class="flag-badge" id="flag-24AP08" style="display:none;">Divergencia relevante</span>
     </div>
     <div class="summary-right">
@@ -5962,7 +5962,7 @@ function renderProgressTab(kind, mkey) {
         <summary>
           <div class="summary-left">
             <span class="proj-code">${r.code}</span>
-            <span class="proj-name">${r.name}</span>
+            <span class="proj-name" title="${r.name}">${r.name}</span>
           </div>
           <div class="summary-right">
             <div class="mini-metric">
@@ -6182,7 +6182,7 @@ function renderFechTab(mkey) {
         <summary>
           <div class="summary-left">
             <span class="proj-code">${r.code}</span>
-            <span class="proj-name">${r.name}</span>
+            <span class="proj-name" title="${r.name}">${r.name}</span>
           </div>
           <div class="summary-right">
             <div class="mini-metric">
@@ -6259,7 +6259,7 @@ function renderParamTab(mkey) {
         <summary>
           <div class="summary-left">
             <span class="proj-code">${p.code}</span>
-            <span class="proj-name">${p.name}</span>
+            <span class="proj-name" title="${p.name}">${p.name}</span>
           </div>
           <div class="summary-right">
             <div class="mini-metric">
