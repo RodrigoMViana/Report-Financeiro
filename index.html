@@ -5176,7 +5176,7 @@
   </div>
 
   <div id="tab-fechamento" class="tab-panel">
-    <div class="kpi-grid kpi-grid-3">
+    <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-label">Meta Margem % (PR)</div>
         <div class="kpi-value" id="fech-meta-total">-</div>
@@ -5189,6 +5189,11 @@
         <div class="kpi-label">Diferenca (p.p.)</div>
         <div class="kpi-value" id="fech-avanco-geral">-</div>
         <div class="kpi-sub" id="fech-avanco-geral-sub"></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Diferenca de Margem vs Pre Cierre (R$)</div>
+        <div class="kpi-value" id="fech-margem-rs-total">-</div>
+        <div class="kpi-sub" id="fech-margem-rs-sub"></div>
       </div>
     </div>
     <div class="section-title">Fechamento por projeto <span class="count" id="fech-count">18</span></div>
@@ -6024,16 +6029,23 @@ function computeFechRow(p, mkey) {
   const realPct = ingreso !== 0 ? ((ingreso + existencia - custoTotal) / ingreso) * 100 : null;
   const diffPp = (realPct !== null && metaPct !== null && metaPct !== undefined) ? (realPct - metaPct) : null;
 
+  const margemAtualRS = ingreso + existencia - custoTotal;
+  const margemFcRS = p.months[mkey].margem.fc || 0;
+  const diffMargemRS = margemAtualRS - margemFcRS;
+
   return {
     code: p.code, name: p.name,
     ingreso: ingreso, custoTotal: custoTotal, existencia: existencia,
     metaPct: metaPct, realPct: realPct, diffPp: diffPp,
+    margemAtualRS: margemAtualRS, margemFcRS: margemFcRS, diffMargemRS: diffMargemRS,
     cls: diffPp === null ? 'neutral' : (diffPp >= 0 ? 'ok' : 'bad'),
+    clsMargemRS: clsPct(diffMargemRS),
   };
 }
 
 function fechAggregates(mkey) {
   let totalIngreso = 0, totalCustoTotal = 0, totalExistencia = 0, totalMbPr = 0, totalIngPr = 0;
+  let totalMargemAtualRS = 0, totalMargemFcRS = 0;
   currentProjects().forEach(function(p) {
     const r = computeFechRow(p, mkey);
     totalIngreso += r.ingreso;
@@ -6041,11 +6053,15 @@ function fechAggregates(mkey) {
     totalExistencia += r.existencia;
     totalMbPr += p.months[mkey].margem.pr;
     totalIngPr += p.months[mkey].ingreso.pr;
+    totalMargemAtualRS += r.margemAtualRS;
+    totalMargemFcRS += r.margemFcRS;
   });
   const metaGeralPct = totalIngPr !== 0 ? (totalMbPr / totalIngPr) * 100 : null;
   const realGeralPct = totalIngreso !== 0 ? ((totalIngreso + totalExistencia - totalCustoTotal) / totalIngreso) * 100 : null;
   const diffGeralPp = (metaGeralPct !== null && realGeralPct !== null) ? (realGeralPct - metaGeralPct) : null;
-  return { metaGeralPct: metaGeralPct, realGeralPct: realGeralPct, diffGeralPp: diffGeralPp };
+  const diffMargemGeralRS = totalMargemAtualRS - totalMargemFcRS;
+  return { metaGeralPct: metaGeralPct, realGeralPct: realGeralPct, diffGeralPp: diffGeralPp,
+           totalMargemAtualRS: totalMargemAtualRS, totalMargemFcRS: totalMargemFcRS, diffMargemGeralRS: diffMargemGeralRS };
 }
 
 function updateFechKpis(mkey) {
@@ -6067,6 +6083,13 @@ function updateFechKpis(mkey) {
       geralSub.className = 'kpi-sub neutral';
     }
   }
+  const margemRsEl = document.getElementById('fech-margem-rs-total');
+  const margemRsSub = document.getElementById('fech-margem-rs-sub');
+  if (margemRsEl && margemRsSub) {
+    margemRsEl.textContent = brl(agg.diffMargemGeralRS);
+    margemRsSub.textContent = (agg.diffMargemGeralRS >= 0 ? 'Acima' : 'Abaixo') + ' do Pre Cierre (' + brl(agg.totalMargemFcRS) + ')';
+    margemRsSub.className = 'kpi-sub ' + clsPct(agg.diffMargemGeralRS);
+  }
 }
 
 function updateFechRowDisplay(code, mkey) {
@@ -6078,6 +6101,8 @@ function updateFechRowDisplay(code, mkey) {
   if (realEl) realEl.textContent = r.realPct !== null ? pctf(r.realPct) : '-';
   const diffEl = document.getElementById('fech-diff-val-' + code);
   if (diffEl) { diffEl.textContent = r.diffPp !== null ? ppf(r.diffPp) : '-'; diffEl.className = 'mini-value ' + r.cls; }
+  const diffRsEl = document.getElementById('fech-diff-rs-val-' + code);
+  if (diffRsEl) { diffRsEl.textContent = brl(r.diffMargemRS); diffRsEl.className = 'mini-value ' + r.clsMargemRS; }
 
   updateFechKpis(mkey);
 }
@@ -6119,6 +6144,10 @@ function renderFechTab(mkey) {
             <div class="mini-metric">
               <span class="mini-label">Diferenca</span>
               <span class="mini-value ${r.cls}" id="fech-diff-val-${r.code}">${r.diffPp !== null ? ppf(r.diffPp) : '-'}</span>
+            </div>
+            <div class="mini-metric">
+              <span class="mini-label">Dif. Margem vs Pre Cierre (R$)</span>
+              <span class="mini-value ${r.clsMargemRS}" id="fech-diff-rs-val-${r.code}">${brl(r.diffMargemRS)}</span>
             </div>
             <span class="chevron">&#9660;</span>
           </div>
