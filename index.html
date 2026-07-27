@@ -5942,7 +5942,7 @@ function renderProgressTab(kind, mkey) {
         <div class="extra-row">
           <div class="obs-block extra-block">
             <div class="obs-header">
-              <label>Solicitado na ferramenta</label>
+              <label>${prefix === 'cob' ? 'Confirmado Recebimento' : 'Solicitado na ferramenta'}</label>
               <span class="obs-status" id="solicitado-status-${prefix}-${r.code}"></span>
             </div>
             <input type="text" inputmode="decimal" id="solicitado-${prefix}-${r.code}" class="obs-textarea" style="min-height:auto;" value="${r.solicitado ? brlPlain(r.solicitado) : ''}" placeholder="Valor solicitado ainda nao refletido na ficha" oninput="saveExtra('${r.code}','${prefix}','solicitado')" onblur="blurExtra('${r.code}','${prefix}','solicitado')">
