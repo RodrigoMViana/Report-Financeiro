@@ -5201,12 +5201,17 @@
   </div>
 
   <div id="tab-parametrizacao" class="tab-panel">
+    <div class="report-bar" style="align-items:center;">
+      <button type="button" id="param-aplicar-btn" onclick="aplicarParametrizacao()">Aplicar</button>
+      <span class="email-status" id="param-aplicar-status"></span>
+      <span class="small-note" id="param-pending-badge" style="display:none;"></span>
+    </div>
     <div class="report-bar">
       <button type="button" class="secondary" onclick="zerarImpostoTodos()">Zerar Imposto (todos os projetos)</button>
       <button type="button" class="secondary" onclick="zerarRateioTipo('ds')">Zerar Rateio DS (todos os projetos)</button>
       <button type="button" class="secondary" onclick="zerarRateioTipo('vertical')">Zerar Rateio Vertical (todos os projetos)</button>
     </div>
-    <div class="small-note" style="margin-bottom:20px;">Rateio DS = 3% do ingresso &middot; Rateio Vertical = 4,5% do ingresso &middot; Imposto = percentual proprio de cada projeto. Os botoes acima zeram o valor calculado apenas para o mes selecionado (util quando o custo real ja caiu na ficha).</div>
+    <div class="small-note" style="margin-bottom:20px;">Rateio DS = 3% do ingresso &middot; Rateio Vertical = 4,5% do ingresso &middot; Imposto = percentual proprio de cada projeto. Alterar o rateio ou o imposto de um projeto so atualiza o preview aqui nesta aba -- clique em "Aplicar" para refletir as mudancas no Fechamento de todos os projetos. Os botoes de zerar abaixo continuam agindo na hora, apenas para o mes selecionado (util quando o custo real ja caiu na ficha).</div>
     <div class="section-title">Parametrizacao por projeto <span class="count" id="param-count">18</span></div>
     <div class="project-filter">
       <input type="text" id="param-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('param')">
@@ -6322,28 +6327,39 @@ function renderParamTab(mkey) {
   }).join('');
 }
 
-function saveParamRateio(code, tipo) {
-  getParams(code).rateioTipo = tipo;
-  try { localStorage.setItem(paramLocalKey(code, 'rateiotipo'), tipo); } catch (e) {}
-  const mkey = document.getElementById('month-select').value;
-  renderParamTab(mkey);
-  updateFechRowDisplay(code, mkey);
-  if (SUPABASE_CONFIGURED) {
-    sb.from('notes').upsert(
-      { code: paramComposite(code, 'rateiotipo'), month: 'PARAM', text: tipo, updated_at: new Date().toISOString() },
-      { onConflict: 'code,month' }
-    );
+// As alteracoes de rateio/imposto ficam em rascunho (so atualizam o preview dentro desta aba)
+// ate o usuario clicar em "Aplicar" -- so entao sao persistidas e refletidas no Fechamento.
+let PARAM_PENDING = new Set();
+
+function markParamPending(code) {
+  PARAM_PENDING.add(code);
+  updateAplicarButtonState();
+}
+
+function updateAplicarButtonState() {
+  const badge = document.getElementById('param-pending-badge');
+  if (!badge) return;
+  if (PARAM_PENDING.size > 0) {
+    badge.textContent = PARAM_PENDING.size + ' alteracao(oes) pendente(s) -- clique em Aplicar';
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
   }
 }
 
-const _paramSaveTimers = {};
+function saveParamRateio(code, tipo) {
+  getParams(code).rateioTipo = tipo;
+  markParamPending(code);
+  const mkey = document.getElementById('month-select').value;
+  renderParamTab(mkey);
+}
 
 function saveParamImposto(code) {
   const el = document.getElementById('param-imposto-' + code);
   if (!el) return;
   const pct = parseBRNum(el.value);
   getParams(code).impostoPct = pct;
-  try { localStorage.setItem(paramLocalKey(code, 'impostopct'), String(pct)); } catch (e) {}
+  markParamPending(code);
 
   const mkey = document.getElementById('month-select').value;
   const labelEl = document.getElementById('param-imposto-label-' + code);
@@ -6356,31 +6372,48 @@ function saveParamImposto(code) {
     const impostoCalc = zeroed.imposto ? 0 : ingreso * (pct / 100);
     previewEl.textContent = brl(impostoCalc);
   }
-  updateFechRowDisplay(code, mkey);
+}
 
-  const statusEl = document.getElementById('param-imposto-status-' + code);
-  clearTimeout(_paramSaveTimers[code]);
-  _paramSaveTimers[code] = setTimeout(function() {
-    if (!SUPABASE_CONFIGURED) {
-      if (statusEl) {
-        statusEl.textContent = 'Salvo neste navegador ' + new Date().toLocaleTimeString('pt-BR');
-        statusEl.classList.add('show');
-        clearTimeout(statusEl._t);
-        statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 2000);
-      }
-      return;
-    }
-    if (statusEl) { statusEl.textContent = 'Salvando...'; statusEl.classList.add('show'); }
-    sb.from('notes').upsert(
-      { code: paramComposite(code, 'impostopct'), month: 'PARAM', text: String(pct), updated_at: new Date().toISOString() },
-      { onConflict: 'code,month' }
-    ).then(({ error }) => {
-      if (!statusEl) return;
-      statusEl.textContent = error ? 'Salvo neste navegador (falha ao sincronizar)' : 'Salvo e sincronizado ' + new Date().toLocaleTimeString('pt-BR');
-      clearTimeout(statusEl._t);
-      statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 2500);
+async function aplicarParametrizacao() {
+  const btn = document.getElementById('param-aplicar-btn');
+  const statusEl = document.getElementById('param-aplicar-status');
+  if (btn) btn.disabled = true;
+  if (statusEl) { statusEl.textContent = 'Aplicando...'; statusEl.classList.add('show'); }
+
+  const nowIso = new Date().toISOString();
+  DATA.forEach(function(p) {
+    const params = getParams(p.code);
+    try {
+      localStorage.setItem(paramLocalKey(p.code, 'rateiotipo'), params.rateioTipo);
+      localStorage.setItem(paramLocalKey(p.code, 'impostopct'), String(params.impostoPct || 0));
+    } catch (e) {}
+  });
+
+  let syncError = null;
+  if (SUPABASE_CONFIGURED) {
+    const rows = [];
+    DATA.forEach(function(p) {
+      const params = getParams(p.code);
+      rows.push({ code: paramComposite(p.code, 'rateiotipo'), month: 'PARAM', text: params.rateioTipo, updated_at: nowIso });
+      rows.push({ code: paramComposite(p.code, 'impostopct'), month: 'PARAM', text: String(params.impostoPct || 0), updated_at: nowIso });
     });
-  }, 800);
+    const { error } = await sb.from('notes').upsert(rows, { onConflict: 'code,month' });
+    syncError = error;
+  }
+
+  PARAM_PENDING.clear();
+  updateAplicarButtonState();
+  if (btn) btn.disabled = false;
+
+  if (statusEl) {
+    statusEl.textContent = !SUPABASE_CONFIGURED
+      ? 'Aplicado neste navegador ' + new Date().toLocaleTimeString('pt-BR')
+      : (syncError ? 'Aplicado neste navegador (falha ao sincronizar)' : 'Aplicado e sincronizado ' + new Date().toLocaleTimeString('pt-BR'));
+    clearTimeout(statusEl._t);
+    statusEl._t = setTimeout(() => statusEl.classList.remove('show'), 3000);
+  }
+
+  renderAllTabs(document.getElementById('month-select').value);
 }
 
 function blurParamImposto(code) {
