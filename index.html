@@ -5388,6 +5388,24 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SUPABASE_CONFIGURED = SUPABASE_URL.indexOf('PLACEHOLDER') === -1 && SUPABASE_ANON_KEY.indexOf('PLACEHOLDER') === -1;
 const sb = SUPABASE_CONFIGURED ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
+// O Supabase/PostgREST limita cada select a 1000 linhas por padrao (sem aviso de erro).
+// Como as tabelas de notes crescem (fichas, extras, parametrizacao) isso passa a cortar
+// resultados silenciosamente. Esta funcao pagina com .range() ate esgotar os resultados.
+async function fetchAllNotes(queryBuilderFactory) {
+  const pageSize = 1000;
+  let from = 0;
+  let all = [];
+  while (true) {
+    const { data, error } = await queryBuilderFactory().range(from, from + pageSize - 1);
+    if (error) { console.error('fetchAllNotes error', error); break; }
+    if (!data || !data.length) break;
+    all = all.concat(data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 function noteKey(code, mkey) {
   return NOTES_PREFIX + code + '::' + mkey;
 }
@@ -6424,21 +6442,21 @@ function loadParamsFromSupabase() {
   if (!SUPABASE_CONFIGURED) return;
 
   Promise.all([
-    sb.from('notes').select('code,month,text').like('code', '%::param_rateiotipo').eq('month', 'PARAM'),
-    sb.from('notes').select('code,month,text').like('code', '%::param_impostopct').eq('month', 'PARAM'),
-    sb.from('notes').select('code,month,text').like('code', '%::zerado_rateio'),
-    sb.from('notes').select('code,month,text').like('code', '%::zerado_imposto'),
+    fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::param_rateiotipo').eq('month', 'PARAM')),
+    fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::param_impostopct').eq('month', 'PARAM')),
+    fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::zerado_rateio')),
+    fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::zerado_imposto')),
   ]).then(function(results) {
     let touched = false;
-    const rtRes = results[0], ipRes = results[1], zrRes = results[2], ziRes = results[3];
-    (rtRes.data || []).forEach(function(row) {
+    const rtRows = results[0], ipRows = results[1], zrRows = results[2], ziRows = results[3];
+    rtRows.forEach(function(row) {
       const idx = row.code.lastIndexOf('::param_rateiotipo');
       if (idx === -1) return;
       const code = row.code.slice(0, idx);
       if (!DATA.some(function(p) { return p.code === code; })) return;
       getParams(code).rateioTipo = row.text; touched = true;
     });
-    (ipRes.data || []).forEach(function(row) {
+    ipRows.forEach(function(row) {
       const idx = row.code.lastIndexOf('::param_impostopct');
       if (idx === -1) return;
       const code = row.code.slice(0, idx);
@@ -6446,14 +6464,14 @@ function loadParamsFromSupabase() {
       const num = parseFloat(row.text);
       getParams(code).impostoPct = isNaN(num) ? 0 : num; touched = true;
     });
-    (zrRes.data || []).forEach(function(row) {
+    zrRows.forEach(function(row) {
       const idx = row.code.lastIndexOf('::zerado_rateio');
       if (idx === -1) return;
       const code = row.code.slice(0, idx);
       if (!DATA.some(function(p) { return p.code === code; })) return;
       getZeroed(code, row.month).rateio = row.text === '1'; touched = true;
     });
-    (ziRes.data || []).forEach(function(row) {
+    ziRows.forEach(function(row) {
       const idx = row.code.lastIndexOf('::zerado_imposto');
       if (idx === -1) return;
       const code = row.code.slice(0, idx);
@@ -6684,13 +6702,13 @@ function loadExtraFromSupabase() {
   // Uma query por "kind" (sufixo _fat / _cob / _fech) basta -- pega todos os campos daquele kind de uma vez.
   const kinds = Object.keys(EXTRA_FIELDS);
   Promise.all(kinds.map(function(kind) {
-    return sb.from('notes').select('code,month,text').like('code', '%_' + kind);
+    return fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%_' + kind));
   })).then(function(results) {
     let touched = false;
     kinds.forEach(function(kind, i) {
-      const res = results[i];
-      if (!res || !res.data) return;
-      res.data.forEach(function(row) {
+      const rows = results[i];
+      if (!rows) return;
+      rows.forEach(function(row) {
         const dbl = row.code.lastIndexOf('::');
         if (dbl === -1) return;
         const code = row.code.slice(0, dbl);
@@ -6944,25 +6962,28 @@ async function handleFichaFiles(event) {
   });
 }
 
-function loadFichaOverridesFromSupabase() {
+async function loadFichaOverridesFromSupabase() {
   if (!SUPABASE_CONFIGURED) return;
-  sb.from('notes').select('code,month,text').like('code', '%::ficha_%').then(({ data, error }) => {
-    if (error || !data || !data.length) return;
-    let touched = false;
-    data.forEach(row => {
-      const idx = row.code.lastIndexOf('::ficha_');
-      if (idx === -1) return;
-      const code = row.code.slice(0, idx);
-      const kind = row.code.slice(idx + 8); // 'fat', 'cob', 'ing' ou 'cst'
-      if (!DATA.some(p => p.code === code)) return;
-      if (!FICHA[code]) FICHA[code] = {};
-      if (!FICHA[code][row.month]) FICHA[code][row.month] = { fat: 0, cob: 0, ing: 0, cst: 0 };
-      const parsedNum = parseFloat(row.text);
-      FICHA[code][row.month][kind] = isNaN(parsedNum) ? 0 : parsedNum;
-      touched = true;
-    });
-    if (touched) renderAllTabs(document.getElementById('month-select').value);
+  const data = await fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::ficha_%'));
+  if (!data.length) return;
+  let touched = false;
+  data.forEach(row => {
+    const idx = row.code.lastIndexOf('::ficha_');
+    if (idx === -1) return;
+    const code = row.code.slice(0, idx);
+    const kind = row.code.slice(idx + 8); // 'fat', 'cob', 'ing' ou 'cst'
+    if (!DATA.some(p => p.code === code)) return;
+    if (!FICHA[code]) FICHA[code] = {};
+    // Nao reaproveitar objeto pre-existente do baked-in estatico: garante que fat/cob/ing/cst
+    // fiquem consistentes (o objeto baked so tinha fat/cob, faltando ing/cst).
+    if (!FICHA[code][row.month] || FICHA[code][row.month]._synced !== true) {
+      FICHA[code][row.month] = { fat: 0, cob: 0, ing: 0, cst: 0, _synced: true };
+    }
+    const parsedNum = parseFloat(row.text);
+    FICHA[code][row.month][kind] = isNaN(parsedNum) ? 0 : parsedNum;
+    touched = true;
   });
+  if (touched) renderAllTabs(document.getElementById('month-select').value);
 }
 
 // ---------- Upload de Pre Cierre e PRs (parser client-side via SheetJS) ----------
@@ -7392,18 +7413,18 @@ async function handlePrFiles(event){
 function loadPrPcCacheFromSupabase(){
   if (!SUPABASE_CONFIGURED) return;
   Promise.all([
-    sb.from('notes').select('code,text').like('code', '%::pc_cache'),
-    sb.from('notes').select('code,text').like('code', '%::pr_cache'),
+    fetchAllNotes(() => sb.from('notes').select('code,text').like('code', '%::pc_cache')),
+    fetchAllNotes(() => sb.from('notes').select('code,text').like('code', '%::pr_cache')),
   ]).then(function(results){
-    const pcRes = results[0], prRes = results[1];
+    const pcRows = results[0], prRows = results[1];
     const touched = new Set();
-    if (pcRes.data) pcRes.data.forEach(function(row){
+    pcRows.forEach(function(row){
       const idx = row.code.lastIndexOf('::pc_cache');
       if (idx === -1) return;
       const code = row.code.slice(0, idx);
       try { PC_CACHE[code] = JSON.parse(row.text); touched.add(code); } catch(e){}
     });
-    if (prRes.data) prRes.data.forEach(function(row){
+    prRows.forEach(function(row){
       const idx = row.code.lastIndexOf('::pr_cache');
       if (idx === -1) return;
       const code = row.code.slice(0, idx);
