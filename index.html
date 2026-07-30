@@ -6048,14 +6048,18 @@ function fechInputRow(code, mkey, field, label, placeholder) {
           </div>`;
 }
 
-function fechComputedRow(code, field, label, value, note) {
+function fechComputedRow(code, mkey, field, label, value, note) {
+  const zeroed = getZeroed(code, mkey)[field];
+  const noteHtml = zeroed
+    ? 'Zerado neste mes. <a href="#" onclick="restaurarZerado(\'' + code + '\',\'' + field + '\'); return false;">Restaurar calculo</a>'
+    : note;
   return `
           <div class="obs-block extra-block">
             <div class="obs-header">
               <label>${label}</label>
             </div>
             <input type="text" class="obs-textarea" style="min-height:auto;background:var(--bg);color:var(--slate);" id="${field}-calc-fech-${code}" value="${brl(value)}" disabled>
-            <div class="small-note">${note}</div>
+            <div class="small-note" id="${field}-calc-note-fech-${code}">${noteHtml}</div>
           </div>`;
 }
 
@@ -6179,6 +6183,16 @@ function updateFechRowDisplay(code, mkey) {
   const impostoCalcEl = document.getElementById('imposto-calc-fech-' + code);
   if (impostoCalcEl) impostoCalcEl.value = brl(r.impostoCalc);
 
+  const zeroed = getZeroed(code, mkey);
+  const rateioNoteEl = document.getElementById('rateio-calc-note-fech-' + code);
+  if (rateioNoteEl) rateioNoteEl.innerHTML = zeroed.rateio
+    ? 'Zerado neste mes. <a href="#" onclick="restaurarZerado(\'' + code + '\',\'rateio\'); return false;">Restaurar calculo</a>'
+    : 'Calculado automaticamente na aba Parametrizacao.';
+  const impostoNoteEl = document.getElementById('imposto-calc-note-fech-' + code);
+  if (impostoNoteEl) impostoNoteEl.innerHTML = zeroed.imposto
+    ? 'Zerado neste mes. <a href="#" onclick="restaurarZerado(\'' + code + '\',\'imposto\'); return false;">Restaurar calculo</a>'
+    : 'Calculado automaticamente na aba Parametrizacao.';
+
   updateFechKpis(mkey);
 }
 
@@ -6234,7 +6248,7 @@ function renderFechTab(mkey) {
         <div class="card-body">
           <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechInputRow(r.code, mkey, 'outros', 'Outros', 'Custos nao cadastrados no MIOPS')}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
           <div class="extra-row">${fechInputRow(r.code, mkey, 'entreempresas', 'Entre Empresas', 'Custo de transferencia entre empresas')}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}</div>
-          <div class="extra-row">${fechComputedRow(r.code, 'rateio', 'Rateio (parametrizado)', r.rateioCalc, 'Calculado automaticamente na aba Parametrizacao.')}${fechComputedRow(r.code, 'imposto', 'Imposto (parametrizado)', r.impostoCalc, 'Calculado automaticamente na aba Parametrizacao.')}</div>
+          <div class="extra-row">${fechComputedRow(r.code, mkey, 'rateio', 'Rateio (parametrizado)', r.rateioCalc, 'Calculado automaticamente na aba Parametrizacao.')}${fechComputedRow(r.code, mkey, 'imposto', 'Imposto (parametrizado)', r.impostoCalc, 'Calculado automaticamente na aba Parametrizacao.')}</div>
         </div>
       </details>`;
   }).join('');
