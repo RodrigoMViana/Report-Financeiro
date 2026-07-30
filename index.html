@@ -6314,12 +6314,12 @@ function renderParamTab(mkey) {
             <div class="obs-block extra-block">
               <div class="obs-header"><label>Rateio calculado (mes atual)</label></div>
               <div class="mini-value" id="param-rateio-calc-preview-${p.code}" style="font-size:16px;">${brl(paramCost.rateioCalc)}</div>
-              ${zeroed.rateio ? '<div class="small-note">Zerado neste mes.</div>' : ''}
+              ${zeroed.rateio ? '<div class="small-note">Zerado neste mes. <a href="#" onclick="restaurarZerado(\'' + p.code + '\',\'rateio\'); return false;">Restaurar calculo</a></div>' : ''}
             </div>
             <div class="obs-block extra-block">
               <div class="obs-header"><label>Imposto calculado (mes atual)</label></div>
               <div class="mini-value" id="param-imposto-calc-preview-${p.code}" style="font-size:16px;">${brl(paramCost.impostoCalc)}</div>
-              ${zeroed.imposto ? '<div class="small-note">Zerado neste mes.</div>' : ''}
+              ${zeroed.imposto ? '<div class="small-note">Zerado neste mes. <a href="#" onclick="restaurarZerado(\'' + p.code + '\',\'imposto\'); return false;">Restaurar calculo</a></div>' : ''}
             </div>
           </div>
         </div>
@@ -6452,6 +6452,21 @@ function zerarRateioTipo(tipo) {
       }
     }
   });
+  renderAllTabs(mkey);
+}
+
+// Desfaz o zerado de um unico projeto/mes (usado quando o rateio/imposto foi zerado por engano
+// ou quando o usuario quer voltar a ver o valor calculado antes do fim do mes).
+function restaurarZerado(code, field) {
+  const mkey = document.getElementById('month-select').value;
+  getZeroed(code, mkey)[field] = false;
+  try { localStorage.removeItem(zeroedLocalKey(code, field, mkey)); } catch (e) {}
+  if (SUPABASE_CONFIGURED) {
+    sb.from('notes').upsert(
+      { code: zeroedComposite(code, field), month: mkey, text: '0', updated_at: new Date().toISOString() },
+      { onConflict: 'code,month' }
+    );
+  }
   renderAllTabs(mkey);
 }
 
