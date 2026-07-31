@@ -135,6 +135,23 @@
     .project-card { break-inside:avoid; }
   }
   @media (max-width:800px) { .kpi-grid { grid-template-columns:repeat(2,1fr); } .summary-right { gap:14px; } }
+  .ficha-modal-overlay { display:none; position:fixed; inset:0; background:rgba(11,37,69,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
+  .ficha-modal-overlay.show { display:flex; }
+  .ficha-modal { background:#fff; border-radius:14px; max-width:720px; width:100%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(11,37,69,0.3); }
+  .ficha-modal-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--border); }
+  .ficha-modal-header h3 { margin:0; font-size:17px; color:var(--navy); }
+  .ficha-modal-close { background:none; border:none; font-size:22px; color:var(--slate); cursor:pointer; line-height:1; padding:4px 8px; }
+  .ficha-modal-body { padding:16px 24px; overflow-y:auto; }
+  .ficha-modal-footer { padding:14px 24px; border-top:1px solid var(--border); text-align:right; }
+  .ficha-modal-footer button { background:var(--navy); color:#fff; border:none; border-radius:8px; padding:9px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+  .ficha-change-group { margin-bottom:18px; }
+  .ficha-change-group-title { font-weight:700; color:var(--navy); font-size:14px; margin-bottom:8px; }
+  .ficha-change-row { display:flex; align-items:center; gap:10px; font-size:13px; padding:6px 0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .ficha-change-month { font-size:11px; text-transform:uppercase; color:var(--slate); background:var(--bg); border-radius:6px; padding:2px 8px; flex-shrink:0; }
+  .ficha-change-field { color:var(--slate); flex:1 1 auto; min-width:100px; }
+  .ficha-change-old { color:var(--bad); text-decoration:line-through; }
+  .ficha-change-new { color:var(--ok); font-weight:600; }
+  .ficha-modal-empty { text-align:center; color:var(--slate); padding:30px 0; }
 </style>
 </head>
 <body>
@@ -181,6 +198,19 @@
     <input type="file" id="pr-file-input" accept=".xlsb,.xlsx" multiple style="display:none" onchange="handlePrFiles(event)">
     <span class="email-status" id="ficha-update-status"></span>
     <span class="email-status" id="xlsx-update-status"></span>
+  </div>
+
+  <div class="ficha-modal-overlay" id="ficha-changes-overlay" onclick="if(event.target===this) closeFichaChangesModal()">
+    <div class="ficha-modal">
+      <div class="ficha-modal-header">
+        <h3>Alteracoes na atualizacao das fichas</h3>
+        <button type="button" class="ficha-modal-close" onclick="closeFichaChangesModal()">&times;</button>
+      </div>
+      <div class="ficha-modal-body" id="ficha-changes-body"></div>
+      <div class="ficha-modal-footer">
+        <button type="button" onclick="closeFichaChangesModal()">Fechar</button>
+      </div>
+    </div>
   </div>
 
   <div class="main-tabs">
@@ -6980,6 +7010,12 @@ async function handleFichaFiles(event) {
     return;
   }
 
+  // snapshot dos valores atuais, para depois calcular o que mudou
+  const oldSnapshot = {};
+  foundCodes.forEach(code => {
+    oldSnapshot[code] = FICHA[code] ? JSON.parse(JSON.stringify(FICHA[code])) : {};
+  });
+
   // atualiza em memoria e re-renderiza na hora
   foundCodes.forEach(code => {
     if (!FICHA[code]) FICHA[code] = {};
@@ -6994,6 +7030,9 @@ async function handleFichaFiles(event) {
     });
   });
   renderAllTabs(document.getElementById('month-select').value);
+
+  const changes = buildFichaChanges(foundCodes, merged, oldSnapshot);
+  showFichaChangesModal(changes, foundCodes.length, parseErrors);
 
   if (!SUPABASE_CONFIGURED) {
     statusEl.className = 'email-status ok';
@@ -7022,6 +7061,77 @@ async function handleFichaFiles(event) {
       statusEl.textContent = foundCodes.length + ' projeto(s) atualizados e sincronizados ' + new Date().toLocaleTimeString('pt-BR') + (parseErrors ? ' (' + parseErrors + ' arquivo(s) ignorado(s))' : '');
     }
   });
+}
+
+const FICHA_FIELD_LABELS = { fat: 'Faturacao', cob: 'Cobrancas', ing: 'Vendas', cst: 'Total Custos' };
+
+function buildFichaChanges(foundCodes, merged, oldSnapshot) {
+  const changes = [];
+  foundCodes.forEach(code => {
+    const proj = DATA.find(p => p.code === code);
+    const projName = proj ? proj.name : (merged[code].name || code);
+    const oldForCode = oldSnapshot[code] || {};
+    Object.keys(merged[code].months).forEach(mk => {
+      const oldV = oldForCode[mk] || { fat: 0, cob: 0, ing: 0, cst: 0 };
+      const newV = FICHA[code][mk] || { fat: 0, cob: 0, ing: 0, cst: 0 };
+      ['fat', 'cob', 'ing', 'cst'].forEach(key => {
+        const ov = oldV[key] || 0;
+        const nv = newV[key] || 0;
+        if (Math.abs(ov - nv) > 0.004) {
+          changes.push({ code: code, name: projName, month: mk, field: FICHA_FIELD_LABELS[key], oldVal: ov, newVal: nv });
+        }
+      });
+    });
+  });
+  return changes;
+}
+
+function fichaModalEscHandler(e) {
+  if (e.key === 'Escape') closeFichaChangesModal();
+}
+function openFichaChangesModal() {
+  const overlay = document.getElementById('ficha-changes-overlay');
+  if (!overlay) return;
+  overlay.classList.add('show');
+  document.addEventListener('keydown', fichaModalEscHandler);
+}
+function closeFichaChangesModal() {
+  const overlay = document.getElementById('ficha-changes-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('show');
+  document.removeEventListener('keydown', fichaModalEscHandler);
+}
+
+function showFichaChangesModal(changes, updatedCount, parseErrors) {
+  const bodyEl = document.getElementById('ficha-changes-body');
+  if (!bodyEl) return;
+  const errNote = parseErrors ? ' ' + parseErrors + ' arquivo(s) com erro de leitura.' : '';
+  if (!changes.length) {
+    bodyEl.innerHTML = '<div class="ficha-modal-empty">' + updatedCount + ' projeto(s) processados. Nenhuma alteracao de valores em relacao ao que ja estava carregado.' + errNote + '</div>';
+    openFichaChangesModal();
+    return;
+  }
+  const byCode = {};
+  changes.forEach(c => { (byCode[c.code] = byCode[c.code] || []).push(c); });
+  const codes = Object.keys(byCode).sort();
+  let html = '<div class="small-note" style="margin-bottom:16px;">' + changes.length + ' valor(es) alterado(s) em ' + codes.length + ' projeto(s) (de ' + updatedCount + ' processado(s)).' + errNote + '</div>';
+  codes.forEach(code => {
+    const rows = byCode[code].slice().sort((a, b) => FICHA_MONTHS_PT.indexOf(a.month) - FICHA_MONTHS_PT.indexOf(b.month));
+    html += '<div class="ficha-change-group">';
+    html += '<div class="ficha-change-group-title">' + code + ' &middot; ' + rows[0].name + '</div>';
+    rows.forEach(r => {
+      html += '<div class="ficha-change-row">'
+        + '<span class="ficha-change-month">' + r.month + '</span>'
+        + '<span class="ficha-change-field">' + r.field + '</span>'
+        + '<span class="ficha-change-old">' + brl(r.oldVal) + '</span>'
+        + '<span>&rarr;</span>'
+        + '<span class="ficha-change-new">' + brl(r.newVal) + '</span>'
+        + '</div>';
+    });
+    html += '</div>';
+  });
+  bodyEl.innerHTML = html;
+  openFichaChangesModal();
 }
 
 async function loadFichaOverridesFromSupabase() {
