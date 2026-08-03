@@ -125,6 +125,7 @@
   .email-status { font-size:12.5px; margin-top:8px; }
   .email-status.ok { color:var(--ok); }
   .email-status.bad { color:var(--bad); }
+  .email-status.warn { color:var(--warn); }
 
   @media print {
     .report-bar, .email-panel, .month-picker, .chevron, .obs-toolbar { display:none !important; }
@@ -5236,10 +5237,11 @@
       <span class="email-status" id="param-aplicar-status"></span>
       <span class="small-note" id="param-pending-badge" style="display:none;"></span>
     </div>
-    <div class="report-bar">
-      <button type="button" class="secondary" onclick="zerarImpostoTodos()">Zerar Imposto (todos os projetos)</button>
-      <button type="button" class="secondary" onclick="zerarRateioTipo('ds')">Zerar Rateio DS (todos os projetos)</button>
-      <button type="button" class="secondary" onclick="zerarRateioTipo('vertical')">Zerar Rateio Vertical (todos os projetos)</button>
+    <div class="report-bar" style="align-items:center;">
+      <button type="button" class="secondary" id="zerar-imposto-btn" onclick="zerarImpostoTodos()">Zerar Imposto (todos os projetos)</button>
+      <button type="button" class="secondary" id="zerar-rateio-ds-btn" onclick="zerarRateioTipo('ds')">Zerar Rateio DS (todos os projetos)</button>
+      <button type="button" class="secondary" id="zerar-rateio-vertical-btn" onclick="zerarRateioTipo('vertical')">Zerar Rateio Vertical (todos os projetos)</button>
+      <span class="email-status" id="param-zerar-status"></span>
     </div>
     <div class="small-note" style="margin-bottom:20px;">Rateio DS = 3% do ingresso &middot; Rateio Vertical = 4,5% do ingresso &middot; Imposto = percentual proprio de cada projeto. Alterar o rateio ou o imposto de um projeto so atualiza o preview aqui nesta aba -- clique em "Aplicar" para refletir as mudancas no Fechamento de todos os projetos. Os botoes de zerar abaixo continuam agindo na hora, apenas para o mes selecionado (util quando o custo real ja caiu na ficha).</div>
     <div class="section-title">Parametrizacao por projeto <span class="count" id="param-count">18</span></div>
@@ -6467,51 +6469,85 @@ function blurParamImposto(code) {
   el.value = params.impostoPct ? params.impostoPct.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) : '';
 }
 
-function zerarImpostoTodos() {
+function setParamZerarStatus(text, cls) {
+  const el = document.getElementById('param-zerar-status');
+  if (!el) return;
+  el.className = 'email-status show' + (cls ? ' ' + cls : '');
+  el.textContent = text;
+  clearTimeout(el._t);
+  if (cls !== 'bad') { el._t = setTimeout(() => el.classList.remove('show'), 4000); }
+}
+
+function setZerarButtonsDisabled(disabled) {
+  ['zerar-imposto-btn', 'zerar-rateio-ds-btn', 'zerar-rateio-vertical-btn'].forEach(function(id) {
+    const b = document.getElementById(id);
+    if (b) b.disabled = disabled;
+  });
+}
+
+// Aplica em memoria/localStorage e sincroniza TODAS as linhas de uma vez, num unico upsert
+// aguardado -- assim conseguimos confirmar (e avisar o usuario) se realmente ficou salvo
+// para todo mundo no Supabase, em vez de disparar N chamadas silenciosas em paralelo.
+async function syncZeroedRows(rows, successMsg) {
+  if (!SUPABASE_CONFIGURED) {
+    setParamZerarStatus(successMsg + ' (Supabase nao configurado, so neste navegador).', 'warn');
+    return;
+  }
+  setZerarButtonsDisabled(true);
+  setParamZerarStatus('Sincronizando...', null);
+  const { error } = await sb.from('notes').upsert(rows, { onConflict: 'code,month' });
+  setZerarButtonsDisabled(false);
+  if (error) {
+    setParamZerarStatus(successMsg + ', mas FALHOU ao sincronizar -- outras pessoas ainda NAO verao esta mudanca. Tente novamente.', 'bad');
+  } else {
+    setParamZerarStatus(successMsg + ' e sincronizado para todos ' + new Date().toLocaleTimeString('pt-BR') + '.', 'ok');
+  }
+}
+
+async function zerarImpostoTodos() {
   const mkey = document.getElementById('month-select').value;
+  const rows = [];
+  const nowIso = new Date().toISOString();
   currentProjects().forEach(function(p) {
     getZeroed(p.code, mkey).imposto = true;
     try { localStorage.setItem(zeroedLocalKey(p.code, 'imposto', mkey), '1'); } catch (e) {}
-    if (SUPABASE_CONFIGURED) {
-      sb.from('notes').upsert(
-        { code: zeroedComposite(p.code, 'imposto'), month: mkey, text: '1', updated_at: new Date().toISOString() },
-        { onConflict: 'code,month' }
-      );
-    }
+    rows.push({ code: zeroedComposite(p.code, 'imposto'), month: mkey, text: '1', updated_at: nowIso });
   });
   renderAllTabs(mkey);
+  await syncZeroedRows(rows, 'Imposto zerado em ' + rows.length + ' projeto(s)');
 }
 
-function zerarRateioTipo(tipo) {
+async function zerarRateioTipo(tipo) {
   const mkey = document.getElementById('month-select').value;
+  const rows = [];
+  const nowIso = new Date().toISOString();
   currentProjects().forEach(function(p) {
     if (getParams(p.code).rateioTipo === tipo) {
       getZeroed(p.code, mkey).rateio = true;
       try { localStorage.setItem(zeroedLocalKey(p.code, 'rateio', mkey), '1'); } catch (e) {}
-      if (SUPABASE_CONFIGURED) {
-        sb.from('notes').upsert(
-          { code: zeroedComposite(p.code, 'rateio'), month: mkey, text: '1', updated_at: new Date().toISOString() },
-          { onConflict: 'code,month' }
-        );
-      }
+      rows.push({ code: zeroedComposite(p.code, 'rateio'), month: mkey, text: '1', updated_at: nowIso });
     }
   });
   renderAllTabs(mkey);
+  await syncZeroedRows(rows, 'Rateio ' + (tipo === 'ds' ? 'DS' : 'Vertical') + ' zerado em ' + rows.length + ' projeto(s)');
 }
 
 // Desfaz o zerado de um unico projeto/mes (usado quando o rateio/imposto foi zerado por engano
 // ou quando o usuario quer voltar a ver o valor calculado antes do fim do mes).
-function restaurarZerado(code, field) {
+async function restaurarZerado(code, field) {
   const mkey = document.getElementById('month-select').value;
   getZeroed(code, mkey)[field] = false;
   try { localStorage.removeItem(zeroedLocalKey(code, field, mkey)); } catch (e) {}
+  renderAllTabs(mkey);
   if (SUPABASE_CONFIGURED) {
-    sb.from('notes').upsert(
+    const { error } = await sb.from('notes').upsert(
       { code: zeroedComposite(code, field), month: mkey, text: '0', updated_at: new Date().toISOString() },
       { onConflict: 'code,month' }
     );
+    if (error) {
+      setParamZerarStatus('Restaurado neste navegador, mas FALHOU ao sincronizar ' + code + '. Tente novamente.', 'bad');
+    }
   }
-  renderAllTabs(mkey);
 }
 
 function loadParamsFromSupabase() {
