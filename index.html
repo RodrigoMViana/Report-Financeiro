@@ -94,6 +94,18 @@
   .project-filter .clear-filter { background:none; border:1px solid var(--border); border-radius:8px; padding:9px 14px; font-size:13px; color:var(--slate); cursor:pointer; }
   .project-filter .clear-filter:hover { background:var(--ice); }
   .no-results { display:none; padding:30px; text-align:center; color:var(--slate); font-size:14px; }
+  .ms-combo { position:relative; flex:1; max-width:360px; }
+  .ms-combo input[type=text] { width:100%; box-sizing:border-box; }
+  .ms-dropdown { display:none; position:absolute; top:calc(100% + 4px); left:0; right:0; max-height:260px; overflow-y:auto; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(11,37,69,0.15); z-index:50; }
+  .ms-dropdown.show { display:block; }
+  .ms-dropdown-item { display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:13px; cursor:pointer; }
+  .ms-dropdown-item:hover { background:var(--bg); }
+  .ms-dropdown-item input[type=checkbox] { flex-shrink:0; }
+  .ms-dropdown-empty { padding:12px; color:var(--slate); font-size:13px; text-align:center; }
+  .ms-chips { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 12px; }
+  .ms-chip { display:flex; align-items:center; gap:6px; background:var(--ice); color:var(--navy); border-radius:20px; padding:5px 8px 5px 12px; font-size:12.5px; font-weight:600; }
+  .ms-chip button { background:none; border:none; color:var(--navy); cursor:pointer; font-size:14px; line-height:1; padding:0 2px; }
+  .ms-chip button:hover { color:var(--bad); }
   .legend span.dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
   .dot.ok { background:var(--ok); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); }
   .obs-block { margin-top:16px; padding-top:14px; border-top:1px dashed var(--border); }
@@ -294,9 +306,13 @@
     <span><span class="dot bad"></span>Divergencia relevante</span>
   </div>
   <div class="project-filter">
-    <input type="text" id="project-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProjects()">
+    <div class="ms-combo">
+      <input type="text" id="project-search" placeholder="Filtrar ou selecionar projetos..." autocomplete="off" oninput="filterProjects(); renderFilterDropdown('geral')" onfocus="renderFilterDropdown('geral'); openFilterDropdown('geral')">
+      <div class="ms-dropdown" id="geral-ms-dropdown"></div>
+    </div>
     <button type="button" class="clear-filter" onclick="clearProjectFilter()">Limpar</button>
   </div>
+  <div class="ms-chips" id="geral-ms-chips"></div>
 
 
 <details class="project-card" data-gestor="Rodrigo" data-code="22AP09">
@@ -365,15 +381,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 4.388.256</td>
             <td>R$ 4.388.256</td>
-            <td class="ok">-0,0%</td>
+            <td class="ok">-0,00%</td>
             <td>R$ 4.284.882</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>20,3%</td>
-            <td>20,2%</td>
-            <td class="ok">+0,2%</td>
-            <td>20,0%</td>
+            <td>20,30%</td>
+            <td>20,20%</td>
+            <td class="ok">+0,20%</td>
+            <td>20,00%</td>
           </tr>
         </tbody>
       </table>
@@ -456,15 +472,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 4.572.338</td>
             <td>R$ 4.481.483</td>
-            <td class="ok">2,0%</td>
+            <td class="ok">2,00%</td>
             <td>R$ 4.080.000</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,1%</td>
-            <td>23,0%</td>
-            <td class="ok">+0,1%</td>
-            <td>23,0%</td>
+            <td>23,10%</td>
+            <td>23,00%</td>
+            <td class="ok">+0,10%</td>
+            <td>23,00%</td>
           </tr>
         </tbody>
       </table>
@@ -547,15 +563,15 @@
             <td>Ingreso (ano)</td>
             <td>-R$ 58.470</td>
             <td>-R$ 58.470</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 270.518</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>86,5%</td>
-            <td>89,6%</td>
-            <td class="bad">-3,1%</td>
-            <td>20,1%</td>
+            <td>86,50%</td>
+            <td>89,60%</td>
+            <td class="bad">-3,10%</td>
+            <td>20,10%</td>
           </tr>
         </tbody>
       </table>
@@ -638,15 +654,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 3.985.492</td>
             <td>R$ 3.985.492</td>
-            <td class="ok">-0,0%</td>
+            <td class="ok">-0,00%</td>
             <td>R$ 16.200.000</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>0,5%</td>
-            <td>1,0%</td>
-            <td class="ok">-0,5%</td>
-            <td>20,5%</td>
+            <td>0,50%</td>
+            <td>1,00%</td>
+            <td class="ok">-0,50%</td>
+            <td>20,50%</td>
           </tr>
         </tbody>
       </table>
@@ -729,15 +745,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 10.095.510</td>
             <td>R$ 10.140.796</td>
-            <td class="ok">-0,4%</td>
+            <td class="ok">-0,40%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>21,1%</td>
-            <td>21,9%</td>
-            <td class="ok">-0,8%</td>
-            <td>0,0%</td>
+            <td>21,10%</td>
+            <td>21,90%</td>
+            <td class="ok">-0,80%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -820,15 +836,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 350.459</td>
             <td>R$ 212.124</td>
-            <td class="bad">65,2%</td>
+            <td class="bad">65,20%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,1%</td>
-            <td>23,0%</td>
-            <td class="ok">+0,1%</td>
-            <td>0,0%</td>
+            <td>23,10%</td>
+            <td>23,00%</td>
+            <td class="ok">+0,10%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -911,15 +927,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 860.678</td>
             <td>R$ 1.168.504</td>
-            <td class="bad">-26,3%</td>
+            <td class="bad">-26,30%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,9%</td>
-            <td>22,5%</td>
-            <td class="ok">+0,4%</td>
-            <td>0,0%</td>
+            <td>22,90%</td>
+            <td>22,50%</td>
+            <td class="ok">+0,40%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -1002,15 +1018,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 1.017.161</td>
             <td>R$ 953.774</td>
-            <td class="warn">6,6%</td>
+            <td class="warn">6,60%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,3%</td>
-            <td>23,1%</td>
-            <td class="ok">+0,1%</td>
-            <td>0,0%</td>
+            <td>23,30%</td>
+            <td>23,10%</td>
+            <td class="ok">+0,10%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -1093,15 +1109,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 410.380</td>
             <td>R$ 50.191</td>
-            <td class="bad">717,6%</td>
+            <td class="bad">717,60%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,0%</td>
-            <td>21,0%</td>
-            <td class="warn">+2,0%</td>
-            <td>0,0%</td>
+            <td>23,00%</td>
+            <td>21,00%</td>
+            <td class="warn">+2,00%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -1184,15 +1200,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 3.523.505</td>
             <td>R$ 3.664.309</td>
-            <td class="warn">-3,8%</td>
+            <td class="warn">-3,80%</td>
             <td>R$ 4.045.769</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>19,8%</td>
-            <td>19,3%</td>
-            <td class="ok">+0,5%</td>
-            <td>21,4%</td>
+            <td>19,80%</td>
+            <td>19,30%</td>
+            <td class="ok">+0,50%</td>
+            <td>21,40%</td>
           </tr>
         </tbody>
       </table>
@@ -1275,15 +1291,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 2.644.085</td>
             <td>R$ 2.526.782</td>
-            <td class="warn">4,6%</td>
+            <td class="warn">4,60%</td>
             <td>R$ 1.810.172</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>28,0%</td>
-            <td>27,1%</td>
-            <td class="ok">+0,8%</td>
-            <td>20,1%</td>
+            <td>28,00%</td>
+            <td>27,10%</td>
+            <td class="ok">+0,80%</td>
+            <td>20,10%</td>
           </tr>
         </tbody>
       </table>
@@ -1366,15 +1382,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 126.215</td>
             <td>R$ 126.215</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>0,0%</td>
-            <td>0,0%</td>
-            <td class="ok">-0,0%</td>
-            <td>0,0%</td>
+            <td>0,00%</td>
+            <td>0,00%</td>
+            <td class="ok">-0,00%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -1457,15 +1473,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 880.271</td>
             <td>R$ 990.045</td>
-            <td class="bad">-11,1%</td>
+            <td class="bad">-11,10%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,1%</td>
-            <td>22,0%</td>
-            <td class="ok">+0,1%</td>
-            <td>0,0%</td>
+            <td>22,10%</td>
+            <td>22,00%</td>
+            <td class="ok">+0,10%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -1548,15 +1564,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 4.295.802</td>
             <td>R$ 4.277.334</td>
-            <td class="ok">0,4%</td>
+            <td class="ok">0,40%</td>
             <td>R$ 3.390.600</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,5%</td>
-            <td>22,3%</td>
-            <td class="ok">+0,3%</td>
-            <td>21,4%</td>
+            <td>22,50%</td>
+            <td>22,30%</td>
+            <td class="ok">+0,30%</td>
+            <td>21,40%</td>
           </tr>
         </tbody>
       </table>
@@ -1639,15 +1655,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 4.041.532</td>
             <td>R$ 3.768.533</td>
-            <td class="warn">7,2%</td>
+            <td class="warn">7,20%</td>
             <td>R$ 1.900.736</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,3%</td>
-            <td>23,1%</td>
-            <td class="ok">+0,2%</td>
-            <td>23,6%</td>
+            <td>23,30%</td>
+            <td>23,10%</td>
+            <td class="ok">+0,20%</td>
+            <td>23,60%</td>
           </tr>
         </tbody>
       </table>
@@ -1730,15 +1746,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 761.540</td>
             <td>R$ 761.541</td>
-            <td class="ok">-0,0%</td>
+            <td class="ok">-0,00%</td>
             <td>R$ 776.000</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>9,2%</td>
-            <td>9,3%</td>
-            <td class="ok">-0,1%</td>
-            <td>10,0%</td>
+            <td>9,20%</td>
+            <td>9,30%</td>
+            <td class="ok">-0,10%</td>
+            <td>10,00%</td>
           </tr>
         </tbody>
       </table>
@@ -1821,15 +1837,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 2.909.049</td>
             <td>R$ 2.882.002</td>
-            <td class="ok">0,9%</td>
+            <td class="ok">0,90%</td>
             <td>R$ 3.390.600</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,6%</td>
-            <td>22,3%</td>
-            <td class="ok">+0,4%</td>
-            <td>21,0%</td>
+            <td>22,60%</td>
+            <td>22,30%</td>
+            <td class="ok">+0,40%</td>
+            <td>21,00%</td>
           </tr>
         </tbody>
       </table>
@@ -1912,15 +1928,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 7.460.615</td>
             <td>R$ 7.412.615</td>
-            <td class="ok">0,6%</td>
+            <td class="ok">0,60%</td>
             <td>R$ 8.697.352</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>5,5%</td>
-            <td>5,3%</td>
-            <td class="ok">+0,2%</td>
-            <td>18,5%</td>
+            <td>5,50%</td>
+            <td>5,30%</td>
+            <td class="ok">+0,20%</td>
+            <td>18,50%</td>
           </tr>
         </tbody>
       </table>
@@ -2037,15 +2053,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 6.614.872</td>
             <td>R$ 6.700.871</td>
-            <td class="bad">-1,3%</td>
+            <td class="bad">-1,30%</td>
             <td>R$ 6.530.202</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>19,6%</td>
-            <td>20,8%</td>
-            <td class="bad">-1,1%</td>
-            <td>20,3%</td>
+            <td>19,60%</td>
+            <td>20,80%</td>
+            <td class="bad">-1,10%</td>
+            <td>20,30%</td>
           </tr>
         </tbody>
       </table>
@@ -2128,15 +2144,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 10.495.228</td>
             <td>R$ 10.404.631</td>
-            <td class="ok">0,9%</td>
+            <td class="ok">0,90%</td>
             <td>R$ 8.425.646</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>21,5%</td>
-            <td>21,5%</td>
-            <td class="ok">+0,0%</td>
-            <td>20,3%</td>
+            <td>21,50%</td>
+            <td>21,50%</td>
+            <td class="ok">+0,00%</td>
+            <td>20,30%</td>
           </tr>
         </tbody>
       </table>
@@ -2219,15 +2235,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 1.885.998</td>
             <td>R$ 1.861.998</td>
-            <td class="ok">1,3%</td>
+            <td class="ok">1,30%</td>
             <td>R$ 1.627.772</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>24,7%</td>
-            <td>24,1%</td>
-            <td class="ok">+0,6%</td>
-            <td>21,3%</td>
+            <td>24,70%</td>
+            <td>24,10%</td>
+            <td class="ok">+0,60%</td>
+            <td>21,30%</td>
           </tr>
         </tbody>
       </table>
@@ -2310,15 +2326,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 215.386</td>
             <td>R$ 215.386</td>
-            <td class="bad">-0,0%</td>
+            <td class="bad">-0,00%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>59,4%</td>
-            <td>58,5%</td>
-            <td class="ok">+1,0%</td>
-            <td>0,0%</td>
+            <td>59,40%</td>
+            <td>58,50%</td>
+            <td class="ok">+1,00%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -2401,15 +2417,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 3.664.556</td>
             <td>R$ 3.570.479</td>
-            <td class="ok">2,6%</td>
+            <td class="ok">2,60%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>17,2%</td>
-            <td>16,9%</td>
-            <td class="ok">+0,2%</td>
-            <td>0,0%</td>
+            <td>17,20%</td>
+            <td>16,90%</td>
+            <td class="ok">+0,20%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -2492,15 +2508,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 1.069.556</td>
             <td>R$ 1.289.939</td>
-            <td class="bad">-17,1%</td>
+            <td class="bad">-17,10%</td>
             <td>R$ 2.529.122</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>-77,6%</td>
-            <td>-46,8%</td>
-            <td class="bad">-30,8%</td>
-            <td>15,1%</td>
+            <td>-77,60%</td>
+            <td>-46,80%</td>
+            <td class="bad">-30,80%</td>
+            <td>15,10%</td>
           </tr>
         </tbody>
       </table>
@@ -2583,15 +2599,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 477.719</td>
             <td>R$ 304.487</td>
-            <td class="ok">56,9%</td>
+            <td class="ok">56,90%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>9,6%</td>
-            <td>3,6%</td>
-            <td class="ok">+6,1%</td>
-            <td>0,0%</td>
+            <td>9,60%</td>
+            <td>3,60%</td>
+            <td class="ok">+6,10%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -2674,15 +2690,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 709.744</td>
             <td>R$ 709.457</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 707.507</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>28,0%</td>
-            <td>27,4%</td>
-            <td class="ok">+0,6%</td>
-            <td>20,9%</td>
+            <td>28,00%</td>
+            <td>27,40%</td>
+            <td class="ok">+0,60%</td>
+            <td>20,90%</td>
           </tr>
         </tbody>
       </table>
@@ -2765,15 +2781,15 @@
             <td>Ingreso (ano)</td>
             <td>-R$ 1.876</td>
             <td>-R$ 1.876</td>
-            <td class="bad">-0,0%</td>
+            <td class="bad">-0,00%</td>
             <td>R$ 32.785</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>66,4%</td>
-            <td>130,2%</td>
-            <td class="bad">-63,8%</td>
-            <td>20,3%</td>
+            <td>66,40%</td>
+            <td>130,20%</td>
+            <td class="bad">-63,80%</td>
+            <td>20,30%</td>
           </tr>
         </tbody>
       </table>
@@ -2861,10 +2877,10 @@
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>0,0%</td>
-            <td>0,0%</td>
-            <td class="ok">0,0%</td>
-            <td>0,0%</td>
+            <td>0,00%</td>
+            <td>0,00%</td>
+            <td class="ok">0,00%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -2947,15 +2963,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 1.780.956</td>
             <td>R$ 1.631.604</td>
-            <td class="ok">9,2%</td>
+            <td class="ok">9,20%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,9%</td>
-            <td>23,4%</td>
-            <td class="bad">-0,5%</td>
-            <td>0,0%</td>
+            <td>22,90%</td>
+            <td>23,40%</td>
+            <td class="bad">-0,50%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -3038,15 +3054,15 @@
             <td>Ingreso (ano)</td>
             <td>-R$ 467.175</td>
             <td>-R$ 467.175</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 2.555.762</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>382,5%</td>
-            <td>382,5%</td>
-            <td class="bad">-0,0%</td>
-            <td>19,6%</td>
+            <td>382,50%</td>
+            <td>382,50%</td>
+            <td class="bad">-0,00%</td>
+            <td>19,60%</td>
           </tr>
         </tbody>
       </table>
@@ -3129,15 +3145,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 277.033</td>
             <td>R$ 197.864</td>
-            <td class="ok">40,0%</td>
+            <td class="ok">40,00%</td>
             <td>R$ 205.965</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>40,2%</td>
-            <td>27,4%</td>
-            <td class="ok">+12,9%</td>
-            <td>18,2%</td>
+            <td>40,20%</td>
+            <td>27,40%</td>
+            <td class="ok">+12,90%</td>
+            <td>18,20%</td>
           </tr>
         </tbody>
       </table>
@@ -3220,15 +3236,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 379.100</td>
             <td>R$ 392.831</td>
-            <td class="bad">-3,5%</td>
+            <td class="bad">-3,50%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,2%</td>
-            <td>23,8%</td>
-            <td class="bad">-0,6%</td>
-            <td>0,0%</td>
+            <td>23,20%</td>
+            <td>23,80%</td>
+            <td class="bad">-0,60%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -3311,15 +3327,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 5.130.898</td>
             <td>R$ 5.957.054</td>
-            <td class="bad">-13,9%</td>
+            <td class="bad">-13,90%</td>
             <td>R$ 4.649.793</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,7%</td>
-            <td>20,9%</td>
-            <td class="ok">+1,8%</td>
-            <td>20,9%</td>
+            <td>22,70%</td>
+            <td>20,90%</td>
+            <td class="ok">+1,80%</td>
+            <td>20,90%</td>
           </tr>
         </tbody>
       </table>
@@ -3402,15 +3418,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 712.276</td>
             <td>R$ 683.984</td>
-            <td class="ok">4,1%</td>
+            <td class="ok">4,10%</td>
             <td>R$ 1.099.689</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>24,4%</td>
-            <td>28,0%</td>
-            <td class="bad">-3,6%</td>
-            <td>20,2%</td>
+            <td>24,40%</td>
+            <td>28,00%</td>
+            <td class="bad">-3,60%</td>
+            <td>20,20%</td>
           </tr>
         </tbody>
       </table>
@@ -3493,15 +3509,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 480.183</td>
             <td>R$ 534.760</td>
-            <td class="bad">-10,2%</td>
+            <td class="bad">-10,20%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>-49,1%</td>
-            <td>-46,2%</td>
-            <td class="bad">-3,0%</td>
-            <td>0,0%</td>
+            <td>-49,10%</td>
+            <td>-46,20%</td>
+            <td class="bad">-3,00%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -3589,10 +3605,10 @@
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>0,0%</td>
-            <td>0,0%</td>
-            <td class="ok">0,0%</td>
-            <td>0,0%</td>
+            <td>0,00%</td>
+            <td>0,00%</td>
+            <td class="ok">0,00%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -3675,15 +3691,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 1.199.319</td>
             <td>R$ 1.199.101</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 941.988</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,6%</td>
-            <td>22,4%</td>
-            <td class="ok">+0,2%</td>
-            <td>20,5%</td>
+            <td>22,60%</td>
+            <td>22,40%</td>
+            <td class="ok">+0,20%</td>
+            <td>20,50%</td>
           </tr>
         </tbody>
       </table>
@@ -3766,15 +3782,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 503.486</td>
             <td>R$ 503.486</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 501.501</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,8%</td>
-            <td>23,3%</td>
-            <td class="ok">+0,5%</td>
-            <td>20,7%</td>
+            <td>23,80%</td>
+            <td>23,30%</td>
+            <td class="ok">+0,50%</td>
+            <td>20,70%</td>
           </tr>
         </tbody>
       </table>
@@ -3857,15 +3873,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 6.061.686</td>
             <td>R$ 6.039.353</td>
-            <td class="ok">0,4%</td>
+            <td class="ok">0,40%</td>
             <td>R$ 5.269.316</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>23,1%</td>
-            <td>22,8%</td>
-            <td class="ok">+0,3%</td>
-            <td>20,5%</td>
+            <td>23,10%</td>
+            <td>22,80%</td>
+            <td class="ok">+0,30%</td>
+            <td>20,50%</td>
           </tr>
         </tbody>
       </table>
@@ -3948,15 +3964,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 3.273.579</td>
             <td>R$ 3.257.998</td>
-            <td class="ok">0,5%</td>
+            <td class="ok">0,50%</td>
             <td>R$ 2.635.175</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>26,0%</td>
-            <td>25,7%</td>
-            <td class="ok">+0,3%</td>
-            <td>22,4%</td>
+            <td>26,00%</td>
+            <td>25,70%</td>
+            <td class="ok">+0,30%</td>
+            <td>22,40%</td>
           </tr>
         </tbody>
       </table>
@@ -4039,15 +4055,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 743.825</td>
             <td>R$ 794.107</td>
-            <td class="bad">-6,3%</td>
+            <td class="bad">-6,30%</td>
             <td>R$ 709.526</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>25,3%</td>
-            <td>23,4%</td>
-            <td class="ok">+1,9%</td>
-            <td>23,2%</td>
+            <td>25,30%</td>
+            <td>23,40%</td>
+            <td class="ok">+1,90%</td>
+            <td>23,20%</td>
           </tr>
         </tbody>
       </table>
@@ -4130,15 +4146,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 2.203.877</td>
             <td>R$ 2.198.097</td>
-            <td class="ok">0,3%</td>
+            <td class="ok">0,30%</td>
             <td>R$ 2.736.767</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>21,4%</td>
-            <td>21,0%</td>
-            <td class="ok">+0,5%</td>
-            <td>21,0%</td>
+            <td>21,40%</td>
+            <td>21,00%</td>
+            <td class="ok">+0,50%</td>
+            <td>21,00%</td>
           </tr>
         </tbody>
       </table>
@@ -4221,15 +4237,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 2.553.030</td>
             <td>R$ 2.583.921</td>
-            <td class="bad">-1,2%</td>
+            <td class="bad">-1,20%</td>
             <td>R$ 2.361.323</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>22,5%</td>
-            <td>22,2%</td>
-            <td class="ok">+0,3%</td>
-            <td>21,8%</td>
+            <td>22,50%</td>
+            <td>22,20%</td>
+            <td class="ok">+0,30%</td>
+            <td>21,80%</td>
           </tr>
         </tbody>
       </table>
@@ -4312,15 +4328,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 1.770.752</td>
             <td>R$ 1.675.853</td>
-            <td class="ok">5,7%</td>
+            <td class="ok">5,70%</td>
             <td>R$ 1.263.579</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>21,2%</td>
-            <td>21,0%</td>
-            <td class="ok">+0,2%</td>
-            <td>21,0%</td>
+            <td>21,20%</td>
+            <td>21,00%</td>
+            <td class="ok">+0,20%</td>
+            <td>21,00%</td>
           </tr>
         </tbody>
       </table>
@@ -4403,15 +4419,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 250.500</td>
             <td>R$ 250.500</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 250.500</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>28,0%</td>
-            <td>27,7%</td>
-            <td class="ok">+0,3%</td>
-            <td>24,8%</td>
+            <td>28,00%</td>
+            <td>27,70%</td>
+            <td class="ok">+0,30%</td>
+            <td>24,80%</td>
           </tr>
         </tbody>
       </table>
@@ -4494,15 +4510,15 @@
             <td>Ingreso (ano)</td>
             <td>-R$ 128.075</td>
             <td>-R$ 128.075</td>
-            <td class="ok">0,0%</td>
+            <td class="ok">0,00%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>99,5%</td>
-            <td>89,9%</td>
-            <td class="ok">+9,6%</td>
-            <td>0,0%</td>
+            <td>99,50%</td>
+            <td>89,90%</td>
+            <td class="ok">+9,60%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -4590,10 +4606,10 @@
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>0,0%</td>
-            <td>0,0%</td>
-            <td class="ok">0,0%</td>
-            <td>18,9%</td>
+            <td>0,00%</td>
+            <td>0,00%</td>
+            <td class="ok">0,00%</td>
+            <td>18,90%</td>
           </tr>
         </tbody>
       </table>
@@ -4676,15 +4692,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 172.584</td>
             <td>R$ 172.200</td>
-            <td class="ok">0,2%</td>
+            <td class="ok">0,20%</td>
             <td>R$ 173.755</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>24,7%</td>
-            <td>24,2%</td>
-            <td class="ok">+0,5%</td>
-            <td>21,1%</td>
+            <td>24,70%</td>
+            <td>24,20%</td>
+            <td class="ok">+0,50%</td>
+            <td>21,10%</td>
           </tr>
         </tbody>
       </table>
@@ -4767,15 +4783,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 293.500</td>
             <td>R$ 1.145.200</td>
-            <td class="bad">-74,4%</td>
+            <td class="bad">-74,40%</td>
             <td>R$ 0</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>21,6%</td>
-            <td>21,8%</td>
-            <td class="bad">-0,2%</td>
-            <td>0,0%</td>
+            <td>21,60%</td>
+            <td>21,80%</td>
+            <td class="bad">-0,20%</td>
+            <td>0,00%</td>
           </tr>
         </tbody>
       </table>
@@ -4858,15 +4874,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 8.100.128</td>
             <td>R$ 5.863.939</td>
-            <td class="ok">38,1%</td>
+            <td class="ok">38,10%</td>
             <td>R$ 3.250.640</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>21,6%</td>
-            <td>20,7%</td>
-            <td class="ok">+0,9%</td>
-            <td>20,7%</td>
+            <td>21,60%</td>
+            <td>20,70%</td>
+            <td class="ok">+0,90%</td>
+            <td>20,70%</td>
           </tr>
         </tbody>
       </table>
@@ -4949,15 +4965,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 1.937.140</td>
             <td>R$ 1.805.859</td>
-            <td class="ok">7,3%</td>
+            <td class="ok">7,30%</td>
             <td>R$ 1.283.944</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>24,6%</td>
-            <td>24,1%</td>
-            <td class="ok">+0,5%</td>
-            <td>21,3%</td>
+            <td>24,60%</td>
+            <td>24,10%</td>
+            <td class="ok">+0,50%</td>
+            <td>21,30%</td>
           </tr>
         </tbody>
       </table>
@@ -5040,15 +5056,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 7.999.471</td>
             <td>R$ 8.098.679</td>
-            <td class="bad">-1,2%</td>
+            <td class="bad">-1,20%</td>
             <td>R$ 1.619.461</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>17,3%</td>
-            <td>17,3%</td>
-            <td class="ok">+0,0%</td>
-            <td>19,2%</td>
+            <td>17,30%</td>
+            <td>17,30%</td>
+            <td class="ok">+0,00%</td>
+            <td>19,20%</td>
           </tr>
         </tbody>
       </table>
@@ -5131,15 +5147,15 @@
             <td>Ingreso (ano)</td>
             <td>R$ 492.900</td>
             <td>R$ 497.850</td>
-            <td class="bad">-1,0%</td>
+            <td class="bad">-1,00%</td>
             <td>R$ 473.100</td>
           </tr>
           <tr>
             <td>Margem Bruta % (ano)</td>
-            <td>31,2%</td>
-            <td>30,5%</td>
-            <td class="ok">+0,7%</td>
-            <td>25,0%</td>
+            <td>31,20%</td>
+            <td>30,50%</td>
+            <td class="ok">+0,70%</td>
+            <td>25,00%</td>
           </tr>
         </tbody>
       </table>
@@ -5177,9 +5193,13 @@
     </div>
     <div class="section-title">Avanco de Faturamento por projeto <span class="count" id="fat-count">18</span></div>
     <div class="project-filter">
-      <input type="text" id="fat-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('fat')">
+      <div class="ms-combo">
+        <input type="text" id="fat-search" placeholder="Filtrar ou selecionar projetos..." autocomplete="off" oninput="filterProgress('fat'); renderFilterDropdown('fat')" onfocus="renderFilterDropdown('fat'); openFilterDropdown('fat')">
+        <div class="ms-dropdown" id="fat-ms-dropdown"></div>
+      </div>
       <button type="button" class="clear-filter" onclick="clearProgressFilter('fat')">Limpar</button>
     </div>
+    <div class="ms-chips" id="fat-ms-chips"></div>
     <div id="fat-projects-list"></div>
   </div>
 
@@ -5201,9 +5221,13 @@
     </div>
     <div class="section-title">Avanco de Cobro por projeto <span class="count" id="cob-count">18</span></div>
     <div class="project-filter">
-      <input type="text" id="cob-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('cob')">
+      <div class="ms-combo">
+        <input type="text" id="cob-search" placeholder="Filtrar ou selecionar projetos..." autocomplete="off" oninput="filterProgress('cob'); renderFilterDropdown('cob')" onfocus="renderFilterDropdown('cob'); openFilterDropdown('cob')">
+        <div class="ms-dropdown" id="cob-ms-dropdown"></div>
+      </div>
       <button type="button" class="clear-filter" onclick="clearProgressFilter('cob')">Limpar</button>
     </div>
+    <div class="ms-chips" id="cob-ms-chips"></div>
     <div id="cob-projects-list"></div>
   </div>
 
@@ -5225,13 +5249,27 @@
     </div>
     <div class="section-title">Fechamento por projeto <span class="count" id="fech-count">18</span></div>
     <div class="project-filter">
-      <input type="text" id="fech-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('fech')">
+      <div class="ms-combo">
+        <input type="text" id="fech-search" placeholder="Filtrar ou selecionar projetos..." autocomplete="off" oninput="filterProgress('fech'); renderFilterDropdown('fech')" onfocus="renderFilterDropdown('fech'); openFilterDropdown('fech')">
+        <div class="ms-dropdown" id="fech-ms-dropdown"></div>
+      </div>
       <button type="button" class="clear-filter" onclick="clearProgressFilter('fech')">Limpar</button>
     </div>
+    <div class="ms-chips" id="fech-ms-chips"></div>
     <div id="fech-projects-list"></div>
   </div>
 
   <div id="tab-parametrizacao" class="tab-panel">
+    <div class="report-bar" style="align-items:center; gap:24px; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <label style="font-size:12.5px; color:var(--slate); font-weight:600;">Rateio DS (%)</label>
+        <input type="text" inputmode="decimal" id="rateio-pct-ds" style="width:90px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:13px;" oninput="saveRateioPct('ds')" onblur="blurRateioPct('ds')">
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <label style="font-size:12.5px; color:var(--slate); font-weight:600;">Rateio Vertical (%)</label>
+        <input type="text" inputmode="decimal" id="rateio-pct-vertical" style="width:90px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:13px;" oninput="saveRateioPct('vertical')" onblur="blurRateioPct('vertical')">
+      </div>
+    </div>
     <div class="report-bar" style="align-items:center;">
       <button type="button" id="param-aplicar-btn" onclick="aplicarParametrizacao()">Aplicar</button>
       <span class="email-status" id="param-aplicar-status"></span>
@@ -5243,12 +5281,16 @@
       <button type="button" class="secondary" id="zerar-rateio-vertical-btn" onclick="zerarRateioTipo('vertical')">Zerar Rateio Vertical (todos os projetos)</button>
       <span class="email-status" id="param-zerar-status"></span>
     </div>
-    <div class="small-note" style="margin-bottom:20px;">Rateio DS = 3% do ingresso &middot; Rateio Vertical = 4,5% do ingresso &middot; Imposto = percentual proprio de cada projeto. Alterar o rateio ou o imposto de um projeto so atualiza o preview aqui nesta aba -- clique em "Aplicar" para refletir as mudancas no Fechamento de todos os projetos. Os botoes de zerar abaixo continuam agindo na hora, apenas para o mes selecionado (util quando o custo real ja caiu na ficha).</div>
+    <div class="small-note" style="margin-bottom:20px;">Defina acima os % de Rateio DS e Vertical &middot; Imposto = percentual proprio de cada projeto. Alterar o rateio, o imposto ou os % acima so atualiza o preview aqui nesta aba -- clique em "Aplicar" para refletir as mudancas no Fechamento de todos os projetos. Os botoes de zerar abaixo continuam agindo na hora, apenas para o mes selecionado (util quando o custo real ja caiu na ficha).</div>
     <div class="section-title">Parametrizacao por projeto <span class="count" id="param-count">18</span></div>
     <div class="project-filter">
-      <input type="text" id="param-search" placeholder="Filtrar por codigo ou nome do projeto..." oninput="filterProgress('param')">
+      <div class="ms-combo">
+        <input type="text" id="param-search" placeholder="Filtrar ou selecionar projetos..." autocomplete="off" oninput="filterProgress('param'); renderFilterDropdown('param')" onfocus="renderFilterDropdown('param'); openFilterDropdown('param')">
+        <div class="ms-dropdown" id="param-ms-dropdown"></div>
+      </div>
       <button type="button" class="clear-filter" onclick="clearProgressFilter('param')">Limpar</button>
     </div>
+    <div class="ms-chips" id="param-ms-chips"></div>
     <div id="param-projects-list"></div>
   </div>
 
@@ -5306,11 +5348,11 @@ function parseBRNum(s) {
   if (isNaN(v)) return 0;
   return neg ? -v : v;
 }
-function pctf(v, d=1) {
+function pctf(v, d=2) {
   if (v === null || v === undefined) return "-";
   return v.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d}) + "%";
 }
-function ppf(v, d=1) {
+function ppf(v, d=2) {
   if (v === null || v === undefined) return "-";
   const sign = v > 0 ? "+" : "";
   return sign + v.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d}) + "%";
@@ -5902,16 +5944,96 @@ function normalizeText(s) {
   return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 }
 
+// ---------- Filtro multi-selecao de projetos (Geral/Faturamento/Cobro/Fechamento/Parametrizacao) ----------
+const FILTER_PREFIXES = ['geral', 'fat', 'cob', 'fech', 'param'];
+const FILTER_SELECTED = { geral: new Set(), fat: new Set(), cob: new Set(), fech: new Set(), param: new Set() };
+const FILTER_SEARCH_ID = { geral: 'project-search', fat: 'fat-search', cob: 'cob-search', fech: 'fech-search', param: 'param-search' };
+const FILTER_DROPDOWN_ID = { geral: 'geral-ms-dropdown', fat: 'fat-ms-dropdown', cob: 'cob-ms-dropdown', fech: 'fech-ms-dropdown', param: 'param-ms-dropdown' };
+const FILTER_CHIPS_ID = { geral: 'geral-ms-chips', fat: 'fat-ms-chips', cob: 'cob-ms-chips', fech: 'fech-ms-chips', param: 'param-ms-chips' };
+
+function filterOptionProjects() {
+  return currentProjects();
+}
+
+function renderFilterDropdown(prefix) {
+  const ddEl = document.getElementById(FILTER_DROPDOWN_ID[prefix]);
+  if (!ddEl) return;
+  const searchEl = document.getElementById(FILTER_SEARCH_ID[prefix]);
+  const q = normalizeText(searchEl ? searchEl.value.trim() : '');
+  const sel = FILTER_SELECTED[prefix];
+  const opts = filterOptionProjects().filter(function(p) {
+    if (!q) return true;
+    return normalizeText(p.code).indexOf(q) !== -1 || normalizeText(p.name).indexOf(q) !== -1;
+  });
+  if (!opts.length) {
+    ddEl.innerHTML = '<div class="ms-dropdown-empty">Nenhum projeto encontrado.</div>';
+    return;
+  }
+  ddEl.innerHTML = opts.map(function(p) {
+    const checked = sel.has(p.code) ? 'checked' : '';
+    const id = 'ms-opt-' + prefix + '-' + p.code;
+    return '<label class="ms-dropdown-item" for="' + id + '">'
+      + '<input type="checkbox" id="' + id + '" ' + checked + ' onclick="event.stopPropagation(); toggleFilterSelection(\'' + prefix + '\',\'' + p.code + '\')">'
+      + '<span><strong>' + p.code + '</strong> ' + p.name + '</span>'
+      + '</label>';
+  }).join('');
+}
+
+function openFilterDropdown(prefix) {
+  const ddEl = document.getElementById(FILTER_DROPDOWN_ID[prefix]);
+  if (ddEl) ddEl.classList.add('show');
+  document.addEventListener('click', _filterOutsideClickHandler, true);
+}
+
+function closeAllFilterDropdowns() {
+  FILTER_PREFIXES.forEach(function(prefix) {
+    const el = document.getElementById(FILTER_DROPDOWN_ID[prefix]);
+    if (el) el.classList.remove('show');
+  });
+}
+
+function _filterOutsideClickHandler(e) {
+  const isInsideCombo = e.target.closest && e.target.closest('.ms-combo');
+  if (!isInsideCombo) {
+    closeAllFilterDropdowns();
+    document.removeEventListener('click', _filterOutsideClickHandler, true);
+  }
+}
+
+function toggleFilterSelection(prefix, code) {
+  const sel = FILTER_SELECTED[prefix];
+  if (sel.has(code)) sel.delete(code); else sel.add(code);
+  renderFilterChips(prefix);
+  renderFilterDropdown(prefix);
+  if (prefix === 'geral') filterProjects(); else filterProgress(prefix);
+}
+
+function renderFilterChips(prefix) {
+  const chipsEl = document.getElementById(FILTER_CHIPS_ID[prefix]);
+  if (!chipsEl) return;
+  const sel = FILTER_SELECTED[prefix];
+  if (!sel.size) { chipsEl.innerHTML = ''; return; }
+  const projects = filterOptionProjects();
+  chipsEl.innerHTML = Array.from(sel).map(function(code) {
+    const p = projects.find(function(x) { return x.code === code; });
+    const label = p ? (code + ' - ' + p.name) : code;
+    return '<span class="ms-chip">' + label + ' <button type="button" onclick="toggleFilterSelection(\'' + prefix + '\',\'' + code + '\')">&times;</button></span>';
+  }).join('');
+}
+
 function filterProjects() {
   var q = normalizeText(document.getElementById('project-search').value.trim());
+  var sel = FILTER_SELECTED.geral;
+  var useSelection = sel.size > 0;
   var cards = document.querySelectorAll('#tab-geral .project-card');
   var visible = 0;
   cards.forEach(function(card) {
     var gestorMatch = (card.getAttribute('data-gestor') || 'Rodrigo') === CURRENT_GESTOR;
-    var code = normalizeText(card.getAttribute('data-code'));
+    var code = card.getAttribute('data-code');
+    var codeNorm = normalizeText(code);
     var nameEl = card.querySelector('.proj-name');
     var name = normalizeText(nameEl ? nameEl.textContent : '');
-    var textMatch = !q || code.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+    var textMatch = useSelection ? sel.has(code) : (!q || codeNorm.indexOf(q) !== -1 || name.indexOf(q) !== -1);
     var match = gestorMatch && textMatch;
     card.style.display = match ? '' : 'none';
     if (match) visible++;
@@ -5924,6 +6046,9 @@ function filterProjects() {
 
 function clearProjectFilter() {
   document.getElementById('project-search').value = '';
+  FILTER_SELECTED.geral.clear();
+  renderFilterChips('geral');
+  renderFilterDropdown('geral');
   filterProjects();
 }
 
@@ -6122,6 +6247,33 @@ function paramLocalKey(code, field) { return NOTES_PREFIX + paramComposite(code,
 function zeroedComposite(code, field) { return code + '::zerado_' + field; }
 function zeroedLocalKey(code, field, mkey) { return NOTES_PREFIX + zeroedComposite(code, field) + '::' + mkey; }
 
+// Os % de Rateio DS/Vertical sao globais (nao por projeto) e parametrizaveis pelo usuario --
+// usam um pseudo-codigo fixo para reaproveitar a mesma tabela 'notes' do Supabase.
+const RATEIO_GLOBAL_CODE = '__GLOBAL__';
+function rateioPctComposite(kind) { return RATEIO_GLOBAL_CODE + '::rateio_pct_' + kind; }
+function rateioPctLocalKey(kind) { return NOTES_PREFIX + rateioPctComposite(kind); }
+
+function refreshRateioPctInputs() {
+  ['ds', 'vertical'].forEach(function(kind) {
+    const el = document.getElementById('rateio-pct-' + kind);
+    if (el) el.value = (RATEIO_PCT[kind] * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  });
+}
+
+function saveRateioPct(kind) {
+  const el = document.getElementById('rateio-pct-' + kind);
+  if (!el) return;
+  const pct = parseBRNum(el.value);
+  RATEIO_PCT[kind] = (isNaN(pct) ? 0 : pct) / 100;
+  markParamPending(RATEIO_GLOBAL_CODE);
+  const mkey = document.getElementById('month-select').value;
+  renderParamTab(mkey);
+}
+
+function blurRateioPct(kind) {
+  refreshRateioPctInputs();
+}
+
 function computeParamCost(p, mkey, ingreso) {
   const params = getParams(p.code);
   const zeroed = getZeroed(p.code, mkey);
@@ -6303,8 +6455,8 @@ function renderAllTabs(mkey) {
 
 // ---------- Parametrizacao: render, edicao e zerar em massa ----------
 function paramRateioLabel(tipo) {
-  if (tipo === 'ds') return 'DS (3%)';
-  if (tipo === 'vertical') return 'Vertical (4,5%)';
+  if (tipo === 'ds') return 'DS (' + pctf(RATEIO_PCT.ds * 100, 2) + ')';
+  if (tipo === 'vertical') return 'Vertical (' + pctf(RATEIO_PCT.vertical * 100, 2) + ')';
   return 'Nenhum';
 }
 
@@ -6345,8 +6497,8 @@ function renderParamTab(mkey) {
         <div class="card-body">
           <div class="meta-row" style="margin-top:14px;gap:20px;">
             <label><input type="radio" name="rateio-${p.code}" value="none" ${params.rateioTipo === 'none' ? 'checked' : ''} onchange="saveParamRateio('${p.code}','none')"> Nenhum</label>
-            <label><input type="radio" name="rateio-${p.code}" value="ds" ${params.rateioTipo === 'ds' ? 'checked' : ''} onchange="saveParamRateio('${p.code}','ds')"> DS (3%)</label>
-            <label><input type="radio" name="rateio-${p.code}" value="vertical" ${params.rateioTipo === 'vertical' ? 'checked' : ''} onchange="saveParamRateio('${p.code}','vertical')"> Vertical (4,5%)</label>
+            <label><input type="radio" name="rateio-${p.code}" value="ds" ${params.rateioTipo === 'ds' ? 'checked' : ''} onchange="saveParamRateio('${p.code}','ds')"> DS (${pctf(RATEIO_PCT.ds * 100, 2)})</label>
+            <label><input type="radio" name="rateio-${p.code}" value="vertical" ${params.rateioTipo === 'vertical' ? 'checked' : ''} onchange="saveParamRateio('${p.code}','vertical')"> Vertical (${pctf(RATEIO_PCT.vertical * 100, 2)})</label>
           </div>
           <div class="extra-row" style="margin-top:16px;">
             <div class="obs-block extra-block">
@@ -6434,6 +6586,10 @@ async function aplicarParametrizacao() {
       localStorage.setItem(paramLocalKey(p.code, 'impostopct'), String(params.impostoPct || 0));
     } catch (e) {}
   });
+  try {
+    localStorage.setItem(rateioPctLocalKey('ds'), String(RATEIO_PCT.ds));
+    localStorage.setItem(rateioPctLocalKey('vertical'), String(RATEIO_PCT.vertical));
+  } catch (e) {}
 
   let syncError = null;
   if (SUPABASE_CONFIGURED) {
@@ -6443,6 +6599,8 @@ async function aplicarParametrizacao() {
       rows.push({ code: paramComposite(p.code, 'rateiotipo'), month: 'PARAM', text: params.rateioTipo, updated_at: nowIso });
       rows.push({ code: paramComposite(p.code, 'impostopct'), month: 'PARAM', text: String(params.impostoPct || 0), updated_at: nowIso });
     });
+    rows.push({ code: rateioPctComposite('ds'), month: 'PARAM', text: String(RATEIO_PCT.ds), updated_at: nowIso });
+    rows.push({ code: rateioPctComposite('vertical'), month: 'PARAM', text: String(RATEIO_PCT.vertical), updated_at: nowIso });
     const { error } = await sb.from('notes').upsert(rows, { onConflict: 'code,month' });
     syncError = error;
   }
@@ -6566,6 +6724,14 @@ function loadParamsFromSupabase() {
       } catch (e) {}
     });
   });
+  ['ds', 'vertical'].forEach(function(kind) {
+    try {
+      const raw = localStorage.getItem(rateioPctLocalKey(kind));
+      const num = parseFloat(raw);
+      if (!isNaN(num)) RATEIO_PCT[kind] = num;
+    } catch (e) {}
+  });
+  refreshRateioPctInputs();
 
   if (!SUPABASE_CONFIGURED) return;
 
@@ -6574,9 +6740,12 @@ function loadParamsFromSupabase() {
     fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::param_impostopct').eq('month', 'PARAM')),
     fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::zerado_rateio')),
     fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::zerado_imposto')),
+    fetchAllNotes(() => sb.from('notes').select('code,month,text').eq('code', rateioPctComposite('ds')).eq('month', 'PARAM')),
+    fetchAllNotes(() => sb.from('notes').select('code,month,text').eq('code', rateioPctComposite('vertical')).eq('month', 'PARAM')),
   ]).then(function(results) {
     let touched = false;
     const rtRows = results[0], ipRows = results[1], zrRows = results[2], ziRows = results[3];
+    const rateioDsRows = results[4], rateioVerticalRows = results[5];
     rtRows.forEach(function(row) {
       const idx = row.code.lastIndexOf('::param_rateiotipo');
       if (idx === -1) return;
@@ -6606,6 +6775,15 @@ function loadParamsFromSupabase() {
       if (!DATA.some(function(p) { return p.code === code; })) return;
       getZeroed(code, row.month).imposto = row.text === '1'; touched = true;
     });
+    if (rateioDsRows.length) {
+      const num = parseFloat(rateioDsRows[0].text);
+      if (!isNaN(num)) { RATEIO_PCT.ds = num; touched = true; }
+    }
+    if (rateioVerticalRows.length) {
+      const num = parseFloat(rateioVerticalRows[0].text);
+      if (!isNaN(num)) { RATEIO_PCT.vertical = num; touched = true; }
+    }
+    refreshRateioPctInputs();
     if (touched) renderAllTabs(document.getElementById('month-select').value);
   });
 }
@@ -6862,13 +7040,16 @@ function filterProgress(prefix) {
   const searchEl = document.getElementById(prefix + '-search');
   if (!searchEl) return;
   const q = normalizeText(searchEl.value.trim());
+  const sel = FILTER_SELECTED[prefix];
+  const useSelection = sel && sel.size > 0;
   const rows = document.querySelectorAll('#' + prefix + '-projects-list .project-card');
   let visible = 0;
   rows.forEach(function(row) {
-    const code = normalizeText(row.getAttribute('data-code'));
+    const code = row.getAttribute('data-code');
+    const codeNorm = normalizeText(code);
     const nameEl = row.querySelector('.proj-name');
     const name = normalizeText(nameEl ? nameEl.textContent : '');
-    const match = !q || code.indexOf(q) !== -1 || name.indexOf(q) !== -1;
+    const match = useSelection ? sel.has(code) : (!q || codeNorm.indexOf(q) !== -1 || name.indexOf(q) !== -1);
     row.style.display = match ? '' : 'none';
     if (match) visible++;
   });
@@ -6879,6 +7060,9 @@ function filterProgress(prefix) {
 function clearProgressFilter(prefix) {
   const searchEl = document.getElementById(prefix + '-search');
   if (searchEl) searchEl.value = '';
+  if (FILTER_SELECTED[prefix]) FILTER_SELECTED[prefix].clear();
+  renderFilterChips(prefix);
+  renderFilterDropdown(prefix);
   filterProgress(prefix);
 }
 
