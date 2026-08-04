@@ -5176,6 +5176,7 @@
   </div>
 
   <div id="tab-faturamento" class="tab-panel">
+    <div class="small-note" id="fat-consolidado-note" style="margin-bottom:10px;"></div>
     <div class="kpi-grid kpi-grid-3">
       <div class="kpi-card">
         <div class="kpi-label">Meta do mes (PR)</div>
@@ -5204,6 +5205,7 @@
   </div>
 
   <div id="tab-cobro" class="tab-panel">
+    <div class="small-note" id="cob-consolidado-note" style="margin-bottom:10px;"></div>
     <div class="kpi-grid kpi-grid-3">
       <div class="kpi-card">
         <div class="kpi-label">Meta do mes (PR)</div>
@@ -5232,6 +5234,7 @@
   </div>
 
   <div id="tab-fechamento" class="tab-panel">
+    <div class="small-note" id="fech-consolidado-note" style="margin-bottom:10px;"></div>
     <div class="kpi-grid kpi-grid-3">
       <div class="kpi-card">
         <div class="kpi-label">Meta Margem % (PR)</div>
@@ -6095,6 +6098,64 @@ function computeProgressRow(p, mkey, prefix, metaField, fichaField) {
   };
 }
 
+// Retorna os projetos que devem entrar no consolidado do topo (Faturamento/Cobro/Fechamento):
+// respeita a selecao multipla ou o texto digitado no filtro da aba; sem filtro, usa todos.
+function getConsolidadoProjects(prefix) {
+  var all = currentProjects();
+  var sel = FILTER_SELECTED[prefix];
+  if (sel && sel.size > 0) {
+    return all.filter(function(p) { return sel.has(p.code); });
+  }
+  var searchEl = document.getElementById(FILTER_SEARCH_ID[prefix]);
+  var q = searchEl ? normalizeText(searchEl.value.trim()) : '';
+  if (!q) return all;
+  return all.filter(function(p) {
+    return normalizeText(p.code).indexOf(q) !== -1 || normalizeText(p.name).indexOf(q) !== -1;
+  });
+}
+
+// Mostra um aviso no topo quando o consolidado esta somando apenas um subconjunto filtrado.
+function updateConsolidadoNote(prefix, projs) {
+  var noteEl = document.getElementById(prefix + '-consolidado-note');
+  if (!noteEl) return;
+  var total = currentProjects().length;
+  var sel = FILTER_SELECTED[prefix];
+  var searchEl = document.getElementById(FILTER_SEARCH_ID[prefix]);
+  var hasTextFilter = searchEl && searchEl.value.trim() !== '';
+  var filtered = (sel && sel.size > 0) || hasTextFilter;
+  noteEl.textContent = filtered ? 'Consolidado de ' + projs.length + ' de ' + total + ' projeto(s) filtrado(s).' : '';
+}
+
+function updateProgressKpis(prefix, mkey) {
+  var metaField = prefix === 'fat' ? 'faturamento' : 'cobro';
+  var fichaField = prefix;
+  var projs = getConsolidadoProjects(prefix);
+  var totalMeta = 0, totalReal = 0;
+  projs.forEach(function(p) {
+    var r = computeProgressRow(p, mkey, prefix, metaField, fichaField);
+    totalMeta += r.meta;
+    totalReal += r.real;
+  });
+  updateConsolidadoNote(prefix, projs);
+  var metaTotalEl = document.getElementById(prefix + '-meta-total');
+  var realTotalEl = document.getElementById(prefix + '-real-total');
+  if (metaTotalEl) metaTotalEl.textContent = brl(totalMeta);
+  if (realTotalEl) realTotalEl.textContent = brl(totalReal);
+  var geralPct = totalMeta > 0 ? (totalReal / totalMeta) * 100 : null;
+  var geralEl = document.getElementById(prefix + '-avanco-geral');
+  var geralSub = document.getElementById(prefix + '-avanco-geral-sub');
+  if (!geralEl || !geralSub) return;
+  if (geralPct !== null) {
+    geralEl.textContent = pctf(geralPct);
+    geralSub.textContent = (geralPct >= 100 ? 'Meta atingida' : 'Abaixo da meta') + ' · ' + brl(totalReal - totalMeta) + ' de diferenca';
+    geralSub.className = 'kpi-sub ' + (geralPct >= 100 ? 'ok' : 'bad');
+  } else {
+    geralEl.textContent = '—';
+    geralSub.textContent = 'Sem meta definida para o mes';
+    geralSub.className = 'kpi-sub neutral';
+  }
+}
+
 function renderProgressTab(kind, mkey) {
   // kind: 'faturamento' (usa m.faturamento.pr como meta e FICHA[code][mkey].fat como realizado)
   //       'cobro' (usa m.cobro.pr como meta e FICHA[code][mkey].cob como realizado)
@@ -6102,12 +6163,8 @@ function renderProgressTab(kind, mkey) {
   var metaField = kind === 'faturamento' ? 'faturamento' : 'cobro';
   var fichaField = kind === 'faturamento' ? 'fat' : 'cob';
 
-  var totalMeta = 0, totalReal = 0;
   var rows = currentProjects().map(function(p) {
-    var r = computeProgressRow(p, mkey, prefix, metaField, fichaField);
-    totalMeta += r.meta;
-    totalReal += r.real;
-    return r;
+    return computeProgressRow(p, mkey, prefix, metaField, fichaField);
   });
 
   rows.sort(function(a, b) {
@@ -6116,20 +6173,7 @@ function renderProgressTab(kind, mkey) {
     return pa - pb;
   });
 
-  document.getElementById(prefix + '-meta-total').textContent = brl(totalMeta);
-  document.getElementById(prefix + '-real-total').textContent = brl(totalReal);
-  var geralPct = totalMeta > 0 ? (totalReal / totalMeta) * 100 : null;
-  var geralEl = document.getElementById(prefix + '-avanco-geral');
-  var geralSub = document.getElementById(prefix + '-avanco-geral-sub');
-  if (geralPct !== null) {
-    geralEl.textContent = geralPct.toLocaleString('pt-BR', {minimumFractionDigits: 1, maximumFractionDigits: 1}) + '%';
-    geralSub.textContent = (geralPct >= 100 ? 'Meta atingida' : 'Abaixo da meta') + ' · ' + brl(totalReal - totalMeta) + ' de diferenca';
-    geralSub.className = 'kpi-sub ' + (geralPct >= 100 ? 'ok' : 'bad');
-  } else {
-    geralEl.textContent = '—';
-    geralSub.textContent = 'Sem meta definida para o mes';
-    geralSub.className = 'kpi-sub neutral';
-  }
+  updateProgressKpis(prefix, mkey);
 
   document.getElementById(prefix + '-count').textContent = rows.length;
   if (rows.length === 0) {
@@ -6314,7 +6358,7 @@ function computeFechRow(p, mkey) {
 
 function fechAggregates(mkey) {
   let totalIngreso = 0, totalCustoTotal = 0, totalExistencia = 0, totalMbPr = 0, totalIngPr = 0;
-  currentProjects().forEach(function(p) {
+  getConsolidadoProjects('fech').forEach(function(p) {
     const r = computeFechRow(p, mkey);
     totalIngreso += r.ingreso;
     totalCustoTotal += r.custoTotal;
@@ -6330,6 +6374,7 @@ function fechAggregates(mkey) {
 
 function updateFechKpis(mkey) {
   const agg = fechAggregates(mkey);
+  updateConsolidadoNote('fech', getConsolidadoProjects('fech'));
   const metaTotalEl = document.getElementById('fech-meta-total');
   const realTotalEl = document.getElementById('fech-real-total');
   if (metaTotalEl) metaTotalEl.textContent = agg.metaGeralPct !== null ? pctf(agg.metaGeralPct) : '-';
@@ -6908,31 +6953,8 @@ function updateProgressRowDisplay(code, prefix, mkey) {
   const barEl = document.getElementById('bar-' + prefix + '-' + code);
   if (barEl) { barEl.style.width = r.barWidth + '%'; barEl.className = 'progress-bar-fill ' + r.barCls; }
 
-  // recalcula os totais/KPI do topo sem reconstruir a lista inteira (preserva o foco do campo)
-  let totalMeta = 0, totalReal = 0;
-  currentProjects().forEach(function(proj) {
-    const rr = computeProgressRow(proj, mkey, prefix, metaField, fichaField);
-    totalMeta += rr.meta;
-    totalReal += rr.real;
-  });
-  const metaTotalEl = document.getElementById(prefix + '-meta-total');
-  const realTotalEl = document.getElementById(prefix + '-real-total');
-  if (metaTotalEl) metaTotalEl.textContent = brl(totalMeta);
-  if (realTotalEl) realTotalEl.textContent = brl(totalReal);
-  const geralPct = totalMeta > 0 ? (totalReal / totalMeta) * 100 : null;
-  const geralEl = document.getElementById(prefix + '-avanco-geral');
-  const geralSub = document.getElementById(prefix + '-avanco-geral-sub');
-  if (geralEl && geralSub) {
-    if (geralPct !== null) {
-      geralEl.textContent = geralPct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
-      geralSub.textContent = (geralPct >= 100 ? 'Meta atingida' : 'Abaixo da meta') + ' · ' + brl(totalReal - totalMeta) + ' de diferenca';
-      geralSub.className = 'kpi-sub ' + (geralPct >= 100 ? 'ok' : 'bad');
-    } else {
-      geralEl.textContent = '—';
-      geralSub.textContent = 'Sem meta definida para o mes';
-      geralSub.className = 'kpi-sub neutral';
-    }
-  }
+  // recalcula os totais/KPI do topo (respeitando o filtro atual) sem reconstruir a lista inteira
+  updateProgressKpis(prefix, mkey);
 }
 
 const _extraSaveTimers = {};
@@ -7055,6 +7077,11 @@ function filterProgress(prefix) {
   });
   const countEl = document.getElementById(prefix + '-count');
   if (countEl) countEl.textContent = visible;
+
+  // atualiza o consolidado do topo para refletir apenas os projetos filtrados (Faturamento/Cobro/Fechamento)
+  const mkey = document.getElementById('month-select').value;
+  if (prefix === 'fat' || prefix === 'cob') updateProgressKpis(prefix, mkey);
+  else if (prefix === 'fech') updateFechKpis(mkey);
 }
 
 function clearProgressFilter(prefix) {
