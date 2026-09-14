@@ -7107,7 +7107,7 @@ function renderOutrosModalBody() {
   }).join('');
   bodyEl.innerHTML =
     (rowsHtml || '<div class="ficha-modal-empty" style="padding:12px 0;">Nenhum custo detalhado ainda.</div>') +
-    '<button type="button" class="secondary" onclick="addOutrosItem()">+ Adicionar linha</button>';
+    '<div class="obs-toolbar" style="justify-content:flex-end; margin-top:4px;"><button type="button" onclick="addOutrosItem()">+ Adicionar linha</button></div>';
   const totalEl = document.getElementById('outros-modal-total');
   if (totalEl) totalEl.textContent = brl(recomputeOutrosSum(code, mkey));
 }
@@ -7193,9 +7193,9 @@ function fechOutrosRow(code, mkey) {
               <label>Outros</label>
               <span class="obs-status" id="outros-status-fech-${code}"></span>
             </div>
-            <div style="display:flex; gap:8px; align-items:center;">
+            <div class="obs-toolbar" style="align-items:center;">
               <input type="text" class="obs-textarea" style="min-height:auto;background:var(--bg);color:var(--slate);flex:1;" id="outros-fech-${code}" value="${brl(sum)}" disabled>
-              <button type="button" class="secondary" id="outros-btn-${code}" style="white-space:nowrap; padding:8px 12px;" onclick="openOutrosModal('${code}','${mkey}')">Detalhar (${label})</button>
+              <button type="button" id="outros-btn-${code}" style="white-space:nowrap;" onclick="openOutrosModal('${code}','${mkey}')">Detalhar (${label})</button>
             </div>
           </div>`;
 }
