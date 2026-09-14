@@ -227,6 +227,24 @@
     </div>
   </div>
 
+  <div class="ficha-modal-overlay" id="outros-modal-overlay" onclick="if(event.target===this) closeOutrosModal()">
+    <div class="ficha-modal">
+      <div class="ficha-modal-header">
+        <h3 id="outros-modal-title">Outros custos</h3>
+        <button type="button" class="ficha-modal-close" onclick="closeOutrosModal()">&times;</button>
+      </div>
+      <div class="ficha-modal-body" id="outros-modal-body"></div>
+      <div class="ficha-modal-footer" style="display:flex; align-items:center; justify-content:space-between; text-align:left;">
+        <div>
+          <div style="font-size:12px; color:var(--slate); text-transform:uppercase; letter-spacing:0.5px;">Total</div>
+          <div style="font-size:18px; font-weight:700; color:var(--navy);" id="outros-modal-total">R$ 0,00</div>
+          <span class="email-status" id="outros-modal-status"></span>
+        </div>
+        <button type="button" onclick="closeOutrosModal()">Concluido</button>
+      </div>
+    </div>
+  </div>
+
   <div class="main-tabs">
     <button type="button" class="tab-btn active" data-tab="geral" onclick="showTab('geral')">Comparativo Geral</button>
     <button type="button" class="tab-btn" data-tab="faturamento" onclick="showTab('faturamento')">Faturamento</button>
@@ -6476,7 +6494,7 @@ function renderFechTab(mkey) {
           </div>
         </summary>
         <div class="card-body">
-          <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechInputRow(r.code, mkey, 'outros', 'Outros', 'Custos nao cadastrados no MIOPS')}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
+          <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechOutrosRow(r.code, mkey)}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
           <div class="extra-row">${fechInputRow(r.code, mkey, 'entreempresas', 'Entre Empresas', 'Custo de transferencia entre empresas')}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}</div>
           <div class="extra-row">${fechComputedRow(r.code, mkey, 'rateio', 'Rateio (parametrizado)', r.rateioCalc, 'Calculado automaticamente na aba Parametrizacao.')}${fechComputedRow(r.code, mkey, 'imposto', 'Imposto (parametrizado)', r.impostoCalc, 'Calculado automaticamente na aba Parametrizacao.')}</div>
         </div>
@@ -7010,6 +7028,214 @@ function blurExtra(code, kind, field) {
   if (!el) return;
   const ex = getExtra(code, mkey, kind);
   el.value = brlPlain(ex[field]);
+}
+
+// ---------- Detalhamento do campo "Outros" (Fechamento): varias linhas de custo ----------
+// OUTROS_ITEMS[code][mkey] = [{desc, valor}, ...]. A soma das linhas alimenta ex.outros
+// (o mesmo campo usado no calculo do custo). Se nunca houve linhas salvas para um
+// code+mkey mas ja existe um valor antigo (digitado direto no campo, antes desta
+// funcionalidade existir), a primeira linha e criada automaticamente com esse valor,
+// para nao perder nada que ja estava preenchido.
+let OUTROS_ITEMS = {};
+let _outrosModalCode = null;
+let _outrosModalMkey = null;
+
+function outrosItemsComposite(code) { return code + '::outros_items'; }
+function outrosItemsLocalKey(code, mkey) { return NOTES_PREFIX + outrosItemsComposite(code) + '::' + mkey; }
+
+function getOutrosItems(code, mkey) {
+  if (!OUTROS_ITEMS[code]) OUTROS_ITEMS[code] = {};
+  if (!OUTROS_ITEMS[code][mkey]) {
+    const legacy = getExtra(code, mkey, 'fech').outros || 0;
+    OUTROS_ITEMS[code][mkey] = legacy ? [{ desc: 'Valor anterior', valor: legacy }] : [];
+  }
+  return OUTROS_ITEMS[code][mkey];
+}
+
+function recomputeOutrosSum(code, mkey) {
+  const items = getOutrosItems(code, mkey);
+  const sum = items.reduce(function(acc, it) { return acc + (parseFloat(it.valor) || 0); }, 0);
+  getExtra(code, mkey, 'fech').outros = sum;
+  return sum;
+}
+
+function refreshOutrosMainDisplay(code, mkey) {
+  const sum = recomputeOutrosSum(code, mkey);
+  const items = getOutrosItems(code, mkey);
+  const displayEl = document.getElementById('outros-fech-' + code);
+  if (displayEl) displayEl.value = brl(sum);
+  const btnEl = document.getElementById('outros-btn-' + code);
+  if (btnEl) btnEl.textContent = 'Detalhar (' + (items.length ? items.length + (items.length > 1 ? ' itens' : ' item') : 'nenhum item') + ')';
+  updateFechRowDisplay(code, mkey);
+}
+
+const _outrosSaveTimers = {};
+function persistOutrosItems(code, mkey) {
+  const items = getOutrosItems(code, mkey);
+  try { localStorage.setItem(outrosItemsLocalKey(code, mkey), JSON.stringify(items)); } catch (e) {}
+  const statusEl = document.getElementById('outros-modal-status');
+  const timerKey = code + ':' + mkey;
+  clearTimeout(_outrosSaveTimers[timerKey]);
+  _outrosSaveTimers[timerKey] = setTimeout(function() {
+    if (!SUPABASE_CONFIGURED) {
+      if (statusEl) statusEl.textContent = 'Salvo neste navegador ' + new Date().toLocaleTimeString('pt-BR');
+      return;
+    }
+    if (statusEl) statusEl.textContent = 'Salvando...';
+    sb.from('notes').upsert(
+      { code: outrosItemsComposite(code), month: mkey, text: JSON.stringify(items), updated_at: new Date().toISOString() },
+      { onConflict: 'code,month' }
+    ).then(function(res) {
+      if (!statusEl) return;
+      statusEl.textContent = res.error ? 'Salvo neste navegador (falha ao sincronizar)' : 'Salvo e sincronizado ' + new Date().toLocaleTimeString('pt-BR');
+    });
+  }, 800);
+}
+
+function renderOutrosModalBody() {
+  const code = _outrosModalCode, mkey = _outrosModalMkey;
+  if (!code) return;
+  const items = getOutrosItems(code, mkey);
+  const bodyEl = document.getElementById('outros-modal-body');
+  if (!bodyEl) return;
+  const rowsHtml = items.map(function(item, idx) {
+    return '<div class="outros-item-row" style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">' +
+      '<input type="text" placeholder="Descricao do custo" value="' + escHtml(item.desc || '') + '" style="flex:2;" oninput="updateOutrosItemField(' + idx + ',\'desc\',this.value)">' +
+      '<input type="text" inputmode="decimal" placeholder="Valor" value="' + (item.valor ? brlPlain(item.valor) : '') + '" style="flex:1;" oninput="updateOutrosItemField(' + idx + ',\'valor\',this.value)" onblur="blurOutrosItemValor(' + idx + ')">' +
+      '<button type="button" class="ficha-modal-close" style="font-size:18px;" title="Excluir linha" onclick="removeOutrosItem(' + idx + ')">&times;</button>' +
+      '</div>';
+  }).join('');
+  bodyEl.innerHTML =
+    (rowsHtml || '<div class="ficha-modal-empty" style="padding:12px 0;">Nenhum custo detalhado ainda.</div>') +
+    '<button type="button" class="secondary" onclick="addOutrosItem()">+ Adicionar linha</button>';
+  const totalEl = document.getElementById('outros-modal-total');
+  if (totalEl) totalEl.textContent = brl(recomputeOutrosSum(code, mkey));
+}
+
+function openOutrosModal(code, mkey) {
+  _outrosModalCode = code;
+  _outrosModalMkey = mkey;
+  const p = DATA.find(function(x) { return x.code === code; });
+  const titleEl = document.getElementById('outros-modal-title');
+  if (titleEl) titleEl.textContent = 'Outros custos — ' + code + (p ? ' · ' + p.name : '');
+  const statusEl = document.getElementById('outros-modal-status');
+  if (statusEl) statusEl.textContent = '';
+  renderOutrosModalBody();
+  document.getElementById('outros-modal-overlay').classList.add('show');
+  document.addEventListener('keydown', outrosModalEscHandler);
+}
+
+function closeOutrosModal() {
+  if (_outrosModalCode) refreshOutrosMainDisplay(_outrosModalCode, _outrosModalMkey);
+  document.getElementById('outros-modal-overlay').classList.remove('show');
+  document.removeEventListener('keydown', outrosModalEscHandler);
+  _outrosModalCode = null;
+  _outrosModalMkey = null;
+}
+
+function outrosModalEscHandler(e) {
+  if (e.key === 'Escape') closeOutrosModal();
+}
+
+function updateOutrosItemField(idx, field, rawValue) {
+  const code = _outrosModalCode, mkey = _outrosModalMkey;
+  if (!code) return;
+  const items = getOutrosItems(code, mkey);
+  if (!items[idx]) return;
+  items[idx][field] = field === 'valor' ? parseBRNum(rawValue) : rawValue;
+  const totalEl = document.getElementById('outros-modal-total');
+  if (totalEl) totalEl.textContent = brl(recomputeOutrosSum(code, mkey));
+  refreshOutrosMainDisplay(code, mkey);
+  persistOutrosItems(code, mkey);
+}
+
+function blurOutrosItemValor(idx) {
+  const code = _outrosModalCode, mkey = _outrosModalMkey;
+  if (!code) return;
+  const items = getOutrosItems(code, mkey);
+  if (!items[idx]) return;
+  const rowEls = document.querySelectorAll('#outros-modal-body .outros-item-row');
+  const rowEl = rowEls[idx];
+  if (!rowEl) return;
+  const valorInput = rowEl.querySelectorAll('input')[1];
+  if (valorInput) valorInput.value = items[idx].valor ? brlPlain(items[idx].valor) : '';
+}
+
+function addOutrosItem() {
+  const code = _outrosModalCode, mkey = _outrosModalMkey;
+  if (!code) return;
+  getOutrosItems(code, mkey).push({ desc: '', valor: 0 });
+  renderOutrosModalBody();
+  refreshOutrosMainDisplay(code, mkey);
+  persistOutrosItems(code, mkey);
+  const rowEls = document.querySelectorAll('#outros-modal-body .outros-item-row');
+  const lastRow = rowEls[rowEls.length - 1];
+  if (lastRow) { const inp = lastRow.querySelector('input'); if (inp) inp.focus(); }
+}
+
+function removeOutrosItem(idx) {
+  const code = _outrosModalCode, mkey = _outrosModalMkey;
+  if (!code) return;
+  const items = getOutrosItems(code, mkey);
+  items.splice(idx, 1);
+  renderOutrosModalBody();
+  refreshOutrosMainDisplay(code, mkey);
+  persistOutrosItems(code, mkey);
+}
+
+function fechOutrosRow(code, mkey) {
+  const sum = recomputeOutrosSum(code, mkey);
+  const items = getOutrosItems(code, mkey);
+  const label = items.length ? items.length + (items.length > 1 ? ' itens' : ' item') : 'nenhum item';
+  return `
+          <div class="obs-block extra-block">
+            <div class="obs-header">
+              <label>Outros</label>
+              <span class="obs-status" id="outros-status-fech-${code}"></span>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="text" class="obs-textarea" style="min-height:auto;background:var(--bg);color:var(--slate);flex:1;" id="outros-fech-${code}" value="${brl(sum)}" disabled>
+              <button type="button" class="secondary" id="outros-btn-${code}" style="white-space:nowrap; padding:8px 12px;" onclick="openOutrosModal('${code}','${mkey}')">Detalhar (${label})</button>
+            </div>
+          </div>`;
+}
+
+function loadOutrosItemsFromSupabase() {
+  // Carrega do localStorage primeiro (funciona sem Supabase tambem).
+  DATA.forEach(function(p) {
+    MESES.forEach(function(mkey) {
+      let raw = null;
+      try { raw = localStorage.getItem(outrosItemsLocalKey(p.code, mkey)); } catch (e) {}
+      if (!raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          if (!OUTROS_ITEMS[p.code]) OUTROS_ITEMS[p.code] = {};
+          OUTROS_ITEMS[p.code][mkey] = parsed;
+        }
+      } catch (e) {}
+    });
+  });
+
+  if (!SUPABASE_CONFIGURED) return;
+  fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::outros_items')).then(function(rows) {
+    if (!rows || !rows.length) return;
+    let touched = false;
+    rows.forEach(function(row) {
+      const idx = row.code.lastIndexOf('::outros_items');
+      if (idx === -1) return;
+      const code = row.code.slice(0, idx);
+      if (!DATA.some(function(p) { return p.code === code; })) return;
+      try {
+        const parsed = JSON.parse(row.text);
+        if (!Array.isArray(parsed)) return;
+        if (!OUTROS_ITEMS[code]) OUTROS_ITEMS[code] = {};
+        OUTROS_ITEMS[code][row.month] = parsed;
+        touched = true;
+      } catch (e) {}
+    });
+    if (touched) renderAllTabs(document.getElementById('month-select').value);
+  });
 }
 
 function loadExtraFromSupabase() {
@@ -7923,6 +8149,7 @@ loadExtraFromSupabase();
 loadParamsFromSupabase();
 seedCachesFromData();
 loadPrPcCacheFromSupabase();
+loadOutrosItemsFromSupabase();
 </script>
 
 </body>
