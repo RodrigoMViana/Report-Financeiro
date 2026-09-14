@@ -181,6 +181,7 @@
       <div class="gestor-toggle">
         <button type="button" class="gestor-btn active" data-gestor="Rodrigo" onclick="setGestor('Rodrigo')">Rodrigo</button>
         <button type="button" class="gestor-btn" data-gestor="Dinart" onclick="setGestor('Dinart')">Dinart</button>
+        <button type="button" class="gestor-btn" data-gestor="Eça" onclick="setGestor('Eça')">Eça</button>
       </div>
     </div>
     <div class="month-picker">
@@ -193,7 +194,7 @@
 <option value="MAI" >Maio/2026</option>
 <option value="JUN" >Junho/2026</option>
 <option value="JUL" >Julho/2026</option>
-<option value="AGO" selected>Agosto/2026</option>
+<option value="AGO">Agosto/2026</option>
 <option value="SET" >Setembro/2026</option>
 <option value="OUT" >Outubro/2026</option>
 <option value="NOV" >Novembro/2026</option>
@@ -7412,7 +7413,17 @@ const MESES_NOMES_PC = {JAN:'Janeiro',FEV:'Fevereiro',MAR:'Março',ABR:'Abril',M
 
 const PC_CONCEPT_OFFSETS = {carteira:0,contratacion:1,ingresos:2,coste:3,margen:4,margen_pct:5,clientes:6,dpf:7,alo:8,existencias:9,mov_existencias:10,facturacion:11,cobros:12};
 const PC_DESC_COLS = {operacion:4,descr:7,cliente:9,estado:15,status:16,regiao:17,gerente:19,gestor:20};
-const PC_MANAGER_MAP = {'de melo viana rodrigo':'Rodrigo','de melo viana, rodrigo':'Rodrigo','moreira filho, dinart':'Dinart'};
+const PC_MANAGER_MAP = {
+  'de melo viana rodrigo':'Rodrigo','de melo viana, rodrigo':'Rodrigo',
+  'moreira filho, dinart':'Dinart','moreira filho dinart':'Dinart',
+  'da rocha fernandes neto, eca':'Eça','da rocha fernandes neto eca':'Eça',
+  'da rocha fernandes neto, eça':'Eça','da rocha fernandes neto eça':'Eça'
+};
+const GESTOR_PC_NAME = {
+  'Rodrigo':'De Melo Viana, Rodrigo',
+  'Dinart':'Moreira Filho, Dinart',
+  'Eça':'Da Rocha Fernandes Neto, Eca'
+};
 const PR_ROWS_MAP = {ventas:10,existencias:11,costes:13,margem:58,margem_pct:59,facturacion:61,cobros:62,dpf:63,alo:64};
 
 function normalizeManagerPC(raw){ if (!raw) return null; return PC_MANAGER_MAP[String(raw).trim().toLowerCase()] || null; }
@@ -7650,7 +7661,7 @@ function seedCachesFromData(){
         desc: {
           operacion:p.operacion, descr:p.name, cliente:p.cliente, estado:p.estado, status:p.status,
           regiao:p.regiao, gerente:p.gerente,
-          gestor: (p.gestor === 'Dinart' ? 'Moreira Filho, Dinart' : 'De Melo Viana, Rodrigo')
+          gestor: GESTOR_PC_NAME[p.gestor] || GESTOR_PC_NAME['Rodrigo']
         }
       };
     }
@@ -7694,6 +7705,24 @@ function updateCardStaticFields(code){
   }
 }
 
+// Clona um card de projeto ja existente no DOM para servir de base a um projeto
+// novo (ex.: primeiro upload de um projeto de um gestor recem-adicionado, como Eca).
+// Faz isso via substituicao literal do codigo antigo pelo novo em todo o HTML do
+// template (cobre data-code, ids mini-*, mes-header-*, month-table-*, obs-*, flag-*
+// e os onclick/oninput que referenciam o codigo).
+function createProjectCardIfMissing(code, gestor) {
+  if (document.querySelector('.project-card[data-code="'+CSS.escape(code)+'"]')) return;
+  const container = document.getElementById('tab-geral');
+  const template = container && container.querySelector('.project-card');
+  if (!container || !template) return;
+  const templateCode = template.getAttribute('data-code');
+  if (!templateCode) return;
+  const html = template.outerHTML.split(templateCode).join(code);
+  container.insertAdjacentHTML('beforeend', html);
+  const newCard = container.querySelector('.project-card[data-code="'+CSS.escape(code)+'"]');
+  if (newCard) newCard.setAttribute('data-gestor', gestor || 'Rodrigo');
+}
+
 function recomputeCodes(codes){
   const updated = [];
   const newCodes = [];
@@ -7704,7 +7733,13 @@ function recomputeCodes(codes){
     if (!pc || !pr) return;
     const built = buildProjectFromPrPc(code, pr, pc.data, pc.desc);
     const idx = DATA.findIndex(function(p){ return p.code === code; });
-    if (idx === -1){ newCodes.push(code); return; }
+    if (idx === -1){
+      createProjectCardIfMissing(code, built.gestor);
+      DATA.push(built);
+      newCodes.push(code);
+      updated.push(code);
+      return;
+    }
     const existing = DATA[idx];
     Object.assign(existing, built);
     updated.push(code);
@@ -7734,14 +7769,14 @@ async function handlePreCierreFile(event){
       const result = getPrecierreProjectJS(rows, index, code, colmap);
       if (!result) return;
       const mgr = normalizeManagerPC(result.desc.gestor);
-      if (mgr !== 'Rodrigo' && mgr !== 'Dinart') return;
+      if (!mgr) return; // gestor nao reconhecido na coluna T (veja PC_MANAGER_MAP)
       PC_CACHE[code] = result;
       touched.push(code);
     });
 
     if (!touched.length){
       statusEl.className = 'email-status bad';
-      statusEl.textContent = 'Nenhum projeto de Rodrigo/Dinart reconhecido no arquivo.';
+      statusEl.textContent = 'Nenhum projeto de gestor reconhecido no arquivo (Rodrigo/Dinart/Eça).';
       return;
     }
 
@@ -7750,7 +7785,7 @@ async function handlePreCierreFile(event){
     renderAllTabs(document.getElementById('month-select').value);
 
     let msg = touched.length + ' projeto(s) lidos do Pre Cierre, ' + rc.updated.length + ' atualizado(s) no site.';
-    if (rc.newCodes.length) msg += ' ' + rc.newCodes.length + ' codigo(s) novo(s) ainda sem PR carregada: ' + rc.newCodes.join(', ') + '.';
+    if (rc.newCodes.length) msg += ' ' + rc.newCodes.length + ' projeto(s) novo(s) criado(s) no site: ' + rc.newCodes.join(', ') + '.';
     statusEl.className = 'email-status ok';
     statusEl.textContent = msg;
 
@@ -7813,7 +7848,7 @@ async function handlePrFiles(event){
   const waiting = touched.filter(function(c){ return !PC_CACHE[c]; });
   let msg = touched.length + ' PR(s) lida(s), ' + rc.updated.length + ' projeto(s) atualizado(s).';
   if (waiting.length) msg += ' Aguardando Pre Cierre para: ' + waiting.join(', ') + '.';
-  if (rc.newCodes.length) msg += ' Codigo(s) nao cadastrado(s) no site (nao criado automaticamente): ' + rc.newCodes.join(', ') + '.';
+  if (rc.newCodes.length) msg += ' ' + rc.newCodes.length + ' projeto(s) novo(s) criado(s) no site: ' + rc.newCodes.join(', ') + '.';
   if (parseErrors.length) msg += ' Erros: ' + parseErrors.join('; ') + '.';
   statusEl.className = 'email-status ok';
   statusEl.textContent = msg;
@@ -7861,6 +7896,27 @@ document.getElementById('month-select').setAttribute('onchange', "renderAllTabs(
 document.querySelectorAll('.gestor-btn').forEach(function(b){
   b.classList.toggle('active', b.getAttribute('data-gestor') === CURRENT_GESTOR);
 });
+
+// Mes de referencia padrao: a partir do dia 10 de cada mes, o mes atual passa a
+// ser o default automaticamente (antes do dia 10, mantem o mes anterior, pois
+// os dados do mes atual normalmente ainda nao estao fechados).
+function getDefaultMonthKey() {
+  const codes = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  const now = new Date();
+  let idx = now.getMonth(); // 0 = Janeiro ... 11 = Dezembro
+  if (now.getDate() < 10) {
+    idx = (idx - 1 + 12) % 12;
+  }
+  return codes[idx];
+}
+(function applyDefaultMonth(){
+  const sel = document.getElementById('month-select');
+  const key = getDefaultMonthKey();
+  if (sel.querySelector('option[value="' + key + '"]')) {
+    sel.value = key;
+  }
+})();
+
 renderAllTabs(document.getElementById('month-select').value);
 loadFichaOverridesFromSupabase();
 loadExtraFromSupabase();
