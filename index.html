@@ -6497,6 +6497,13 @@ function renderFechTab(mkey) {
           <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechOutrosRow(r.code, mkey)}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
           <div class="extra-row">${fechInputRow(r.code, mkey, 'entreempresas', 'Entre Empresas', 'Custo de transferencia entre empresas')}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}</div>
           <div class="extra-row">${fechComputedRow(r.code, mkey, 'rateio', 'Rateio (parametrizado)', r.rateioCalc, 'Calculado automaticamente na aba Parametrizacao.')}${fechComputedRow(r.code, mkey, 'imposto', 'Imposto (parametrizado)', r.impostoCalc, 'Calculado automaticamente na aba Parametrizacao.')}</div>
+          <div class="obs-block">
+            <div class="obs-header">
+              <label>Comentarios</label>
+              <span class="obs-status" id="status-fech-status-${r.code}"></span>
+            </div>
+            <textarea id="status-fech-${r.code}" class="obs-textarea" placeholder="Digite aqui comentarios sobre o fechamento deste projeto..." oninput="saveStatus('${r.code}','fech')"></textarea>
+          </div>
         </div>
       </details>`;
   }).join('');
@@ -6510,6 +6517,7 @@ function renderAllTabs(mkey) {
   renderParamTab(mkey);
   loadStatusForMonth('fat', mkey);
   loadStatusForMonth('cob', mkey);
+  loadStatusForMonth('fech', mkey);
   filterProjects();
   filterProgress('fat');
   filterProgress('cob');
