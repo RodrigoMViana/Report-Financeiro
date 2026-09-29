@@ -1,0 +1,20 @@
+# Dados financeiros — NUNCA publicar (repo é público via GitHub Pages)
+Fichas/
+PRE CIERRE/
+PRs/
+*.xls
+*.xlsx
+*.xlsb
+*.xlsm
+
+# Versões antigas / arquivos de teste locais
+Comparativo_PR_PreCierre.html
+_teste_sheetjs.html
+Converter_PRs.vbs
+Converter_PRs_para_xlsx.bas
+
+# Claude Code local
+.claude/
+
+# Contexto local do Claude Code (não publicar)
+CLAUDE.md
