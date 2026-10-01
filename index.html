@@ -5333,7 +5333,7 @@
   <div id="tab-rateio" class="tab-panel">
     <div id="rp-locked">
       <div class="rp-lock">
-        <h3>&#128274; Rateio de pessoas</h3>
+        <h3 id="rp-lock-title">&#128274; Rateio</h3>
         <p id="rp-lock-msg">Area restrita. Informe a senha para acessar.</p>
         <input type="password" id="rp-pass" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter') rpUnlock()">
         <input type="password" id="rp-pass2" placeholder="Confirme a senha" autocomplete="new-password" style="display:none;" onkeydown="if(event.key==='Enter') rpUnlock()">
@@ -5354,7 +5354,7 @@
         <div class="kpi-card"><div class="kpi-label">Horas rateadas no mes</div><div class="kpi-value" id="rp-kpi-horas">-</div></div>
         <div class="kpi-card"><div class="kpi-label">Custo rateado no mes</div><div class="kpi-value" id="rp-kpi-custo">-</div></div>
       </div>
-      <div class="section-title">Pessoas <span class="count" id="rp-count">0</span></div>
+      <div class="section-title">Pessoas &middot; <span id="rp-gestor-label"></span> <span class="count" id="rp-count">0</span></div>
       <div id="rp-pessoas-list"></div>
     </div>
   </div>
@@ -5383,6 +5383,7 @@ function currentProjects() {
 function setGestor(g) {
   CURRENT_GESTOR = g;
   try { localStorage.setItem('pr_current_gestor', g); } catch(e) {}
+  rpOnGestorChange();
   document.querySelectorAll('.gestor-btn').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-gestor') === g);
   });
@@ -8183,9 +8184,12 @@ document.querySelectorAll('.gestor-btn').forEach(function(b){
 // criptografado (AES-GCM, chave derivada da senha via PBKDF2). No Supabase/localStorage so vai o
 // texto cifrado -- sem a senha nao da para ler as taxas. Nao ha recuperacao: perdeu a senha, perdeu os dados.
 // Em localhost/arquivo local nao sincroniza com o Supabase, para o preview nao mexer no dado real.
-var RP_COMPOSITE = '__RATEIO__::cfg';
+// Cada gestor tem o seu rateio e a sua senha. O do Rodrigo usa a chave original (sem sufixo),
+// criada quando a aba ainda era unica, para nao perder o que ja estava cadastrado.
 var RP_MONTH = 'ALL';
-var RP_LOCAL_KEY = NOTES_PREFIX + RP_COMPOSITE;
+var RP_GESTOR = null;    // gestor cujo rateio esta carregado/sendo verificado
+function rpComposite(g) { return g === 'Rodrigo' ? '__RATEIO__::cfg' : '__RATEIO__::cfg::' + g; }
+function rpLocalKey(g) { return NOTES_PREFIX + rpComposite(g); }
 var RP_REMOTE = SUPABASE_CONFIGURED && !/^(localhost|127\.0\.0\.1|\[::1\]|)$/.test(location.hostname);
 var RP_MODE = 'loading'; // loading | setup | login | unlocked
 var RP_BLOB = null;      // texto cifrado carregado do storage
@@ -8206,10 +8210,10 @@ async function rpDeriveKey(pass, salt) {
     base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
 
-async function rpEncrypt(obj) {
+async function rpEncrypt(obj, key, salt) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, RP_KEY, new TextEncoder().encode(JSON.stringify(obj)));
-  return JSON.stringify({ v: 1, salt: rpB64(RP_SALT), iv: rpB64(iv), ct: rpB64(ct) });
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
+  return JSON.stringify({ v: 1, salt: rpB64(salt), iv: rpB64(iv), ct: rpB64(ct) });
 }
 
 async function rpDecrypt(blobText, pass) {
@@ -8220,37 +8224,53 @@ async function rpDecrypt(blobText, pass) {
   return { key: key, salt: salt, data: JSON.parse(new TextDecoder().decode(plain)) };
 }
 
-async function rpLoadBlob() {
+async function rpLoadBlob(g) {
   if (RP_REMOTE) {
     try {
-      const { data, error } = await sb.from('notes').select('text').eq('code', RP_COMPOSITE).eq('month', RP_MONTH).maybeSingle();
+      const { data, error } = await sb.from('notes').select('text').eq('code', rpComposite(g)).eq('month', RP_MONTH).maybeSingle();
       if (!error && data && data.text) return data.text;
     } catch (e) {}
   }
-  try { return localStorage.getItem(RP_LOCAL_KEY); } catch (e) { return null; }
+  try { return localStorage.getItem(rpLocalKey(g)); } catch (e) { return null; }
 }
 
 async function rpCheckSetup() {
-  RP_BLOB = await rpLoadBlob();
-  RP_MODE = RP_BLOB ? 'login' : 'setup';
+  const g = CURRENT_GESTOR;
+  RP_GESTOR = g;
+  RP_MODE = 'loading';
   rpUpdateLockUi();
+  const blob = await rpLoadBlob(g);
+  if (g !== CURRENT_GESTOR || RP_MODE !== 'loading') return; // trocou de gestor no meio do carregamento
+  RP_BLOB = blob;
+  RP_MODE = blob ? 'login' : 'setup';
+  rpUpdateLockUi();
+}
+
+// Trocar de gestor no topo bloqueia o rateio aberto (salvando o que estiver pendente)
+// e passa a pedir a senha do rateio do novo gestor.
+function rpOnGestorChange() {
+  if (RP_GESTOR === CURRENT_GESTOR) return;
+  rpLock();
 }
 
 function rpUpdateLockUi() {
   const locked = document.getElementById('rp-locked');
   const unlocked = document.getElementById('rp-unlocked');
   if (!locked || !unlocked) return;
+  const g = RP_GESTOR || CURRENT_GESTOR;
+  document.getElementById('rp-lock-title').textContent = '🔒 Rateio de ' + g;
+  document.getElementById('rp-gestor-label').textContent = g;
   locked.style.display = RP_MODE === 'unlocked' ? 'none' : '';
   unlocked.style.display = RP_MODE === 'unlocked' ? '' : 'none';
   const msg = document.getElementById('rp-lock-msg');
   const pass2 = document.getElementById('rp-pass2');
   const btn = document.getElementById('rp-unlock-btn');
   if (RP_MODE === 'setup') {
-    msg.textContent = 'Primeiro acesso: defina uma senha para proteger esta aba. Guarde-a bem -- sem ela os dados do rateio nao podem ser recuperados.';
+    msg.textContent = 'Primeiro acesso de ' + g + ': defina uma senha para proteger o seu rateio. Guarde-a bem -- sem ela os dados do rateio nao podem ser recuperados.';
     pass2.style.display = '';
     btn.textContent = 'Definir senha';
   } else {
-    msg.textContent = RP_MODE === 'loading' ? 'Carregando...' : 'Area restrita. Informe a senha para acessar.';
+    msg.textContent = RP_MODE === 'loading' ? 'Carregando...' : 'Area restrita. Informe a senha do rateio de ' + g + '.';
     pass2.style.display = 'none';
     btn.textContent = 'Entrar';
   }
@@ -8300,8 +8320,8 @@ async function rpUnlock() {
 function rpLock() {
   if (RP_SAVE_TIMER) { clearTimeout(RP_SAVE_TIMER); RP_SAVE_TIMER = null; rpPersist(); }
   RP = null; RP_KEY = null; RP_SALT = null;
-  RP_MODE = 'login';
-  rpUpdateLockUi();
+  RP_OPEN = {};
+  rpSetStatus('rp-lock-status', '', null);
   rpCheckSetup();
 }
 
@@ -8313,12 +8333,13 @@ function rpScheduleSave() {
 
 async function rpPersist() {
   if (!RP || !RP_KEY) return;
-  const text = await rpEncrypt(RP);
-  RP_BLOB = text;
-  try { localStorage.setItem(RP_LOCAL_KEY, text); } catch (e) {}
+  const g = RP_GESTOR; // captura antes do await: o usuario pode bloquear/trocar de gestor no meio
+  const text = await rpEncrypt(RP, RP_KEY, RP_SALT);
+  if (g === RP_GESTOR) RP_BLOB = text;
+  try { localStorage.setItem(rpLocalKey(g), text); } catch (e) {}
   const hora = new Date().toLocaleTimeString('pt-BR');
   if (!RP_REMOTE) { rpSetStatus('rp-save-status', 'Salvo neste navegador ' + hora + (SUPABASE_CONFIGURED ? ' (preview local: nao sincroniza com o Supabase).' : '.'), 'warn'); return; }
-  const { error } = await sb.from('notes').upsert({ code: RP_COMPOSITE, month: RP_MONTH, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+  const { error } = await sb.from('notes').upsert({ code: rpComposite(g), month: RP_MONTH, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
   if (error) rpSetStatus('rp-save-status', 'Salvo neste navegador, mas FALHOU ao sincronizar. Tente novamente.', 'bad');
   else rpSetStatus('rp-save-status', 'Salvo e sincronizado ' + hora + '.', 'ok');
 }
