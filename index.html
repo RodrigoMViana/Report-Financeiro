@@ -5356,8 +5356,6 @@
       </div>
       <div class="section-title">Pessoas <span class="count" id="rp-count">0</span></div>
       <div id="rp-pessoas-list"></div>
-      <div class="section-title">Consolidado por projeto</div>
-      <div id="rp-consolidado"></div>
     </div>
   </div>
 
@@ -8460,42 +8458,16 @@ function rpRenderPessoaCalc(id, mkey) {
 
 function rpRenderResumo(mkey) {
   let horasTot = 0, custoTot = 0;
-  const porProjeto = {};
-  const calcs = RP.pessoas.map(function(pe) { return { pe: pe, c: rpCalcPessoa(pe, mkey) }; });
-  calcs.forEach(function(x) {
-    Object.keys(x.c.linhas).forEach(function(code) {
-      const l = x.c.linhas[code];
-      if (!porProjeto[code]) porProjeto[code] = { horas: 0, custo: 0, pessoas: {} };
-      porProjeto[code].horas += l.horas;
-      porProjeto[code].custo += l.custo;
-      porProjeto[code].pessoas[x.pe.id] = l.custo;
-      horasTot += l.horas;
-      custoTot += l.custo;
+  RP.pessoas.forEach(function(pe) {
+    const c = rpCalcPessoa(pe, mkey);
+    Object.keys(c.linhas).forEach(function(code) {
+      horasTot += c.linhas[code].horas;
+      custoTot += c.linhas[code].custo;
     });
   });
   document.getElementById('rp-kpi-pessoas').textContent = RP.pessoas.length;
   document.getElementById('rp-kpi-horas').textContent = rpNum(horasTot, 2);
   document.getElementById('rp-kpi-custo').textContent = brl(custoTot);
-  const el = document.getElementById('rp-consolidado');
-  const codes = Object.keys(porProjeto);
-  if (codes.length === 0) {
-    el.innerHTML = '<div class="small-note">Nenhum projeto recebendo rateio neste mes.</div>';
-    return;
-  }
-  const nome = function(code) { const p = DATA.find(function(d) { return d.code === code; }); return p ? p.name : ''; };
-  el.innerHTML = `<div class="table-wrap"><table class="rp-table">
-    <thead><tr><th>Codigo</th><th>Projeto</th>${RP.pessoas.map(function(pe) { return '<th class="num">' + rpEsc(pe.nome || '(sem nome)') + '</th>'; }).join('')}<th class="num">Horas</th><th class="num">Custo total</th></tr></thead>
-    <tbody>${codes.map(function(code) {
-      const r = porProjeto[code];
-      return '<tr><td>' + code + '</td><td>' + rpEsc(nome(code)) + '</td>' +
-        RP.pessoas.map(function(pe) { return '<td class="num">' + (r.pessoas[pe.id] !== undefined ? brl(r.pessoas[pe.id]) : '-') + '</td>'; }).join('') +
-        '<td class="num">' + rpNum(r.horas, 2) + '</td><td class="num">' + brl(r.custo) + '</td></tr>';
-    }).join('')}</tbody>
-    <tfoot><tr><td colspan="2">Total</td>${RP.pessoas.map(function(pe) {
-      const s = codes.reduce(function(a, code) { return a + (porProjeto[code].pessoas[pe.id] || 0); }, 0);
-      return '<td class="num">' + brl(s) + '</td>';
-    }).join('')}<td class="num">${rpNum(horasTot, 2)}</td><td class="num">${brl(custoTot)}</td></tr></tfoot>
-  </table></div>`;
 }
 
 function rpCurrentMonth() { return document.getElementById('month-select').value; }
