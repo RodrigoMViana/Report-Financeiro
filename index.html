@@ -6,6 +6,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --navy: #0b2545; --navy-2: #13315c; --ice: #eaf1fb; --slate: #5c6b7a;
@@ -140,6 +141,16 @@
   .email-status.warn { color:var(--warn); }
 
   /* Aba Rateio (protegida por senha) */
+  .tr-form { display:flex; flex-direction:column; gap:14px; background:#fff; border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:12px; }
+  .tr-form label { display:block; font-size:11px; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; }
+  .tr-form .rp-input { width:100%; }
+  .tr-row { display:grid; gap:16px; }
+  .tr-row-4 { grid-template-columns:repeat(4, 1fr); }
+  .tr-row-3 { grid-template-columns:repeat(3, 1fr); }
+  .tr-form select.rp-input:disabled { background:var(--bg); color:var(--slate); cursor:not-allowed; }
+  @media (max-width: 760px) { .tr-row-4, .tr-row-3 { grid-template-columns:1fr; } }
+  table.tr-table td { white-space:nowrap; }
+  table.tr-table a { font-size:12px; margin-left:8px; }
   .rp-lock { max-width:420px; margin:40px auto; background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; text-align:center; }
   .rp-lock h3 { margin:0 0 6px; color:var(--navy); font-size:18px; }
   .rp-lock p { margin:0 0 16px; color:var(--slate); font-size:13px; }
@@ -152,7 +163,7 @@
   table.rp-table tfoot td { font-weight:700; color:var(--navy); border-top:2px solid var(--border); }
 
   @media print {
-    #tab-rateio, .tab-btn[data-tab="rateio"] { display:none !important; }
+    #tab-rateio, .tab-btn[data-tab="rateio"], #tab-transferencias, .tab-btn[data-tab="transferencias"] { display:none !important; }
     .report-bar, .email-panel, .month-picker, .chevron, .obs-toolbar { display:none !important; }
     .project-card summary { cursor:default; }
     body { background:#fff; }
@@ -264,6 +275,7 @@
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
     <button type="button" class="tab-btn" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
     <button type="button" class="tab-btn" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
+    <button type="button" class="tab-btn" data-tab="transferencias" onclick="showTab('transferencias')">Transferencias</button>
     <button type="button" class="tab-btn" data-tab="rateio" onclick="showTab('rateio')">&#128274; Rateio</button>
   </div>
 
@@ -5330,6 +5342,55 @@
     <div id="param-projects-list"></div>
   </div>
 
+  <div id="tab-transferencias" class="tab-panel">
+    <div id="tr-locked">
+      <div class="rp-lock">
+        <h3 id="tr-lock-title">&#128274; Transferencias</h3>
+        <p id="tr-lock-msg">Area restrita. Informe a senha do rateio.</p>
+        <input type="password" id="tr-pass" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter') trUnlock()">
+        <button type="button" id="tr-unlock-btn" onclick="trUnlock()">Entrar</button>
+        <div class="email-status" id="tr-lock-status"></div>
+      </div>
+    </div>
+    <div id="tr-unlocked" style="display:none;">
+      <div class="report-bar" style="align-items:center;">
+        <button type="button" onclick="trExportar()">Exportar para planilha...</button>
+        <button type="button" class="secondary" onclick="loadTransfMonth(document.getElementById('month-select').value)">Atualizar lista</button>
+        <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
+        <input type="file" id="tr-file" accept=".xlsx,.xlsm" style="display:none;" onchange="trExportarArquivo(this)">
+        <span class="email-status" id="tr-status"></span>
+      </div>
+      <div class="small-note" style="margin-bottom:20px;">Transferencias de horas entre empresas do mes selecionado no topo. Cada gestor cadastra as suas (solicitante e motivo sao preenchidos automaticamente). "Exportar para planilha" pede a planilha do mes, preenche a aba BASE com as transferencias <b>deste gestor</b> e baixa uma copia preenchida -- o arquivo original nao e alterado.</div>
+      <div class="section-title" id="tr-form-title">Nova transferencia</div>
+      <div class="tr-form">
+        <div class="tr-row tr-row-4">
+          <div><label>Matricula</label><input type="text" inputmode="numeric" class="rp-input" id="tr-matricula"></div>
+          <div><label>Qtd. de horas</label><input type="text" inputmode="decimal" class="rp-input" id="tr-horas" placeholder="Ex: 40"></div>
+          <div><label>Mes competencia</label><select class="rp-input" id="tr-mescomp"></select></div>
+          <div><label>Transferir folha variavel</label><select class="rp-input" id="tr-folha"><option value="">Selecionar</option><option value="SIM">SIM</option><option value="NAO">NÃO</option></select></div>
+        </div>
+        <div class="tr-row tr-row-3">
+          <div><label>Projeto origem</label><input type="text" class="rp-input" id="tr-projorig" list="tr-projetos-list" placeholder="Ex: SBPEBR"></div>
+          <div><label>EDT origem</label><input type="text" class="rp-input" id="tr-edtorig" placeholder="Ex: 1.2.1"></div>
+          <div><label>Empresa origem</label><select class="rp-input" id="tr-emporig" onchange="trSyncEmpresa()"><option value="">Selecionar</option><option value="A3">A3</option><option value="B2">B2</option></select></div>
+        </div>
+        <div class="tr-row tr-row-3">
+          <div><label>Projeto destino</label><input type="text" class="rp-input" id="tr-projdest" list="tr-projetos-list" placeholder="Ex: SBPEBR"></div>
+          <div><label>EDT destino</label><input type="text" class="rp-input" id="tr-edtdest" placeholder="Ex: 1.2.1"></div>
+          <div><label>Empresa destino</label><select class="rp-input" id="tr-empdest" disabled><option value=""></option><option value="A3">A3</option><option value="B2">B2</option></select></div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button type="button" style="background:var(--navy); color:#fff; border:none; border-radius:8px; font-weight:600; padding:10px 18px; cursor:pointer;" onclick="trSalvarForm()" id="tr-save-btn">Adicionar</button>
+          <button type="button" style="background:#fff; color:var(--navy); border:1px solid var(--border); border-radius:8px; font-weight:600; padding:10px 18px; cursor:pointer; display:none;" onclick="trLimparForm()" id="tr-cancel-btn">Cancelar edicao</button>
+          <span class="email-status" id="tr-form-status"></span>
+        </div>
+      </div>
+      <datalist id="tr-projetos-list"></datalist>
+      <div class="section-title">Transferencias do mes <span class="count" id="tr-count">0</span></div>
+      <div id="tr-list"></div>
+    </div>
+  </div>
+
   <div id="tab-rateio" class="tab-panel">
     <div id="rp-locked">
       <div class="rp-lock">
@@ -6119,7 +6180,7 @@ function clearProjectFilter() {
 }
 
 function showTab(name) {
-  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'rateio'].forEach(function(t) {
+  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'transferencias', 'rateio'].forEach(function(t) {
     var panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
     var btn = document.querySelector('.tab-btn[data-tab="' + t + '"]');
@@ -6560,6 +6621,7 @@ function renderAllTabs(mkey) {
   renderFechTab(mkey);
   renderParamTab(mkey);
   renderRateioTab(mkey);
+  loadTransfMonth(mkey);
   loadStatusForMonth('fat', mkey);
   loadStatusForMonth('cob', mkey);
   loadStatusForMonth('fech', mkey);
@@ -8179,6 +8241,395 @@ document.querySelectorAll('.gestor-btn').forEach(function(b){
 // Mes de referencia padrao: a partir do dia 10 de cada mes, o mes atual passa a
 // ser o default automaticamente (antes do dia 10, mantem o mes anterior, pois
 // os dados do mes atual normalmente ainda nao estao fechados).
+// ---------- Transferencias entre empresas ----------
+// Cada transferencia e uma linha da tabela 'notes' (code = '__TRANSF__::<id>', month = mes do topo,
+// text = JSON), assim varias pessoas cadastram ao mesmo tempo sem uma sobrescrever a outra.
+// Excluir grava text vazio. Em localhost/arquivo local fica so no navegador (preview nao mexe no dado real).
+var TR_PREFIX = '__TRANSF__::';
+var TR_REMOTE = SUPABASE_CONFIGURED && !/^(localhost|127\.0\.0\.1|\[::1\]|)$/.test(location.hostname);
+var TR_ROWS = {};        // { MKEY: { id: linha } }
+var TR_EDIT_ID = null;
+var TR_MES_NOMES = { JAN:'JANEIRO', FEV:'FEVEREIRO', MAR:'MARÇO', ABR:'ABRIL', MAI:'MAIO', JUN:'JUNHO', JUL:'JULHO', AGO:'AGOSTO', SET:'SETEMBRO', OUT:'OUTUBRO', NOV:'NOVEMBRO', DEZ:'DEZEMBRO' };
+var TR_FIELDS = ['matricula', 'horas', 'mescomp', 'folha', 'projorig', 'edtorig', 'emporig', 'projdest', 'edtdest', 'empdest'];
+var TR_MOTIVO = 'Transferência de Horas';
+var TR_SOLICITANTE = { Rodrigo: 'Rodrigo de Melo Viana', Dinart: 'Dinart', 'Eça': 'Eça' };
+
+function trLocalKey(id, mkey) { return NOTES_PREFIX + TR_PREFIX + id + '::' + mkey; }
+
+// A aba usa a mesma senha (por gestor) do Rateio: destravar uma destrava a outra.
+async function trUnlock() {
+  const inp = document.getElementById('tr-pass');
+  if (RP_MODE === 'setup') { rpSetStatus('tr-lock-status', 'Defina primeiro a senha de ' + CURRENT_GESTOR + ' na aba Rateio.', 'bad'); return; }
+  if (RP_MODE !== 'login') return;
+  document.getElementById('rp-pass').value = inp.value;
+  rpSetStatus('tr-lock-status', 'Verificando...', null);
+  await rpUnlock();
+  inp.value = '';
+  if (RP_MODE !== 'unlocked') rpSetStatus('tr-lock-status', document.getElementById('rp-lock-status').textContent, 'bad');
+  else rpSetStatus('tr-lock-status', '', null);
+}
+
+function trUpdateLockUi(g) {
+  const locked = document.getElementById('tr-locked');
+  const unlocked = document.getElementById('tr-unlocked');
+  if (!locked || !unlocked) return;
+  locked.style.display = RP_MODE === 'unlocked' ? 'none' : '';
+  unlocked.style.display = RP_MODE === 'unlocked' ? '' : 'none';
+  document.getElementById('tr-lock-title').textContent = '🔒 Transferencias de ' + g;
+  document.getElementById('tr-lock-msg').textContent = RP_MODE === 'loading' ? 'Carregando...'
+    : RP_MODE === 'setup' ? g + ' ainda nao definiu senha. Defina a senha na aba Rateio -- ela vale para esta aba tambem.'
+    : 'Area restrita. Informe a senha de ' + g + ' (a mesma do Rateio).';
+  document.getElementById('tr-pass').style.display = RP_MODE === 'login' ? '' : 'none';
+  document.getElementById('tr-unlock-btn').style.display = RP_MODE === 'login' ? '' : 'none';
+}
+
+async function loadTransfMonth(mkey) {
+  if (typeof TR_ROWS === 'undefined') return;
+  const rows = {};
+  try {
+    const pref = NOTES_PREFIX + TR_PREFIX;
+    Object.keys(localStorage).forEach(function(k) {
+      if (k.indexOf(pref) !== 0 || !k.endsWith('::' + mkey)) return;
+      const id = k.slice(pref.length, k.length - mkey.length - 2);
+      try { const o = JSON.parse(localStorage.getItem(k)); if (o) rows[id] = o; } catch (e) {}
+    });
+  } catch (e) {}
+  TR_ROWS[mkey] = rows;
+  renderTransfTab(mkey);
+  if (!TR_REMOTE) return;
+  const data = await fetchAllNotes(() => sb.from('notes').select('code,text').like('code', TR_PREFIX + '%').eq('month', mkey));
+  const remote = {};
+  (data || []).forEach(function(r) {
+    if (!r.text) return; // excluida
+    try { remote[r.code.slice(TR_PREFIX.length)] = JSON.parse(r.text); } catch (e) {}
+  });
+  TR_ROWS[mkey] = remote;
+  if (document.getElementById('month-select').value === mkey) renderTransfTab(mkey);
+}
+
+async function trPersist(id, mkey, obj) {
+  const text = obj ? JSON.stringify(obj) : '';
+  try {
+    if (obj) localStorage.setItem(trLocalKey(id, mkey), text);
+    else localStorage.removeItem(trLocalKey(id, mkey));
+  } catch (e) {}
+  if (!TR_REMOTE) return { ok: true, local: true };
+  const { error } = await sb.from('notes').upsert({ code: TR_PREFIX + id, month: mkey, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+  return { ok: !error };
+}
+
+function trFormEl(f) { return document.getElementById('tr-' + f); }
+
+function trFillMesComp(mkey, value) {
+  const sel = trFormEl('mescomp');
+  sel.innerHTML = MESES.map(function(m) { return '<option value="' + TR_MES_NOMES[m] + '">' + TR_MES_NOMES[m] + '</option>'; }).join('');
+  sel.value = value || TR_MES_NOMES[mkey];
+}
+
+// Empresa destino e sempre a outra empresa (A3 <-> B2); fica travada.
+function trSyncEmpresa() {
+  const o = trFormEl('emporig').value;
+  trFormEl('empdest').value = o === 'A3' ? 'B2' : (o === 'B2' ? 'A3' : '');
+}
+
+// Transferencias do mes do gestor selecionado -- cada gestor ve, edita e exporta so as suas.
+function trLinhasOrdenadas(mkey) {
+  const rows = TR_ROWS[mkey] || {};
+  return Object.keys(rows).map(function(id) { return { id: id, r: rows[id] }; })
+    .filter(function(x) { return trDoGestor(x.r); })
+    .sort(function(a, b) { return (a.r.criado_em || '').localeCompare(b.r.criado_em || ''); });
+}
+
+function trDoGestor(r) { return (r.gestor || 'Rodrigo') === CURRENT_GESTOR; }
+
+function renderTransfTab(mkey) {
+  const list = document.getElementById('tr-list');
+  if (!list) return;
+  if (!TR_EDIT_ID) trFillMesComp(mkey);
+  const dl = document.getElementById('tr-projetos-list');
+  if (dl && !dl.childElementCount) {
+    const ops = {};
+    DATA.forEach(function(p) { if (p.operacion) ops[p.operacion] = p.code + ' - ' + p.name; });
+    dl.innerHTML = Object.keys(ops).sort().map(function(o) { return '<option value="' + rpEsc(o) + '">' + rpEsc(ops[o]) + '</option>'; }).join('');
+  }
+  const rows = trLinhasOrdenadas(mkey);
+  document.getElementById('tr-count').textContent = rows.length;
+  if (rows.length === 0) {
+    list.innerHTML = '<div class="no-results" style="display:block;">Nenhuma transferencia de ' + CURRENT_GESTOR + ' cadastrada para ' + TR_MES_NOMES[mkey] + '.</div>';
+    return;
+  }
+  list.innerHTML = `<div class="table-wrap"><table class="tr-table">
+    <thead><tr><th>Matricula</th><th class="num">Horas</th><th>Competencia</th><th>Folha var.</th><th>Proj. origem</th><th>EDT origem</th><th>Emp. origem</th><th>Proj. destino</th><th>EDT destino</th><th>Emp. destino</th><th></th></tr></thead>
+    <tbody>${rows.map(function(x) {
+      const r = x.r;
+      return '<tr><td>' + rpEsc(r.matricula) + '</td><td class="num">' + rpNum(r.horas, 2) + '</td><td>' + rpEsc(r.mescomp) + '</td><td>' + (r.folha === 'NAO' ? 'NÃO' : rpEsc(r.folha)) +
+        '</td><td>' + rpEsc(r.projorig) + '</td><td>' + rpEsc(r.edtorig) + '</td><td>' + rpEsc(r.emporig) + '</td><td>' + rpEsc(r.projdest) + '</td><td>' + rpEsc(r.edtdest) + '</td><td>' + rpEsc(r.empdest) +
+        '</td><td><a href="#" onclick="trEditar(\'' + x.id + '\'); return false;">Editar</a><a href="#" style="color:var(--bad);" onclick="trExcluir(\'' + x.id + '\'); return false;">Excluir</a></td></tr>';
+    }).join('')}</tbody></table></div>`;
+}
+
+function trLimparForm() {
+  TR_EDIT_ID = null;
+  TR_FIELDS.forEach(function(f) { if (f !== 'mescomp') trFormEl(f).value = ''; });
+  trFillMesComp(document.getElementById('month-select').value);
+  document.getElementById('tr-form-title').textContent = 'Nova transferencia';
+  document.getElementById('tr-save-btn').textContent = 'Adicionar';
+  document.getElementById('tr-cancel-btn').style.display = 'none';
+}
+
+async function trSalvarForm() {
+  const mkey = document.getElementById('month-select').value;
+  const o = {};
+  TR_FIELDS.forEach(function(f) { o[f] = trFormEl(f).value.trim(); });
+  o.horas = parseBRNum(o.horas);
+  o.projorig = o.projorig.toUpperCase();
+  o.projdest = o.projdest.toUpperCase();
+  const faltando = [];
+  if (!o.matricula) faltando.push('matricula');
+  if (!o.horas) faltando.push('horas');
+  if (!o.folha) faltando.push('folha variavel');
+  if (!o.projorig || !o.projdest) faltando.push('projetos');
+  if (!o.edtorig || !o.edtdest) faltando.push('EDTs');
+  if (!o.emporig) faltando.push('empresa origem');
+  if (faltando.length) { rpSetStatus('tr-form-status', 'Preencha: ' + faltando.join(', ') + '.', 'bad'); return; }
+  const id = TR_EDIT_ID || ('t' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+  const antigo = (TR_ROWS[mkey] || {})[id];
+  o.gestor = antigo ? (antigo.gestor || 'Rodrigo') : CURRENT_GESTOR;
+  o.solicitante = TR_SOLICITANTE[o.gestor] || o.gestor;
+  o.motivo = TR_MOTIVO;
+  o.criado_em = antigo ? antigo.criado_em : new Date().toISOString();
+  if (!TR_ROWS[mkey]) TR_ROWS[mkey] = {};
+  TR_ROWS[mkey][id] = o;
+  const editando = !!TR_EDIT_ID;
+  trLimparForm();
+  renderTransfTab(mkey);
+  rpSetStatus('tr-form-status', 'Salvando...', null);
+  const r = await trPersist(id, mkey, o);
+  if (!r.ok) rpSetStatus('tr-form-status', 'Salvo neste navegador, mas FALHOU ao sincronizar. Tente novamente.', 'bad');
+  else rpSetStatus('tr-form-status', (editando ? 'Alteracao salva' : 'Transferencia adicionada') + (r.local ? ' (preview local: so neste navegador).' : '.'), 'ok');
+}
+
+function trEditar(id) {
+  const mkey = document.getElementById('month-select').value;
+  const r = (TR_ROWS[mkey] || {})[id];
+  if (!r) return;
+  TR_EDIT_ID = id;
+  trFillMesComp(mkey, r.mescomp);
+  TR_FIELDS.forEach(function(f) {
+    if (f === 'mescomp') return;
+    trFormEl(f).value = f === 'horas' ? rpNum(r.horas, 2) : (r[f] || '');
+  });
+  trSyncEmpresa();
+  document.getElementById('tr-form-title').textContent = 'Editando transferencia';
+  document.getElementById('tr-save-btn').textContent = 'Salvar alteracao';
+  document.getElementById('tr-cancel-btn').style.display = '';
+  document.getElementById('tr-form-title').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function trExcluir(id) {
+  const mkey = document.getElementById('month-select').value;
+  const r = (TR_ROWS[mkey] || {})[id];
+  if (!r || !confirm('Excluir a transferencia da matricula ' + r.matricula + ' (' + rpNum(r.horas, 2) + 'h)?')) return;
+  delete TR_ROWS[mkey][id];
+  if (TR_EDIT_ID === id) trLimparForm();
+  renderTransfTab(mkey);
+  const res = await trPersist(id, mkey, null);
+  if (!res.ok) rpSetStatus('tr-form-status', 'Excluida neste navegador, mas FALHOU ao sincronizar.', 'bad');
+}
+
+// ---------- Exportacao: preenche a planilha do mes direto no XML do .xlsx ----------
+// Editar o XML (via JSZip) em vez de regravar com SheetJS preserva tudo o que a planilha tem:
+// formulas, validacoes, tabela, protecao e as abas ocultas. As colunas sao localizadas pelo texto
+// do cabecalho, entao continua funcionando se a planilha do mes mudar a ordem das colunas.
+var TR_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+var TR_COLS = [
+  { f: 'matricula', h: ['MATRICULA'], num: true },
+  { f: 'horas', h: ['QTD. DE HORAS', 'QTD DE HORAS'], num: true },
+  { f: 'mescomp', h: ['MÊS COMPETENCIA', 'MES COMPETENCIA'] },
+  { f: 'projorig', h: ['PROJETO ORIGEM'] },
+  { f: 'edtorig', h: ['ETD ORIGEM', 'EDT ORIGEM'] },
+  { f: 'emporig', h: ['EMPRESA ORIGEM'] },
+  { f: 'projdest', h: ['PROJETO DESTINO'] },
+  { f: 'edtdest', h: ['ETD DESTINO', 'EDT DESTINO'] },
+  { f: 'empdest', h: ['EMPRESA DESTINO'] },
+  { f: 'motivo', h: ['MOTIVO'] },
+  { f: 'folha', h: ['TRANSFERIR FOLHA'] },
+  { f: 'solicitante', h: ['SOLICITANTE'] }
+];
+
+function trExportar() {
+  const mkey = document.getElementById('month-select').value;
+  if (!trLinhasOrdenadas(mkey).length) { rpSetStatus('tr-status', 'Nenhuma transferencia de ' + CURRENT_GESTOR + ' em ' + TR_MES_NOMES[mkey] + ' para exportar.', 'bad'); return; }
+  const inp = document.getElementById('tr-file');
+  inp.value = '';
+  inp.click();
+}
+
+async function trExportarArquivo(inp) {
+  const file = inp.files && inp.files[0];
+  if (!file) return;
+  const mkey = document.getElementById('month-select').value;
+  rpSetStatus('tr-status', 'Preenchendo ' + file.name + '...', null);
+  try {
+    const out = await trPreencherPlanilha(file, trLinhasOrdenadas(mkey).map(function(x) { return x.r; }));
+    const ext = /\.xlsm$/i.test(file.name) ? '.xlsm' : '.xlsx';
+    const nome = file.name.replace(/\.(xlsx|xlsm)$/i, '') + '_preenchida' + ext;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(out.blob);
+    a.download = nome;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function() { URL.revokeObjectURL(a.href); }, 10000);
+    rpSetStatus('tr-status', out.preenchidas + ' linha(s) preenchida(s) na aba ' + out.aba + ' (linhas ' + out.primeira + ' a ' + out.ultima + '). Arquivo baixado: ' + nome, 'ok');
+  } catch (e) {
+    console.error(e);
+    rpSetStatus('tr-status', 'Nao foi possivel preencher: ' + e.message, 'bad');
+  }
+}
+
+function trNorm(s) { return String(s || '').trim().toUpperCase().replace(/\s+/g, ' '); }
+function trColNum(letters) { let n = 0; for (let i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) - 64); return n; }
+function trRef(cell) { const m = /^([A-Z]+)(\d+)$/.exec(cell.getAttribute('r') || ''); return m ? { col: m[1], row: +m[2] } : null; }
+
+async function trPreencherPlanilha(file, linhas) {
+  const zip = await JSZip.loadAsync(file);
+  const parse = function(txt) { return new DOMParser().parseFromString(txt, 'application/xml'); };
+  const wbFile = zip.file('xl/workbook.xml');
+  if (!wbFile) throw new Error('arquivo nao parece ser uma planilha Excel (.xlsx) valida.');
+  const wbXml = parse(await wbFile.async('string'));
+  const relsXml = parse(await zip.file('xl/_rels/workbook.xml.rels').async('string'));
+  const sheets = Array.from(wbXml.getElementsByTagNameNS(TR_NS, 'sheet'));
+  const sheetEl = sheets.find(function(s) { return trNorm(s.getAttribute('name')) === 'BASE'; }) || sheets[0];
+  const rid = sheetEl.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+  const rel = Array.from(relsXml.getElementsByTagName('Relationship')).find(function(r) { return r.getAttribute('Id') === rid; });
+  const target = rel.getAttribute('Target');
+  const sheetPath = target.charAt(0) === '/' ? target.slice(1) : 'xl/' + target.replace(/^\.\//, '');
+
+  let shared = [];
+  const ssFile = zip.file('xl/sharedStrings.xml');
+  if (ssFile) {
+    const ss = parse(await ssFile.async('string'));
+    shared = Array.from(ss.getElementsByTagNameNS(TR_NS, 'si')).map(function(si) {
+      return Array.from(si.getElementsByTagNameNS(TR_NS, 't')).map(function(t) { return t.textContent; }).join('');
+    });
+  }
+  const cellText = function(c) {
+    const t = c.getAttribute('t');
+    if (t === 'inlineStr') return Array.from(c.getElementsByTagNameNS(TR_NS, 't')).map(function(x) { return x.textContent; }).join('');
+    const v = c.getElementsByTagNameNS(TR_NS, 'v')[0];
+    if (!v) return '';
+    return t === 's' ? (shared[+v.textContent] || '') : v.textContent;
+  };
+
+  const doc = parse(await zip.file(sheetPath).async('string'));
+  const sheetData = doc.getElementsByTagNameNS(TR_NS, 'sheetData')[0];
+  const rows = Array.from(sheetData.getElementsByTagNameNS(TR_NS, 'row'));
+
+  // Localiza a linha de cabecalho (a que tem "MATRICULA") e a coluna de cada campo.
+  let headerRow = null;
+  const colMap = {};
+  for (const row of rows.slice(0, 30)) {
+    const cells = Array.from(row.getElementsByTagNameNS(TR_NS, 'c'));
+    if (!cells.some(function(c) { return trNorm(cellText(c)) === 'MATRICULA'; })) continue;
+    headerRow = +row.getAttribute('r');
+    TR_COLS.forEach(function(def) {
+      const c = cells.find(function(c) { const t = trNorm(cellText(c)); return def.h.some(function(h) { return t.indexOf(h) === 0; }); });
+      if (c) colMap[def.f] = trRef(c).col;
+    });
+    break;
+  }
+  if (!headerRow) throw new Error('nao encontrei o cabecalho "MATRICULA" na aba ' + sheetEl.getAttribute('name') + '.');
+  const faltam = TR_COLS.filter(function(d) { return !colMap[d.f]; }).map(function(d) { return d.h[0]; });
+  if (faltam.length) throw new Error('colunas nao encontradas na planilha: ' + faltam.join(', ') + '.');
+
+  // Ultima linha disponivel: fim da tabela do Excel nesta aba (se houver) ou ultima linha existente.
+  let ultimaLinha = rows.length ? +rows[rows.length - 1].getAttribute('r') : headerRow;
+  const sheetRels = zip.file(sheetPath.replace(/worksheets\/([^/]+)$/, 'worksheets/_rels/$1.rels'));
+  if (sheetRels) {
+    const sr = parse(await sheetRels.async('string'));
+    for (const r of Array.from(sr.getElementsByTagName('Relationship'))) {
+      if (!/\/table$/.test(r.getAttribute('Type'))) continue;
+      const tf = zip.file('xl/' + r.getAttribute('Target').replace(/^\.\.\//, ''));
+      if (!tf) continue;
+      const m = /:[A-Z]+(\d+)$/.exec(parse(await tf.async('string')).documentElement.getAttribute('ref') || '');
+      if (m && +m[1] > headerRow) { ultimaLinha = +m[1]; break; }
+    }
+  }
+
+  const rowByNum = {};
+  rows.forEach(function(r) { rowByNum[+r.getAttribute('r')] = r; });
+  const getRow = function(n) {
+    if (rowByNum[n]) return rowByNum[n];
+    const r = doc.createElementNS(TR_NS, 'row');
+    r.setAttribute('r', n);
+    const next = rows.find(function(x) { return +x.getAttribute('r') > n; });
+    sheetData.insertBefore(r, next || null);
+    rowByNum[n] = r;
+    return r;
+  };
+  const getCell = function(rowEl, col, n) {
+    const ref = col + n;
+    const cells = Array.from(rowEl.getElementsByTagNameNS(TR_NS, 'c'));
+    let c = cells.find(function(x) { return x.getAttribute('r') === ref; });
+    if (c) return c;
+    c = doc.createElementNS(TR_NS, 'c');
+    c.setAttribute('r', ref);
+    const next = cells.find(function(x) { const rr = trRef(x); return rr && trColNum(rr.col) > trColNum(col); });
+    rowEl.insertBefore(c, next || null);
+    return c;
+  };
+  // Mantem o estilo (atributo s) da celula do modelo; troca so o conteudo.
+  const setCell = function(c, value, isNum) {
+    while (c.firstChild) c.removeChild(c.firstChild);
+    c.removeAttribute('t');
+    const txt = String(value == null ? '' : value).trim();
+    const n = Number(txt.replace(',', '.'));
+    if (isNum && txt !== '' && isFinite(n)) {
+      const v = doc.createElementNS(TR_NS, 'v'); v.textContent = String(n); c.appendChild(v);
+    } else if (txt !== '') {
+      c.setAttribute('t', 'inlineStr');
+      const is = doc.createElementNS(TR_NS, 'is'); const t = doc.createElementNS(TR_NS, 't');
+      t.textContent = txt; is.appendChild(t); c.appendChild(is);
+    }
+  };
+  const isVazia = function(num) {
+    const r = rowByNum[num]; if (!r) return true;
+    const c = Array.from(r.getElementsByTagNameNS(TR_NS, 'c')).find(function(x) { return x.getAttribute('r') === colMap.matricula + num; });
+    return !c || cellText(c) === '';
+  };
+
+  // Preenche a partir da primeira linha com matricula vazia (o que ja estiver na planilha nao e sobrescrito).
+  const usadas = [];
+  let n = headerRow + 1;
+  for (const l of linhas) {
+    while (n <= ultimaLinha && !isVazia(n)) n++;
+    if (n > ultimaLinha) throw new Error('a planilha so tem espaco ate a linha ' + ultimaLinha + ' e ha ' + linhas.length + ' transferencia(s). Nenhum arquivo foi gerado.');
+    const rowEl = getRow(n);
+    TR_COLS.forEach(function(def) {
+      let v = l[def.f];
+      if (def.f === 'folha' && v === 'NAO') v = 'NÃO';
+      setCell(getCell(rowEl, colMap[def.f], n), v, def.num);
+    });
+    usadas.push(n);
+    n++;
+  }
+
+  // Forca o Excel a recalcular as formulas (nome, taxa, totais, avisos) ao abrir.
+  let calcPr = wbXml.getElementsByTagNameNS(TR_NS, 'calcPr')[0];
+  if (!calcPr) {
+    calcPr = wbXml.createElementNS(TR_NS, 'calcPr');
+    const ext = Array.from(wbXml.documentElement.childNodes).find(function(x) { return x.localName === 'extLst'; });
+    wbXml.documentElement.insertBefore(calcPr, ext || null);
+  }
+  calcPr.setAttribute('fullCalcOnLoad', '1');
+
+  const ser = new XMLSerializer();
+  zip.file(sheetPath, ser.serializeToString(doc));
+  zip.file('xl/workbook.xml', ser.serializeToString(wbXml));
+  const mime = /\.xlsm$/i.test(file.name) ? 'application/vnd.ms-excel.sheet.macroEnabled.12' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: mime });
+  return { blob: blob, preenchidas: usadas.length, primeira: usadas[0], ultima: usadas[usadas.length - 1], aba: sheetEl.getAttribute('name') };
+}
+
 // ---------- Rateio de pessoas (aba protegida por senha) ----------
 // Toda a configuracao (pessoas, taxas, horas e projetos marcados por mes) fica num unico JSON
 // criptografado (AES-GCM, chave derivada da senha via PBKDF2). No Supabase/localStorage so vai o
@@ -8275,6 +8726,7 @@ function rpUpdateLockUi() {
     btn.textContent = 'Entrar';
   }
   btn.disabled = RP_MODE === 'loading';
+  trUpdateLockUi(g);
 }
 
 function rpSetStatus(id, text, cls) {
@@ -8315,6 +8767,7 @@ async function rpUnlock() {
   RP_MODE = 'unlocked';
   rpUpdateLockUi();
   renderRateioTab(document.getElementById('month-select').value);
+  renderTransfTab(document.getElementById('month-select').value);
 }
 
 function rpLock() {
