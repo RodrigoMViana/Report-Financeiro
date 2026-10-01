@@ -8826,15 +8826,52 @@ function rpIngresoPC(code, mkey) {
   return p.months[mkey].ingreso.fc || 0;
 }
 
-// Distribuicao: % = ingreso PC do projeto / soma dos ingresos PC dos projetos marcados.
+// Ingreso usado no rateio: o do Pre Cierre, a menos que tenha sido ajustado manualmente
+// (ex.: planejamento do mes mudou muito depois do Pre Cierre). O ajuste e por projeto/mes e vale
+// para todas as pessoas do rateio do gestor; fica em RP.ingresoAjuste[mkey][code].
+function rpIngresoAjuste(code, mkey) {
+  const m = RP && RP.ingresoAjuste ? RP.ingresoAjuste[mkey] : null;
+  return m && typeof m[code] === 'number' ? m[code] : null;
+}
+
+function rpIngreso(code, mkey) {
+  const aj = rpIngresoAjuste(code, mkey);
+  return aj !== null ? aj : rpIngresoPC(code, mkey);
+}
+
+// Campo editavel do ingreso. Salva no change (Enter ou ao sair do campo) para nao perder o foco
+// enquanto digita. Ajustado = destacado em amarelo, com o valor do Pre Cierre e um link para voltar.
+function rpIngresoCell(code, mkey) {
+  const pc = rpIngresoPC(code, mkey);
+  const aj = rpIngresoAjuste(code, mkey);
+  const estilo = 'width:140px; text-align:right;' + (aj !== null ? ' background:var(--warn-bg); border-color:var(--warn);' : '');
+  const input = '<input type="text" inputmode="decimal" class="rp-input" style="' + estilo + '" value="' + rpNum(aj !== null ? aj : pc, 2) + '"' +
+    ' title="Pre Cierre: ' + brl(pc) + '" onfocus="this.select()" onchange="rpSetIngreso(\'' + code + '\', this.value)">';
+  if (aj === null) return input;
+  return input + '<div class="small-note">PC: ' + brl(pc) + ' &middot; <a href="#" onclick="rpSetIngreso(\'' + code + '\', \'\'); return false;">voltar ao PC</a></div>';
+}
+
+function rpSetIngreso(code, value) {
+  const mkey = rpCurrentMonth();
+  if (!RP.ingresoAjuste) RP.ingresoAjuste = {};
+  if (!RP.ingresoAjuste[mkey]) RP.ingresoAjuste[mkey] = {};
+  const txt = String(value || '').trim();
+  const v = parseBRNum(txt);
+  if (txt === '' || v === rpIngresoPC(code, mkey)) delete RP.ingresoAjuste[mkey][code];
+  else RP.ingresoAjuste[mkey][code] = v;
+  renderRateioTab(mkey);
+  rpScheduleSave();
+}
+
+// Distribuicao: % = ingreso do projeto / soma dos ingresos dos projetos marcados.
 // Ingreso negativo (estorno no Pre Cierre) conta como zero para nao distorcer os percentuais.
 function rpCalcPessoa(pessoa, mkey) {
   const entry = rpGetMes(mkey, pessoa.id, false);
   const codes = entry.projetos.filter(function(c) { return DATA.some(function(d) { return d.code === c; }); });
-  const total = codes.reduce(function(s, c) { return s + Math.max(0, rpIngresoPC(c, mkey)); }, 0);
+  const total = codes.reduce(function(s, c) { return s + Math.max(0, rpIngreso(c, mkey)); }, 0);
   const linhas = {};
   codes.forEach(function(c) {
-    const ing = Math.max(0, rpIngresoPC(c, mkey));
+    const ing = Math.max(0, rpIngreso(c, mkey));
     const pct = total > 0 ? ing / total : 0;
     const horas = (entry.horas || 0) * pct;
     linhas[c] = { ingreso: ing, pct: pct, horas: horas, custo: horas * (pessoa.taxa || 0) };
@@ -8993,7 +9030,7 @@ function rpRenderPessoaCalc(id, mkey) {
       <td><input type="checkbox" ${on ? 'checked' : ''} onchange="rpToggleProjeto('${id}','${p.code}',this.checked)"></td>
       <td>${p.code}</td>
       <td>${rpEsc(p.name)}</td>
-      <td class="num">${brl(rpIngresoPC(p.code, mkey))}</td>
+      <td class="num">${rpIngresoCell(p.code, mkey)}</td>
       <td class="num">${on ? pctf(l.pct * 100, 2) : '-'}</td>
       <td class="num">${on ? rpNum(l.horas, 2) : '-'}</td>
       <td class="num">${on ? porDia(l.horas) : '-'}</td>
@@ -9003,7 +9040,7 @@ function rpRenderPessoaCalc(id, mkey) {
   const aviso = (Object.keys(c.linhas).length > 0 && c.totalIngreso === 0)
     ? '<div class="small-note" style="color:var(--warn);">Os projetos marcados nao tem Ingreso no Pre Cierre deste mes -- nao da para distribuir as horas.</div>' : '';
   tbl.innerHTML = `${aviso}<table class="rp-table">
-    <thead><tr><th></th><th>Codigo</th><th>Projeto</th><th class="num">Ingreso PC (${mkey})</th><th class="num">% rateio</th><th class="num">Horas</th><th class="num">Horas/dia</th><th class="num">Custo</th></tr></thead>
+    <thead><tr><th></th><th>Codigo</th><th>Projeto</th><th class="num" title="Editavel. Deixe vazio para voltar ao valor do Pre Cierre.">Ingreso (${mkey}) &#9998;</th><th class="num">% rateio</th><th class="num">Horas</th><th class="num">Horas/dia</th><th class="num">Custo</th></tr></thead>
     <tbody>${rows}</tbody>
     <tfoot><tr><td></td><td colspan="2">Total marcado</td><td class="num">${brl(c.totalIngreso)}</td><td class="num">${Object.keys(c.linhas).length ? pctf(c.totalIngreso > 0 ? 100 : 0, 2) : '-'}</td><td class="num">${rpNum(c.totalIngreso > 0 ? c.horas : 0, 2)}</td><td class="num">${porDia(c.totalIngreso > 0 ? c.horas : 0)}</td><td class="num">${brl(c.totalIngreso > 0 ? c.custo : 0)}</td></tr></tfoot>
   </table>`;
