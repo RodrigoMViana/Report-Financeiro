@@ -275,7 +275,7 @@
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
     <button type="button" class="tab-btn" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
     <button type="button" class="tab-btn" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
-    <button type="button" class="tab-btn" data-tab="transferencias" onclick="showTab('transferencias')">Transferencias</button>
+    <button type="button" class="tab-btn" data-tab="transferencias" onclick="showTab('transferencias')">&#128274; Transferencias</button>
     <button type="button" class="tab-btn" data-tab="rateio" onclick="showTab('rateio')">&#128274; Rateio</button>
   </div>
 
@@ -5409,7 +5409,12 @@
         <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
         <span class="email-status" id="rp-save-status"></span>
       </div>
-      <div class="small-note" style="margin-bottom:20px;">Custo da pessoa no mes = horas informadas &times; taxa. As horas sao distribuidas entre os projetos marcados proporcionalmente ao <b>Ingreso do Pre Cierre</b> do mes selecionado (ingreso do projeto &divide; soma dos ingresos dos projetos marcados). Os dados desta aba sao salvos criptografados com a senha.</div>
+      <div class="report-bar" style="align-items:center; gap:8px;">
+        <label style="font-size:12.5px; color:var(--slate); font-weight:600;" id="rp-dias-label">Dias uteis no mes</label>
+        <input type="text" inputmode="numeric" class="rp-input" id="rp-dias" style="width:80px;" oninput="rpSetDiasUteis(this.value)">
+        <span class="small-note" id="rp-dias-note"></span>
+      </div>
+      <div class="small-note" style="margin-bottom:20px;">Custo da pessoa no mes = horas informadas &times; taxa. As horas sao distribuidas entre os projetos marcados proporcionalmente ao <b>Ingreso do Pre Cierre</b> do mes selecionado (ingreso do projeto &divide; soma dos ingresos dos projetos marcados). <b>Horas/dia</b> = horas do projeto no mes &divide; dias uteis -- e o que o time dedica por dia em cada projeto. Os dados desta aba sao salvos criptografados com a senha.</div>
       <div class="kpi-grid kpi-grid-3">
         <div class="kpi-card"><div class="kpi-label">Pessoas no rateio</div><div class="kpi-value" id="rp-kpi-pessoas">-</div></div>
         <div class="kpi-card"><div class="kpi-label">Horas rateadas no mes</div><div class="kpi-value" id="rp-kpi-horas">-</div></div>
@@ -8850,12 +8855,18 @@ function rpProjetosVisiveis(extraCodes) {
 
 function renderRateioTab(mkey) {
   if (typeof RP_MODE === 'undefined' || RP_MODE !== 'unlocked' || !RP) return;
+  rpRenderDiasUteis(mkey);
   const list = document.getElementById('rp-pessoas-list');
-  document.getElementById('rp-count').textContent = RP.pessoas.length;
-  if (RP.pessoas.length === 0) {
-    list.innerHTML = '<div class="no-results" style="display:block;">Nenhuma pessoa cadastrada. Clique em "+ Adicionar pessoa".</div>';
+  const pessoas = rpPessoasDoMes(mkey);
+  const removidas = RP.pessoas.filter(function(pe) { return !rpVisivelNoMes(pe, mkey); });
+  document.getElementById('rp-count').textContent = pessoas.length;
+  const restaurar = removidas.length ? '<div class="small-note" style="margin-bottom:12px;">Removidas deste mes: ' + removidas.map(function(pe) {
+    return rpEsc(pe.nome || '(sem nome)') + ' (<a href="#" onclick="rpRestaurarPessoa(\'' + pe.id + '\'); return false;">restaurar</a>)';
+  }).join(', ') + '</div>' : '';
+  if (pessoas.length === 0) {
+    list.innerHTML = restaurar + '<div class="no-results" style="display:block;">Nenhuma pessoa neste mes. Clique em "+ Adicionar pessoa".</div>';
   } else {
-    list.innerHTML = RP.pessoas.map(function(pe) {
+    list.innerHTML = restaurar + pessoas.map(function(pe) {
       const entry = rpGetMes(mkey, pe.id, false);
       return `
       <details class="project-card" data-rp="${pe.id}" ${RP_OPEN[pe.id] ? 'open' : ''} ontoggle="RP_OPEN['${pe.id}'] = this.open">
@@ -8889,9 +8900,73 @@ function renderRateioTab(mkey) {
         </div>
       </details>`;
     }).join('');
-    RP.pessoas.forEach(function(pe) { rpRenderPessoaCalc(pe.id, mkey); });
+    pessoas.forEach(function(pe) { rpRenderPessoaCalc(pe.id, mkey); });
   }
   rpRenderResumo(mkey);
+}
+
+// ---------- Dias uteis do mes (para converter horas do mes em horas/dia) ----------
+// Padrao: segunda a sexta menos feriados nacionais. Pode ser sobrescrito por mes
+// (feriado local, ponte etc.) -- o valor manual fica em RP.diasUteis[mkey].
+function rpAnoRef(mkey) {
+  const opt = document.querySelector('#month-select option[value="' + mkey + '"]');
+  const m = opt && /(\d{4})/.exec(opt.textContent);
+  return m ? +m[1] : new Date().getFullYear();
+}
+
+function rpPascoa(ano) {
+  const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4;
+  const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(ano, mes - 1, dia);
+}
+
+function rpFeriadosNacionais(ano) {
+  const fixos = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'];
+  const set = new Set(fixos.map(function(md) { return ano + '-' + md; }));
+  const sextaSanta = rpPascoa(ano); sextaSanta.setDate(sextaSanta.getDate() - 2);
+  set.add(ano + '-' + String(sextaSanta.getMonth() + 1).padStart(2, '0') + '-' + String(sextaSanta.getDate()).padStart(2, '0'));
+  return set;
+}
+
+function rpDiasUteisCalculado(mkey) {
+  const ano = rpAnoRef(mkey), mes = MESES.indexOf(mkey);
+  const feriados = rpFeriadosNacionais(ano);
+  let n = 0;
+  for (let d = new Date(ano, mes, 1); d.getMonth() === mes; d.setDate(d.getDate() + 1)) {
+    const dow = d.getDay();
+    const key = ano + '-' + String(mes + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (dow !== 0 && dow !== 6 && !feriados.has(key)) n++;
+  }
+  return n;
+}
+
+function rpDiasUteis(mkey) {
+  const manual = RP && RP.diasUteis ? RP.diasUteis[mkey] : null;
+  return manual > 0 ? manual : rpDiasUteisCalculado(mkey);
+}
+
+function rpRenderDiasUteis(mkey) {
+  const inp = document.getElementById('rp-dias');
+  if (!inp) return;
+  const manual = RP.diasUteis ? RP.diasUteis[mkey] : null;
+  document.getElementById('rp-dias-label').textContent = 'Dias uteis em ' + TR_MES_NOMES[mkey].toLowerCase().replace(/^./, function(c) { return c.toUpperCase(); });
+  if (document.activeElement !== inp) inp.value = rpDiasUteis(mkey);
+  const calc = rpDiasUteisCalculado(mkey);
+  document.getElementById('rp-dias-note').innerHTML = manual > 0 && manual !== calc
+    ? 'Ajustado manualmente (calculado: ' + calc + '). <a href="#" onclick="rpSetDiasUteis(\'\'); return false;">Voltar ao calculado</a>'
+    : 'Calculado: segunda a sexta menos feriados nacionais. Ajuste se houver feriado local. Base 8,8h/dia = ' + rpNum(rpDiasUteis(mkey) * 8.8, 1) + 'h no mes.';
+}
+
+function rpSetDiasUteis(value) {
+  const mkey = rpCurrentMonth();
+  if (!RP.diasUteis) RP.diasUteis = {};
+  const n = parseInt(value, 10);
+  if (n > 0 && n <= 31) RP.diasUteis[mkey] = n; else delete RP.diasUteis[mkey];
+  if (!(n > 0)) document.getElementById('rp-dias').value = '';
+  renderRateioTab(mkey);
+  rpScheduleSave();
 }
 
 function rpRenderPessoaCalc(id, mkey) {
@@ -8902,11 +8977,14 @@ function rpRenderPessoaCalc(id, mkey) {
   if (summary) summary.innerHTML = `
     <div class="mini-metric"><span class="mini-label">Taxa</span><span class="mini-value">${brl(pe.taxa || 0)}</span></div>
     <div class="mini-metric"><span class="mini-label">Horas</span><span class="mini-value">${rpNum(c.horas, 2)}</span></div>
+    <div class="mini-metric"><span class="mini-label">Horas/dia</span><span class="mini-value">${rpDiasUteis(mkey) > 0 ? rpNum(c.horas / rpDiasUteis(mkey), 2) : '-'}</span></div>
     <div class="mini-metric"><span class="mini-label">Projetos</span><span class="mini-value">${Object.keys(c.linhas).length}</span></div>
     <div class="mini-metric"><span class="mini-label">Custo</span><span class="mini-value">${brl(c.custo)}</span></div>
     <span class="chevron">&#9660;</span>`;
   const tbl = document.getElementById('rp-tbl-' + id);
   if (!tbl) return;
+  const dias = rpDiasUteis(mkey);
+  const porDia = function(h) { return dias > 0 ? rpNum(h / dias, 2) : '-'; };
   const projetos = rpProjetosVisiveis(c.entry.projetos);
   const rows = projetos.map(function(p) {
     const l = c.linhas[p.code];
@@ -8918,28 +8996,30 @@ function rpRenderPessoaCalc(id, mkey) {
       <td class="num">${brl(rpIngresoPC(p.code, mkey))}</td>
       <td class="num">${on ? pctf(l.pct * 100, 2) : '-'}</td>
       <td class="num">${on ? rpNum(l.horas, 2) : '-'}</td>
+      <td class="num">${on ? porDia(l.horas) : '-'}</td>
       <td class="num">${on ? brl(l.custo) : '-'}</td>
     </tr>`;
   }).join('');
   const aviso = (Object.keys(c.linhas).length > 0 && c.totalIngreso === 0)
     ? '<div class="small-note" style="color:var(--warn);">Os projetos marcados nao tem Ingreso no Pre Cierre deste mes -- nao da para distribuir as horas.</div>' : '';
   tbl.innerHTML = `${aviso}<table class="rp-table">
-    <thead><tr><th></th><th>Codigo</th><th>Projeto</th><th class="num">Ingreso PC (${mkey})</th><th class="num">% rateio</th><th class="num">Horas</th><th class="num">Custo</th></tr></thead>
+    <thead><tr><th></th><th>Codigo</th><th>Projeto</th><th class="num">Ingreso PC (${mkey})</th><th class="num">% rateio</th><th class="num">Horas</th><th class="num">Horas/dia</th><th class="num">Custo</th></tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr><td></td><td colspan="2">Total marcado</td><td class="num">${brl(c.totalIngreso)}</td><td class="num">${Object.keys(c.linhas).length ? pctf(c.totalIngreso > 0 ? 100 : 0, 2) : '-'}</td><td class="num">${rpNum(c.totalIngreso > 0 ? c.horas : 0, 2)}</td><td class="num">${brl(c.totalIngreso > 0 ? c.custo : 0)}</td></tr></tfoot>
+    <tfoot><tr><td></td><td colspan="2">Total marcado</td><td class="num">${brl(c.totalIngreso)}</td><td class="num">${Object.keys(c.linhas).length ? pctf(c.totalIngreso > 0 ? 100 : 0, 2) : '-'}</td><td class="num">${rpNum(c.totalIngreso > 0 ? c.horas : 0, 2)}</td><td class="num">${porDia(c.totalIngreso > 0 ? c.horas : 0)}</td><td class="num">${brl(c.totalIngreso > 0 ? c.custo : 0)}</td></tr></tfoot>
   </table>`;
 }
 
 function rpRenderResumo(mkey) {
   let horasTot = 0, custoTot = 0;
-  RP.pessoas.forEach(function(pe) {
+  const pessoas = rpPessoasDoMes(mkey);
+  pessoas.forEach(function(pe) {
     const c = rpCalcPessoa(pe, mkey);
     Object.keys(c.linhas).forEach(function(code) {
       horasTot += c.linhas[code].horas;
       custoTot += c.linhas[code].custo;
     });
   });
-  document.getElementById('rp-kpi-pessoas').textContent = RP.pessoas.length;
+  document.getElementById('rp-kpi-pessoas').textContent = pessoas.length;
   document.getElementById('rp-kpi-horas').textContent = rpNum(horasTot, 2);
   document.getElementById('rp-kpi-custo').textContent = brl(custoTot);
 }
@@ -8954,12 +9034,27 @@ function rpAddPessoa() {
   rpScheduleSave();
 }
 
+// Remover/restaurar vale so para o mes selecionado: a pessoa continua nos outros meses.
+function rpVisivelNoMes(pe, mkey) { return !(pe.ocultoMeses && pe.ocultoMeses[mkey]); }
+function rpPessoasDoMes(mkey) { return RP.pessoas.filter(function(pe) { return rpVisivelNoMes(pe, mkey); }); }
+
 function rpRemovePessoa(id) {
+  const mkey = rpCurrentMonth();
   const pe = RP.pessoas.find(function(x) { return x.id === id; });
-  if (!confirm('Remover ' + ((pe && pe.nome) || 'esta pessoa') + ' do rateio (em todos os meses)?')) return;
-  RP.pessoas = RP.pessoas.filter(function(x) { return x.id !== id; });
-  Object.keys(RP.meses).forEach(function(m) { delete RP.meses[m][id]; });
-  renderRateioTab(rpCurrentMonth());
+  if (!pe || !confirm('Remover ' + (pe.nome || 'esta pessoa') + ' do rateio de ' + TR_MES_NOMES[mkey].toLowerCase() + '? Os outros meses nao mudam.')) return;
+  if (!pe.ocultoMeses) pe.ocultoMeses = {};
+  pe.ocultoMeses[mkey] = true;
+  if (RP.meses[mkey]) delete RP.meses[mkey][id];
+  renderRateioTab(mkey);
+  rpScheduleSave();
+}
+
+function rpRestaurarPessoa(id) {
+  const mkey = rpCurrentMonth();
+  const pe = RP.pessoas.find(function(x) { return x.id === id; });
+  if (!pe || !pe.ocultoMeses) return;
+  delete pe.ocultoMeses[mkey];
+  renderRateioTab(mkey);
   rpScheduleSave();
 }
 
@@ -9006,6 +9101,8 @@ function rpCopiarMesAnterior() {
   if (Object.keys(atual).length > 0 && !confirm('Substituir as horas e projetos de ' + mkey + ' pelos de ' + MESES[idx - 1] + '?')) return;
   RP.meses[mkey] = {};
   Object.keys(prev).forEach(function(id) {
+    const pe = RP.pessoas.find(function(x) { return x.id === id; });
+    if (!pe || !rpVisivelNoMes(pe, mkey)) return;
     RP.meses[mkey][id] = { horas: prev[id].horas, projetos: prev[id].projetos.slice() };
   });
   renderRateioTab(mkey);
