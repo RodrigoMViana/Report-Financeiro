@@ -139,7 +139,20 @@
   .email-status.bad { color:var(--bad); }
   .email-status.warn { color:var(--warn); }
 
+  /* Aba Rateio (protegida por senha) */
+  .rp-lock { max-width:420px; margin:40px auto; background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; text-align:center; }
+  .rp-lock h3 { margin:0 0 6px; color:var(--navy); font-size:18px; }
+  .rp-lock p { margin:0 0 16px; color:var(--slate); font-size:13px; }
+  .rp-lock input { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; margin-bottom:10px; }
+  .rp-lock button { width:100%; background:var(--navy); color:#fff; border:none; border-radius:8px; font-weight:600; font-size:14px; padding:10px; cursor:pointer; }
+  .rp-input { padding:8px 10px; border:1px solid var(--border); border-radius:8px; font-size:13px; font-family:inherit; }
+  .rp-input:focus { outline:none; border-color:var(--navy); }
+  table.rp-table td.num, table.rp-table th.num { text-align:right; white-space:nowrap; }
+  table.rp-table tr.rp-off td { color:var(--neutral); }
+  table.rp-table tfoot td { font-weight:700; color:var(--navy); border-top:2px solid var(--border); }
+
   @media print {
+    #tab-rateio, .tab-btn[data-tab="rateio"] { display:none !important; }
     .report-bar, .email-panel, .month-picker, .chevron, .obs-toolbar { display:none !important; }
     .project-card summary { cursor:default; }
     body { background:#fff; }
@@ -251,6 +264,7 @@
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
     <button type="button" class="tab-btn" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
     <button type="button" class="tab-btn" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
+    <button type="button" class="tab-btn" data-tab="rateio" onclick="showTab('rateio')">&#128274; Rateio</button>
   </div>
 
   <div id="tab-geral" class="tab-panel active">
@@ -5316,6 +5330,37 @@
     <div id="param-projects-list"></div>
   </div>
 
+  <div id="tab-rateio" class="tab-panel">
+    <div id="rp-locked">
+      <div class="rp-lock">
+        <h3>&#128274; Rateio de pessoas</h3>
+        <p id="rp-lock-msg">Area restrita. Informe a senha para acessar.</p>
+        <input type="password" id="rp-pass" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter') rpUnlock()">
+        <input type="password" id="rp-pass2" placeholder="Confirme a senha" autocomplete="new-password" style="display:none;" onkeydown="if(event.key==='Enter') rpUnlock()">
+        <button type="button" id="rp-unlock-btn" onclick="rpUnlock()">Entrar</button>
+        <div class="email-status" id="rp-lock-status"></div>
+      </div>
+    </div>
+    <div id="rp-unlocked" style="display:none;">
+      <div class="report-bar" style="align-items:center;">
+        <button type="button" onclick="rpAddPessoa()">+ Adicionar pessoa</button>
+        <button type="button" class="secondary" onclick="rpCopiarMesAnterior()">Copiar do mes anterior</button>
+        <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
+        <span class="email-status" id="rp-save-status"></span>
+      </div>
+      <div class="small-note" style="margin-bottom:20px;">Custo da pessoa no mes = horas informadas &times; taxa. As horas sao distribuidas entre os projetos marcados proporcionalmente ao <b>Ingreso do Pre Cierre</b> do mes selecionado (ingreso do projeto &divide; soma dos ingresos dos projetos marcados). Os dados desta aba sao salvos criptografados com a senha.</div>
+      <div class="kpi-grid kpi-grid-3">
+        <div class="kpi-card"><div class="kpi-label">Pessoas no rateio</div><div class="kpi-value" id="rp-kpi-pessoas">-</div></div>
+        <div class="kpi-card"><div class="kpi-label">Horas rateadas no mes</div><div class="kpi-value" id="rp-kpi-horas">-</div></div>
+        <div class="kpi-card"><div class="kpi-label">Custo rateado no mes</div><div class="kpi-value" id="rp-kpi-custo">-</div></div>
+      </div>
+      <div class="section-title">Pessoas <span class="count" id="rp-count">0</span></div>
+      <div id="rp-pessoas-list"></div>
+      <div class="section-title">Consolidado por projeto</div>
+      <div id="rp-consolidado"></div>
+    </div>
+  </div>
+
   <div class="footer-note">
     Gerado automaticamente a partir das planilhas de PR (aba RESUMO) e do Pre Cierre (aba FC) &middot; AAPP Sanidad
   </div>
@@ -6075,7 +6120,7 @@ function clearProjectFilter() {
 }
 
 function showTab(name) {
-  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao'].forEach(function(t) {
+  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'rateio'].forEach(function(t) {
     var panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
     var btn = document.querySelector('.tab-btn[data-tab="' + t + '"]');
@@ -6515,6 +6560,7 @@ function renderAllTabs(mkey) {
   renderProgressTab('cobro', mkey);
   renderFechTab(mkey);
   renderParamTab(mkey);
+  renderRateioTab(mkey);
   loadStatusForMonth('fat', mkey);
   loadStatusForMonth('cob', mkey);
   loadStatusForMonth('fech', mkey);
@@ -8134,6 +8180,394 @@ document.querySelectorAll('.gestor-btn').forEach(function(b){
 // Mes de referencia padrao: a partir do dia 10 de cada mes, o mes atual passa a
 // ser o default automaticamente (antes do dia 10, mantem o mes anterior, pois
 // os dados do mes atual normalmente ainda nao estao fechados).
+// ---------- Rateio de pessoas (aba protegida por senha) ----------
+// Toda a configuracao (pessoas, taxas, horas e projetos marcados por mes) fica num unico JSON
+// criptografado (AES-GCM, chave derivada da senha via PBKDF2). No Supabase/localStorage so vai o
+// texto cifrado -- sem a senha nao da para ler as taxas. Nao ha recuperacao: perdeu a senha, perdeu os dados.
+// Em localhost/arquivo local nao sincroniza com o Supabase, para o preview nao mexer no dado real.
+var RP_COMPOSITE = '__RATEIO__::cfg';
+var RP_MONTH = 'ALL';
+var RP_LOCAL_KEY = NOTES_PREFIX + RP_COMPOSITE;
+var RP_REMOTE = SUPABASE_CONFIGURED && !/^(localhost|127\.0\.0\.1|\[::1\]|)$/.test(location.hostname);
+var RP_MODE = 'loading'; // loading | setup | login | unlocked
+var RP_BLOB = null;      // texto cifrado carregado do storage
+var RP_KEY = null;       // CryptoKey derivada da senha (so em memoria)
+var RP_SALT = null;
+var RP = null;           // { pessoas: [{id, nome, taxa}], meses: { MKEY: { id: { horas, projetos: [code] } } } }
+var RP_OPEN = {};
+var RP_SAVE_TIMER = null;
+
+function rpB64(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+function rpUnB64(s) { return Uint8Array.from(atob(s), function(c) { return c.charCodeAt(0); }); }
+function rpEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function rpNum(v, d) { return (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+
+async function rpDeriveKey(pass, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 250000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+async function rpEncrypt(obj) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, RP_KEY, new TextEncoder().encode(JSON.stringify(obj)));
+  return JSON.stringify({ v: 1, salt: rpB64(RP_SALT), iv: rpB64(iv), ct: rpB64(ct) });
+}
+
+async function rpDecrypt(blobText, pass) {
+  const b = JSON.parse(blobText);
+  const salt = rpUnB64(b.salt);
+  const key = await rpDeriveKey(pass, salt);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, key, rpUnB64(b.ct));
+  return { key: key, salt: salt, data: JSON.parse(new TextDecoder().decode(plain)) };
+}
+
+async function rpLoadBlob() {
+  if (RP_REMOTE) {
+    try {
+      const { data, error } = await sb.from('notes').select('text').eq('code', RP_COMPOSITE).eq('month', RP_MONTH).maybeSingle();
+      if (!error && data && data.text) return data.text;
+    } catch (e) {}
+  }
+  try { return localStorage.getItem(RP_LOCAL_KEY); } catch (e) { return null; }
+}
+
+async function rpCheckSetup() {
+  RP_BLOB = await rpLoadBlob();
+  RP_MODE = RP_BLOB ? 'login' : 'setup';
+  rpUpdateLockUi();
+}
+
+function rpUpdateLockUi() {
+  const locked = document.getElementById('rp-locked');
+  const unlocked = document.getElementById('rp-unlocked');
+  if (!locked || !unlocked) return;
+  locked.style.display = RP_MODE === 'unlocked' ? 'none' : '';
+  unlocked.style.display = RP_MODE === 'unlocked' ? '' : 'none';
+  const msg = document.getElementById('rp-lock-msg');
+  const pass2 = document.getElementById('rp-pass2');
+  const btn = document.getElementById('rp-unlock-btn');
+  if (RP_MODE === 'setup') {
+    msg.textContent = 'Primeiro acesso: defina uma senha para proteger esta aba. Guarde-a bem -- sem ela os dados do rateio nao podem ser recuperados.';
+    pass2.style.display = '';
+    btn.textContent = 'Definir senha';
+  } else {
+    msg.textContent = RP_MODE === 'loading' ? 'Carregando...' : 'Area restrita. Informe a senha para acessar.';
+    pass2.style.display = 'none';
+    btn.textContent = 'Entrar';
+  }
+  btn.disabled = RP_MODE === 'loading';
+}
+
+function rpSetStatus(id, text, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'email-status show' + (cls ? ' ' + cls : '');
+  el.textContent = text;
+}
+
+async function rpUnlock() {
+  const pass = document.getElementById('rp-pass').value;
+  if (!window.crypto || !crypto.subtle) { rpSetStatus('rp-lock-status', 'Navegador sem suporte a criptografia (precisa de https).', 'bad'); return; }
+  if (RP_MODE === 'setup') {
+    const pass2 = document.getElementById('rp-pass2').value;
+    if (pass.length < 6) { rpSetStatus('rp-lock-status', 'Use pelo menos 6 caracteres.', 'bad'); return; }
+    if (pass !== pass2) { rpSetStatus('rp-lock-status', 'As senhas nao conferem.', 'bad'); return; }
+    RP_SALT = crypto.getRandomValues(new Uint8Array(16));
+    RP_KEY = await rpDeriveKey(pass, RP_SALT);
+    RP = { pessoas: [], meses: {} };
+    await rpPersist();
+  } else if (RP_MODE === 'login') {
+    rpSetStatus('rp-lock-status', 'Verificando...', null);
+    try {
+      const r = await rpDecrypt(RP_BLOB, pass);
+      RP_KEY = r.key; RP_SALT = r.salt; RP = r.data;
+      if (!RP.pessoas) RP.pessoas = [];
+      if (!RP.meses) RP.meses = {};
+    } catch (e) {
+      rpSetStatus('rp-lock-status', 'Senha incorreta.', 'bad');
+      return;
+    }
+  } else {
+    return;
+  }
+  document.getElementById('rp-pass').value = '';
+  document.getElementById('rp-pass2').value = '';
+  rpSetStatus('rp-lock-status', '', null);
+  RP_MODE = 'unlocked';
+  rpUpdateLockUi();
+  renderRateioTab(document.getElementById('month-select').value);
+}
+
+function rpLock() {
+  if (RP_SAVE_TIMER) { clearTimeout(RP_SAVE_TIMER); RP_SAVE_TIMER = null; rpPersist(); }
+  RP = null; RP_KEY = null; RP_SALT = null;
+  RP_MODE = 'login';
+  rpUpdateLockUi();
+  rpCheckSetup();
+}
+
+function rpScheduleSave() {
+  rpSetStatus('rp-save-status', 'Salvando...', null);
+  clearTimeout(RP_SAVE_TIMER);
+  RP_SAVE_TIMER = setTimeout(function() { RP_SAVE_TIMER = null; rpPersist(); }, 700);
+}
+
+async function rpPersist() {
+  if (!RP || !RP_KEY) return;
+  const text = await rpEncrypt(RP);
+  RP_BLOB = text;
+  try { localStorage.setItem(RP_LOCAL_KEY, text); } catch (e) {}
+  const hora = new Date().toLocaleTimeString('pt-BR');
+  if (!RP_REMOTE) { rpSetStatus('rp-save-status', 'Salvo neste navegador ' + hora + (SUPABASE_CONFIGURED ? ' (preview local: nao sincroniza com o Supabase).' : '.'), 'warn'); return; }
+  const { error } = await sb.from('notes').upsert({ code: RP_COMPOSITE, month: RP_MONTH, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+  if (error) rpSetStatus('rp-save-status', 'Salvo neste navegador, mas FALHOU ao sincronizar. Tente novamente.', 'bad');
+  else rpSetStatus('rp-save-status', 'Salvo e sincronizado ' + hora + '.', 'ok');
+}
+
+// Entrada da pessoa no mes. Se o mes ainda nao foi configurado, herda os projetos marcados do
+// ultimo mes anterior que tiver configuracao (as horas comecam zeradas).
+function rpGetMes(mkey, id, create) {
+  const m = RP.meses[mkey];
+  if (m && m[id]) return m[id];
+  let projetos = [];
+  for (let i = MESES.indexOf(mkey) - 1; i >= 0; i--) {
+    const prev = RP.meses[MESES[i]];
+    if (prev && prev[id]) { projetos = prev[id].projetos.slice(); break; }
+  }
+  const entry = { horas: 0, projetos: projetos };
+  if (create) {
+    if (!RP.meses[mkey]) RP.meses[mkey] = {};
+    RP.meses[mkey][id] = entry;
+  }
+  return entry;
+}
+
+function rpIngresoPC(code, mkey) {
+  const p = DATA.find(function(d) { return d.code === code; });
+  if (!p || !p.months[mkey] || !p.months[mkey].ingreso) return 0;
+  return p.months[mkey].ingreso.fc || 0;
+}
+
+// Distribuicao: % = ingreso PC do projeto / soma dos ingresos PC dos projetos marcados.
+// Ingreso negativo (estorno no Pre Cierre) conta como zero para nao distorcer os percentuais.
+function rpCalcPessoa(pessoa, mkey) {
+  const entry = rpGetMes(mkey, pessoa.id, false);
+  const codes = entry.projetos.filter(function(c) { return DATA.some(function(d) { return d.code === c; }); });
+  const total = codes.reduce(function(s, c) { return s + Math.max(0, rpIngresoPC(c, mkey)); }, 0);
+  const linhas = {};
+  codes.forEach(function(c) {
+    const ing = Math.max(0, rpIngresoPC(c, mkey));
+    const pct = total > 0 ? ing / total : 0;
+    const horas = (entry.horas || 0) * pct;
+    linhas[c] = { ingreso: ing, pct: pct, horas: horas, custo: horas * (pessoa.taxa || 0) };
+  });
+  return { entry: entry, totalIngreso: total, linhas: linhas, horas: entry.horas || 0, custo: (entry.horas || 0) * (pessoa.taxa || 0) };
+}
+
+function rpProjetosVisiveis(extraCodes) {
+  const list = currentProjects().slice();
+  (extraCodes || []).forEach(function(c) {
+    if (!list.some(function(p) { return p.code === c; })) {
+      const p = DATA.find(function(d) { return d.code === c; });
+      if (p) list.push(p);
+    }
+  });
+  return list;
+}
+
+function renderRateioTab(mkey) {
+  if (typeof RP_MODE === 'undefined' || RP_MODE !== 'unlocked' || !RP) return;
+  const list = document.getElementById('rp-pessoas-list');
+  document.getElementById('rp-count').textContent = RP.pessoas.length;
+  if (RP.pessoas.length === 0) {
+    list.innerHTML = '<div class="no-results" style="display:block;">Nenhuma pessoa cadastrada. Clique em "+ Adicionar pessoa".</div>';
+  } else {
+    list.innerHTML = RP.pessoas.map(function(pe) {
+      const entry = rpGetMes(mkey, pe.id, false);
+      return `
+      <details class="project-card" data-rp="${pe.id}" ${RP_OPEN[pe.id] ? 'open' : ''} ontoggle="RP_OPEN['${pe.id}'] = this.open">
+        <summary>
+          <div class="summary-left">
+            <span class="proj-name" id="rp-nome-label-${pe.id}">${rpEsc(pe.nome) || '(sem nome)'}</span>
+          </div>
+          <div class="summary-right" id="rp-summary-${pe.id}"></div>
+        </summary>
+        <div class="card-body">
+          <div class="extra-row">
+            <div class="obs-block extra-block">
+              <div class="obs-header"><label>Nome</label></div>
+              <input type="text" class="rp-input" style="width:100%;" value="${rpEsc(pe.nome)}" oninput="rpSetPessoa('${pe.id}','nome',this.value)">
+            </div>
+            <div class="obs-block extra-block">
+              <div class="obs-header"><label>Taxa (R$/hora)</label></div>
+              <input type="text" inputmode="decimal" class="rp-input" style="width:100%;" value="${pe.taxa ? rpNum(pe.taxa, 2) : ''}" placeholder="Ex: 120,50" oninput="rpSetPessoa('${pe.id}','taxa',this.value)" onblur="this.value = this.value ? rpNum(parseBRNum(this.value), 2) : ''">
+              <div class="small-note">Custo total do profissional por hora (salario, 13o, ferias, encargos...).</div>
+            </div>
+            <div class="obs-block extra-block">
+              <div class="obs-header"><label>Horas no mes (${mkey})</label></div>
+              <input type="text" inputmode="decimal" class="rp-input" style="width:100%;" value="${entry.horas ? rpNum(entry.horas, 2) : ''}" placeholder="Ex: 80" oninput="rpSetHoras('${pe.id}',this.value)">
+              <div class="small-note">Horas desta pessoa no mes que sao devidas aos seus projetos.</div>
+            </div>
+          </div>
+          <div class="table-wrap" style="margin-top:16px;" id="rp-tbl-${pe.id}"></div>
+          <div style="text-align:right; margin-top:8px;">
+            <a href="#" style="color:var(--bad); font-size:12px;" onclick="rpRemovePessoa('${pe.id}'); return false;">Remover pessoa</a>
+          </div>
+        </div>
+      </details>`;
+    }).join('');
+    RP.pessoas.forEach(function(pe) { rpRenderPessoaCalc(pe.id, mkey); });
+  }
+  rpRenderResumo(mkey);
+}
+
+function rpRenderPessoaCalc(id, mkey) {
+  const pe = RP.pessoas.find(function(x) { return x.id === id; });
+  if (!pe) return;
+  const c = rpCalcPessoa(pe, mkey);
+  const summary = document.getElementById('rp-summary-' + id);
+  if (summary) summary.innerHTML = `
+    <div class="mini-metric"><span class="mini-label">Taxa</span><span class="mini-value">${brl(pe.taxa || 0)}</span></div>
+    <div class="mini-metric"><span class="mini-label">Horas</span><span class="mini-value">${rpNum(c.horas, 2)}</span></div>
+    <div class="mini-metric"><span class="mini-label">Projetos</span><span class="mini-value">${Object.keys(c.linhas).length}</span></div>
+    <div class="mini-metric"><span class="mini-label">Custo</span><span class="mini-value">${brl(c.custo)}</span></div>
+    <span class="chevron">&#9660;</span>`;
+  const tbl = document.getElementById('rp-tbl-' + id);
+  if (!tbl) return;
+  const projetos = rpProjetosVisiveis(c.entry.projetos);
+  const rows = projetos.map(function(p) {
+    const l = c.linhas[p.code];
+    const on = !!l;
+    return `<tr class="${on ? '' : 'rp-off'}">
+      <td><input type="checkbox" ${on ? 'checked' : ''} onchange="rpToggleProjeto('${id}','${p.code}',this.checked)"></td>
+      <td>${p.code}</td>
+      <td>${rpEsc(p.name)}</td>
+      <td class="num">${brl(rpIngresoPC(p.code, mkey))}</td>
+      <td class="num">${on ? pctf(l.pct * 100, 2) : '-'}</td>
+      <td class="num">${on ? rpNum(l.horas, 2) : '-'}</td>
+      <td class="num">${on ? brl(l.custo) : '-'}</td>
+    </tr>`;
+  }).join('');
+  const aviso = (Object.keys(c.linhas).length > 0 && c.totalIngreso === 0)
+    ? '<div class="small-note" style="color:var(--warn);">Os projetos marcados nao tem Ingreso no Pre Cierre deste mes -- nao da para distribuir as horas.</div>' : '';
+  tbl.innerHTML = `${aviso}<table class="rp-table">
+    <thead><tr><th></th><th>Codigo</th><th>Projeto</th><th class="num">Ingreso PC (${mkey})</th><th class="num">% rateio</th><th class="num">Horas</th><th class="num">Custo</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr><td></td><td colspan="2">Total marcado</td><td class="num">${brl(c.totalIngreso)}</td><td class="num">${Object.keys(c.linhas).length ? pctf(c.totalIngreso > 0 ? 100 : 0, 2) : '-'}</td><td class="num">${rpNum(c.totalIngreso > 0 ? c.horas : 0, 2)}</td><td class="num">${brl(c.totalIngreso > 0 ? c.custo : 0)}</td></tr></tfoot>
+  </table>`;
+}
+
+function rpRenderResumo(mkey) {
+  let horasTot = 0, custoTot = 0;
+  const porProjeto = {};
+  const calcs = RP.pessoas.map(function(pe) { return { pe: pe, c: rpCalcPessoa(pe, mkey) }; });
+  calcs.forEach(function(x) {
+    Object.keys(x.c.linhas).forEach(function(code) {
+      const l = x.c.linhas[code];
+      if (!porProjeto[code]) porProjeto[code] = { horas: 0, custo: 0, pessoas: {} };
+      porProjeto[code].horas += l.horas;
+      porProjeto[code].custo += l.custo;
+      porProjeto[code].pessoas[x.pe.id] = l.custo;
+      horasTot += l.horas;
+      custoTot += l.custo;
+    });
+  });
+  document.getElementById('rp-kpi-pessoas').textContent = RP.pessoas.length;
+  document.getElementById('rp-kpi-horas').textContent = rpNum(horasTot, 2);
+  document.getElementById('rp-kpi-custo').textContent = brl(custoTot);
+  const el = document.getElementById('rp-consolidado');
+  const codes = Object.keys(porProjeto);
+  if (codes.length === 0) {
+    el.innerHTML = '<div class="small-note">Nenhum projeto recebendo rateio neste mes.</div>';
+    return;
+  }
+  const nome = function(code) { const p = DATA.find(function(d) { return d.code === code; }); return p ? p.name : ''; };
+  el.innerHTML = `<div class="table-wrap"><table class="rp-table">
+    <thead><tr><th>Codigo</th><th>Projeto</th>${RP.pessoas.map(function(pe) { return '<th class="num">' + rpEsc(pe.nome || '(sem nome)') + '</th>'; }).join('')}<th class="num">Horas</th><th class="num">Custo total</th></tr></thead>
+    <tbody>${codes.map(function(code) {
+      const r = porProjeto[code];
+      return '<tr><td>' + code + '</td><td>' + rpEsc(nome(code)) + '</td>' +
+        RP.pessoas.map(function(pe) { return '<td class="num">' + (r.pessoas[pe.id] !== undefined ? brl(r.pessoas[pe.id]) : '-') + '</td>'; }).join('') +
+        '<td class="num">' + rpNum(r.horas, 2) + '</td><td class="num">' + brl(r.custo) + '</td></tr>';
+    }).join('')}</tbody>
+    <tfoot><tr><td colspan="2">Total</td>${RP.pessoas.map(function(pe) {
+      const s = codes.reduce(function(a, code) { return a + (porProjeto[code].pessoas[pe.id] || 0); }, 0);
+      return '<td class="num">' + brl(s) + '</td>';
+    }).join('')}<td class="num">${rpNum(horasTot, 2)}</td><td class="num">${brl(custoTot)}</td></tr></tfoot>
+  </table></div>`;
+}
+
+function rpCurrentMonth() { return document.getElementById('month-select').value; }
+
+function rpAddPessoa() {
+  const id = 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  RP.pessoas.push({ id: id, nome: '', taxa: 0 });
+  RP_OPEN[id] = true;
+  renderRateioTab(rpCurrentMonth());
+  rpScheduleSave();
+}
+
+function rpRemovePessoa(id) {
+  const pe = RP.pessoas.find(function(x) { return x.id === id; });
+  if (!confirm('Remover ' + ((pe && pe.nome) || 'esta pessoa') + ' do rateio (em todos os meses)?')) return;
+  RP.pessoas = RP.pessoas.filter(function(x) { return x.id !== id; });
+  Object.keys(RP.meses).forEach(function(m) { delete RP.meses[m][id]; });
+  renderRateioTab(rpCurrentMonth());
+  rpScheduleSave();
+}
+
+function rpSetPessoa(id, field, value) {
+  const pe = RP.pessoas.find(function(x) { return x.id === id; });
+  if (!pe) return;
+  const mkey = rpCurrentMonth();
+  if (field === 'taxa') pe.taxa = parseBRNum(value);
+  else {
+    pe.nome = value;
+    const lbl = document.getElementById('rp-nome-label-' + id);
+    if (lbl) lbl.textContent = value || '(sem nome)';
+  }
+  rpRenderPessoaCalc(id, mkey);
+  rpRenderResumo(mkey);
+  rpScheduleSave();
+}
+
+function rpSetHoras(id, value) {
+  const mkey = rpCurrentMonth();
+  rpGetMes(mkey, id, true).horas = parseBRNum(value);
+  rpRenderPessoaCalc(id, mkey);
+  rpRenderResumo(mkey);
+  rpScheduleSave();
+}
+
+function rpToggleProjeto(id, code, on) {
+  const mkey = rpCurrentMonth();
+  const entry = rpGetMes(mkey, id, true);
+  entry.projetos = entry.projetos.filter(function(c) { return c !== code; });
+  if (on) entry.projetos.push(code);
+  rpRenderPessoaCalc(id, mkey);
+  rpRenderResumo(mkey);
+  rpScheduleSave();
+}
+
+function rpCopiarMesAnterior() {
+  const mkey = rpCurrentMonth();
+  const idx = MESES.indexOf(mkey);
+  if (idx <= 0) { alert('Nao ha mes anterior a ' + mkey + '.'); return; }
+  const prev = RP.meses[MESES[idx - 1]] || {};
+  if (Object.keys(prev).length === 0) { alert('O mes ' + MESES[idx - 1] + ' nao tem rateio configurado.'); return; }
+  const atual = RP.meses[mkey] || {};
+  if (Object.keys(atual).length > 0 && !confirm('Substituir as horas e projetos de ' + mkey + ' pelos de ' + MESES[idx - 1] + '?')) return;
+  RP.meses[mkey] = {};
+  Object.keys(prev).forEach(function(id) {
+    RP.meses[mkey][id] = { horas: prev[id].horas, projetos: prev[id].projetos.slice() };
+  });
+  renderRateioTab(mkey);
+  rpScheduleSave();
+}
+
+rpCheckSetup();
+
 function getDefaultMonthKey() {
   const codes = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
   const now = new Date();
