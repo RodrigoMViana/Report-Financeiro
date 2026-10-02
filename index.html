@@ -5445,6 +5445,9 @@
         <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
         <input type="file" id="rev-pessoas-file" accept=".xls,.xlsx,.xml,.csv" style="display:none;" onchange="revUploadPessoas(this)">
         <input type="file" id="rev-pr-file" accept=".xlsb,.xlsx" multiple style="display:none;" onchange="revUploadPRs(this)">
+        <button type="button" onclick="document.getElementById('rev-ferias-file').click()">Subir ferias</button>
+        <input type="password" id="rev-ferias-senha" class="rp-input" style="width:190px;" placeholder="Senha do zip de ferias" autocomplete="off">
+        <input type="file" id="rev-ferias-file" accept=".zip,.xls,.xlsx,.txt,.csv" style="display:none;" onchange="revUploadFerias(this)">
         <span class="email-status" id="rev-status"></span>
       </div>
       <div class="report-bar" style="align-items:center; gap:8px;">
@@ -5467,6 +5470,8 @@
       <div id="rev-taxa"></div>
       <div class="section-title">Horas na PR sem atribuicao na planilha <span class="count" id="rev-fora-count">0</span></div>
       <div id="rev-fora"></div>
+      <div class="section-title">Horas do mes: PR + ferias <span class="count" id="rev-horas-count">0</span></div>
+      <div id="rev-horas"></div>
     </div>
   </div>
 
@@ -8810,7 +8815,7 @@ function revExtractHC(wb, code, arquivo) {
   if (h === -1) throw new Error('cabecalho TIPO/Matricula nao encontrado na aba HC');
   const head = rows[h];
   const col = function(label) { return head.findIndex(function(v) { return revNorm(v) === label; }); };
-  const cTipo = col('TIPO'), cMat = col('MATRICULA'), cNome = col('NOME'), cStatus = col('STATUS'), cTx = col('TX');
+  const cTipo = col('TIPO'), cMat = col('MATRICULA'), cNome = col('NOME'), cStatus = col('STATUS'), cTx = col('TX'), cCh = col('CH_DIA');
   // Colunas dos meses de 2026: pela linha de anos (acima do cabecalho); sem ela, o 2o JAN..DEZ.
   let anoRow = null;
   for (let i = 0; i < h; i++) {
@@ -8833,6 +8838,8 @@ function revExtractHC(wb, code, arquivo) {
     if (!mat) continue;
     const pe = pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: String(r[cNome] || '').replace(/\u00a0/g, ' ').trim(), status: String(r[cStatus] || '').trim(), tx: null, horas: {}, taxa: {} });
     const tx = revNum(r[cTx]);
+    const ch = cCh !== -1 ? revNum(r[cCh]) : null;
+    if (ch && !pe.ch) pe.ch = ch;
     if (tx !== null && pe.tx === null) pe.tx = tx;
     MESES.forEach(function(m) {
       if (mesCol[m] === undefined) return;
@@ -9127,19 +9134,231 @@ function revRenderFiltro() {
   sel.value = codes.indexOf(atual) !== -1 ? atual : '';
 }
 
+// ---- Ferias programadas (relatorio ALFA_FERIAS_PROGRAMADAS) ----
+// Vem num .zip com senha (criptografia ZIP tradicional) contendo um texto separado por tabulacao com
+// extensao .xls. O zip e aberto aqui no navegador; a senha nao fica no codigo (o repositorio e publico):
+// e digitada na tela e guardada dentro do JSON cifrado da Revisao do gestor.
+var REV_CRC_TABLE = null;
+function revCrc32Byte(crc, b) {
+  if (!REV_CRC_TABLE) {
+    REV_CRC_TABLE = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; REV_CRC_TABLE[n] = c >>> 0; }
+  }
+  return (REV_CRC_TABLE[(crc ^ b) & 0xff] ^ (crc >>> 8)) >>> 0;
+}
+
+// Le o primeiro arquivo do zip, decifrando (ZipCrypto) se precisar, e descomprime (deflate).
+async function revZipPrimeiroArquivo(buf, senha) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) { if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; } }
+  if (eocd === -1) throw new Error('arquivo .zip invalido.');
+  const cd = dv.getUint32(eocd + 16, true);
+  if (dv.getUint32(cd, true) !== 0x02014b50) throw new Error('arquivo .zip invalido.');
+  const flags = dv.getUint16(cd + 8, true), metodo = dv.getUint16(cd + 10, true), dosTime = dv.getUint16(cd + 12, true);
+  const crc = dv.getUint32(cd + 16, true), compSize = dv.getUint32(cd + 20, true);
+  const nomeLen = dv.getUint16(cd + 28, true), off = dv.getUint32(cd + 42, true);
+  const nome = new TextDecoder().decode(buf.subarray(cd + 46, cd + 46 + nomeLen));
+  const inicio = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+  let dados = buf.slice(inicio, inicio + compSize);
+  if (metodo === 99) throw new Error('zip com criptografia AES nao suportado -- extraia o arquivo e suba o .xls.');
+  if (flags & 1) {
+    if (!senha) throw new Error('o .zip tem senha -- informe a senha no campo ao lado.');
+    let k0 = 305419896, k1 = 591751049, k2 = 878082192;
+    const upd = function(c) {
+      k0 = revCrc32Byte(k0, c);
+      k1 = (Math.imul((k1 + (k0 & 0xff)) >>> 0, 134775813) + 1) >>> 0;
+      k2 = revCrc32Byte(k2, k1 >>> 24);
+    };
+    for (const ch of new TextEncoder().encode(senha)) upd(ch);
+    const out = new Uint8Array(dados.length);
+    for (let i = 0; i < dados.length; i++) {
+      const t = (k2 | 2) & 0xffff;
+      const p = dados[i] ^ ((Math.imul(t, t ^ 1) >>> 8) & 0xff);
+      out[i] = p; upd(p);
+    }
+    const verif = flags & 8 ? (dosTime >>> 8) & 0xff : crc >>> 24;
+    if (out[11] !== verif) throw new Error('senha do arquivo de ferias incorreta.');
+    dados = out.subarray(12);
+  }
+  if (metodo === 8) {
+    const ds = new DecompressionStream('deflate-raw');
+    dados = new Uint8Array(await new Response(new Blob([dados]).stream().pipeThrough(ds)).arrayBuffer());
+  } else if (metodo !== 0) throw new Error('compressao do .zip nao suportada (metodo ' + metodo + ').');
+  return { nome: nome, dados: dados };
+}
+
+// Linhas do relatorio: texto com tabulacao (utf-8 ou windows-1252) ou planilha de verdade.
+function revFeriasRows(bytes) {
+  const ini = new TextDecoder('latin1').decode(bytes.slice(0, 4000));
+  if (ini.indexOf('\t') !== -1 && ini.indexOf('urn:schemas-microsoft-com') === -1 && bytes[0] !== 0xD0 && !(bytes[0] === 0x50 && bytes[1] === 0x4B)) {
+    let txt;
+    try { txt = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch (e) { txt = new TextDecoder('windows-1252').decode(bytes); }
+    return txt.split(/\r?\n/).filter(function(l) { return l.trim(); }).map(function(l) { return l.split('\t').map(function(c) { return c.trim(); }); });
+  }
+  return revPlanilhaRows(bytes);
+}
+
+function revParseFerias(rows) {
+  const h = rows.findIndex(function(r) { return (r || []).some(function(v) { return revNorm(v) === 'MATRICULA'; }); });
+  if (h === -1) throw new Error('nao encontrei a coluna "Matricula" no arquivo de ferias.');
+  const head = rows[h].map(revNorm);
+  const col = function(txt) { return head.findIndex(function(v) { return v.indexOf(txt) !== -1; }); };
+  const cMat = head.indexOf('MATRICULA'), cNome = col('PROFISSIONAL'), cProj = head.indexOf('PROJETO');
+  const cIni = col('DT_INICIO'), cDias = col('DIAS_DESCANSO'), cAbono = col('DIAS_ABONO'), cSit = col('SITUACAO');
+  if (cIni === -1 || cDias === -1) throw new Error('colunas de data de inicio / dias de descanso nao encontradas.');
+  const linhas = [];
+  for (let i = h + 1; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const mat = revMat(r[cMat]);
+    const ini = revData(r[cIni]);
+    const dias = revNum(r[cDias]);
+    if (!mat || !ini || !dias) continue;
+    linhas.push({ matricula: mat, nome: String(r[cNome] || '').trim(), projeto: String(r[cProj] || '').trim(), inicio: ini, dias: dias, abono: revNum(r[cAbono]) || 0, situacao: cSit !== -1 ? String(r[cSit] || '').trim() : '' });
+  }
+  return linhas;
+}
+
+async function revUploadFerias(inp) {
+  const file = inp.files && inp.files[0];
+  inp.value = '';
+  if (!file || !REV) return;
+  const senhaEl = document.getElementById('rev-ferias-senha');
+  const senha = senhaEl.value || REV.feriasSenha || '';
+  rpSetStatus('rev-status', 'Lendo ' + file.name + '...', null);
+  try {
+    let bytes = new Uint8Array(await file.arrayBuffer());
+    let nome = file.name;
+    if (bytes[0] === 0x50 && bytes[1] === 0x4B && /\.zip$/i.test(file.name)) {
+      const z = await revZipPrimeiroArquivo(bytes, senha);
+      bytes = z.dados; nome = file.name + ' > ' + z.nome;
+      if (senhaEl.value) REV.feriasSenha = senhaEl.value;
+    }
+    const linhas = revParseFerias(revFeriasRows(bytes));
+    if (!linhas.length) throw new Error('nenhuma ferias encontrada no arquivo.');
+    REV.ferias = { arquivo: nome, data: new Date().toISOString(), linhas: linhas };
+    senhaEl.value = '';
+    revRenderSenhaFerias();
+    renderRevisaoTab(document.getElementById('month-select').value);
+    await revPersist(linhas.length + ' periodo(s) de ferias lido(s) de ' + file.name + '.', 'ok');
+  } catch (e) {
+    rpSetStatus('rev-status', 'Nao foi possivel ler as ferias: ' + e.message, 'bad');
+  }
+}
+
+function revRenderSenhaFerias() {
+  const el = document.getElementById('rev-ferias-senha');
+  if (el) el.placeholder = REV && REV.feriasSenha ? 'Senha do zip (salva)' : 'Senha do zip de ferias';
+}
+
+// Dias uteis (seg-sex, sem feriado nacional) do periodo de descanso que caem no mes. Abono nao e folga.
+function revDiasFeriasNoMes(l, mkey) {
+  const ano = rpAnoRef(mkey), idx = MESES.indexOf(mkey);
+  const p = l.inicio.split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2]);
+  let n = 0;
+  for (let i = 0; i < l.dias; i++, d.setDate(d.getDate() + 1)) {
+    if (d.getFullYear() !== ano || d.getMonth() !== idx) continue;
+    const dow = d.getDay();
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    if (dow !== 0 && dow !== 6 && !rpFeriadosNacionais(d.getFullYear()).has(key)) n++;
+  }
+  return n;
+}
+
+// Horas do mes de cada pessoa: horas nas PRs + ferias tem que fechar com as horas do mes
+// (dias uteis x carga diaria da aba HC), proporcional ao % atribuido nos projetos com PR enviada.
+function revHorasMes(mkey, proj) {
+  const dias = rpDiasUteis(mkey);
+  const planByMat = {};
+  REV.pessoas.forEach(function(p) { planByMat[p.matricula] = p; });
+  const feriasDe = {};
+  ((REV.ferias && REV.ferias.linhas) || []).forEach(function(l) {
+    const n = revDiasFeriasNoMes(l, mkey);
+    if (n > 0) feriasDe[l.matricula] = (feriasDe[l.matricula] || 0) + n;
+  });
+  const pessoas = {};
+  const add = function(mat) { return pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: '', horasPR: 0, codes: [], ch: null, noProj: !proj }); };
+  Object.keys(REV.hc).forEach(function(code) {
+    (REV.hc[code].pessoas || []).forEach(function(o) {
+      const h = o.horas[mkey] || 0;
+      if (h <= 0) return;
+      const x = add(o.matricula);
+      x.nome = x.nome || o.nome;
+      x.horasPR += h;
+      x.codes.push(code);
+      if (x.ch === null && o.ch) x.ch = o.ch;
+      if (code === proj) x.noProj = true;
+    });
+  });
+  REV.pessoas.forEach(function(p) {
+    revAtribs(p).forEach(function(a) {
+      if (!REV.hc[a.code] || revAtivaNoMes(a, mkey) === false) return;
+      const x = add(p.matricula);
+      if (a.code === proj) x.noProj = true;
+    });
+  });
+  const linhas = [];
+  Object.values(pessoas).forEach(function(x) {
+    if (!x.noProj) return;
+    const p = planByMat[x.matricula];
+    if (p) x.nome = p.nome || x.nome;
+    if (x.ch === null) {
+      Object.keys(REV.hc).some(function(c) { const o = (REV.hc[c].pessoas || []).find(function(pe) { return pe.matricula === x.matricula && pe.ch; }); if (o) x.ch = o.ch; return !!o; });
+    }
+    const ch = x.ch || 8.8;
+    // % atribuido nos projetos com PR enviada (planilha "Plano de recursos"); sem essa informacao, 100%.
+    let pctAtr = 100;
+    if (p && p.atrib) {
+      const s = p.atrib.reduce(function(acc, a) {
+        if (!REV.hc[a.code]) return acc;
+        const v = revAtivaNoMes(a, mkey);
+        return v === false ? acc : acc + (v === null ? 100 : v);
+      }, 0);
+      pctAtr = Math.min(100, s);
+      if (pctAtr === 0 && x.horasPR > 0) pctAtr = 100;
+    }
+    const diasFerias = feriasDe[x.matricula] || 0;
+    const horasMes = dias * ch;
+    const horasFerias = diasFerias * ch;
+    const esperado = Math.max(0, horasMes - horasFerias) * pctAtr / 100;
+    linhas.push({ matricula: x.matricula, nome: x.nome, codes: x.codes, ch: ch, horasMes: horasMes, diasFerias: diasFerias, horasFerias: horasFerias, pct: pctAtr, esperado: esperado, horasPR: x.horasPR, dif: x.horasPR - esperado });
+  });
+  linhas.sort(function(a, b) { return Math.abs(b.dif) - Math.abs(a.dif); });
+  const comFerias = linhas.filter(function(l) { return l.diasFerias > 0; });
+  return { dias: dias, linhas: linhas, desvios: linhas.filter(function(l) { return Math.abs(l.dif) > 0.5; }), comFerias: comFerias, temFerias: !!(REV.ferias && REV.ferias.linhas && REV.ferias.linhas.length) };
+}
+
+function revRenderHorasMes(hm, mkey) {
+  const mes = revMesNome(mkey);
+  document.getElementById('rev-horas-count').textContent = hm.desvios.length;
+  const nota = '<div class="small-note" style="margin-bottom:8px;">Horas do mes = ' + hm.dias + ' dias uteis x carga diaria (aba HC). Esperado na PR = (horas do mes - ferias) x % atribuido nos projetos com PR enviada.' +
+    (hm.temFerias ? ' ' + hm.comFerias.length + ' pessoa(s) com ferias em ' + mes + '.' : ' <b>Nenhum arquivo de ferias enviado</b> -- suba o relatorio de ferias programadas para descontar as ferias.') + '</div>';
+  const el = document.getElementById('rev-horas');
+  if (!hm.desvios.length) { el.innerHTML = nota + '<div class="small-note">Horas da PR + ferias fecham com as horas do mes para todas as pessoas.</div>'; return; }
+  el.innerHTML = nota + '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>PR(s)</th><th class="num">Horas do mes</th><th class="num">Ferias</th><th class="num">% atrib.</th><th class="num">Esperado na PR</th><th class="num">Horas na PR</th><th class="num">Diferenca</th></tr></thead><tbody>' +
+    hm.desvios.map(function(l) {
+      return '<tr><td>' + l.matricula + '</td><td>' + rpEsc(l.nome) + '</td><td>' + (l.codes.join(', ') || '-') + '</td><td class="num">' + rpNum(l.horasMes, 1) + '</td><td class="num">' +
+        (l.diasFerias ? l.diasFerias + 'd / ' + rpNum(l.horasFerias, 1) + 'h' : '-') + '</td><td class="num">' + rpNum(l.pct, 0) + '%</td><td class="num">' + rpNum(l.esperado, 1) + '</td><td class="num">' + rpNum(l.horasPR, 1) +
+        '</td><td class="num ' + (l.dif < 0 ? 'bad' : 'warn') + '">' + (l.dif > 0 ? '+' : '') + rpNum(l.dif, 1) + 'h</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
 function renderRevisaoTab(mkey) {
   if (typeof REV === 'undefined' || !REV || RP_MODE !== 'unlocked') return;
   const prs = Object.keys(REV.hc).sort();
   const dt = function(iso) { return iso ? new Date(iso).toLocaleDateString('pt-BR') : ''; };
   document.getElementById('rev-fontes').innerHTML =
     '<b>Planilha:</b> ' + (REV.pessoasArquivo ? rpEsc(REV.pessoasArquivo) + ' (' + REV.pessoas.length + ' pessoas, enviada em ' + dt(REV.pessoasData) + ')' : 'nenhuma enviada') +
-    ' &middot; <b>PRs com HC:</b> ' + (prs.length ? prs.map(function(c) { return '<span title="' + rpEsc(REV.hc[c].arquivo) + ' - ' + dt(REV.hc[c].data) + '">' + c + '</span>'; }).join(', ') : 'nenhuma enviada');
+    ' &middot; <b>PRs com HC:</b> ' + (prs.length ? prs.map(function(c) { return '<span title="' + rpEsc(REV.hc[c].arquivo) + ' - ' + dt(REV.hc[c].data) + '">' + c + '</span>'; }).join(', ') : 'nenhuma enviada') +
+    ' &middot; <b>Ferias:</b> ' + (REV.ferias ? rpEsc(REV.ferias.arquivo) + ' (' + REV.ferias.linhas.length + ' periodos, enviada em ' + dt(REV.ferias.data) + ')' : 'nenhuma enviada');
   revRenderFiltro();
+  revRenderSenhaFerias();
   const vazio = function(id, msg) { document.getElementById(id).innerHTML = '<div class="small-note">' + msg + '</div>'; };
   const setKpi = function(id, v, sub) { document.getElementById('rev-kpi-' + id).textContent = v; document.getElementById('rev-kpi-' + id + '-sub').textContent = sub || ''; };
   if (!REV.pessoas.length || !prs.length) {
     ['pessoas', 'sem', 'taxa', 'fora'].forEach(function(k) { setKpi(k, '-', ''); });
-    ['sem', 'taxa', 'fora'].forEach(function(k) { document.getElementById('rev-' + k + '-count').textContent = 0; vazio('rev-' + k, ''); });
+    ['sem', 'taxa', 'fora', 'horas'].forEach(function(k) { document.getElementById('rev-' + k + '-count').textContent = 0; vazio('rev-' + k, ''); });
     document.getElementById('rev-resumo').innerHTML = 'Para comecar, suba ' + (!REV.pessoas.length ? '<b>a planilha de pessoas</b>' : '') + (!REV.pessoas.length && !prs.length ? ' e ' : '') + (!prs.length ? '<b>as suas PRs</b> (a aba HC e lida automaticamente)' : '') + '.';
     return;
   }
@@ -9173,6 +9392,14 @@ function renderRevisaoTab(mkey) {
   if (a.fora.length) itens.push('<b>' + a.fora.length + ' lancamento(s)</b> com horas ' + (proj ? 'na PR' + escopo : 'nas PRs') + ' sem atribuicao ao projeto na planilha: ' + nomes(a.fora, function(o) { return rpEsc(o.nome || o.matricula) + (proj ? '' : ' (' + o.code + ')'); }) + '.');
   const ign = Object.keys(a.ignorados).sort();
   if (!proj && ign.length) itens.push('Atribuicoes em projetos de outros gestores sem PR enviada nao foram conferidas: ' + ign.map(function(c) { return c + ' (' + a.ignorados[c] + ')'; }).join(', ') + '.');
+  const hm = revHorasMes(mkey, proj);
+  if (hm.desvios.length) {
+    const faltam = hm.desvios.filter(function(l) { return l.dif < 0; });
+    itens.push('<b>' + hm.desvios.length + ' pessoa(s)</b> em que horas da PR + ferias nao fecham com as horas do mes (' + hm.dias + ' dias uteis): ' + faltam.length + ' com horas faltando (' + rpNum(faltam.reduce(function(s, l) { return s - l.dif; }, 0), 1) + 'h) e ' + (hm.desvios.length - faltam.length) + ' com horas a mais.');
+  } else itens.push('Horas da PR + ferias fecham com as horas do mes para todas as pessoas' + escopo + '.');
+  if (!hm.temFerias) itens.push('Arquivo de ferias nao enviado: as ferias ainda nao estao sendo descontadas.');
+  else if (hm.comFerias.length) itens.push(hm.comFerias.length + ' pessoa(s) com ferias em ' + mes + escopo + ' (' + rpNum(hm.comFerias.reduce(function(s, l) { return s + l.horasFerias; }, 0), 1) + 'h descontadas).');
+  revRenderHorasMes(hm, mkey);
   document.getElementById('rev-resumo').innerHTML = '<ul style="margin:0; padding-left:18px;">' + itens.map(function(t) { return '<li>' + t + '</li>'; }).join('') + '</ul>';
 
   // Tabelas
