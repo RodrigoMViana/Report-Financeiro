@@ -5447,8 +5447,12 @@
         <input type="file" id="rev-pr-file" accept=".xlsb,.xlsx" multiple style="display:none;" onchange="revUploadPRs(this)">
         <span class="email-status" id="rev-status"></span>
       </div>
+      <div class="report-bar" style="align-items:center; gap:8px;">
+        <label style="font-size:12.5px; color:var(--slate); font-weight:600;" for="rev-projeto">Projeto</label>
+        <select class="rp-input" id="rev-projeto" style="min-width:280px;" onchange="revSetProjeto(this.value)"></select>
+      </div>
       <div class="small-note" style="margin-bottom:6px;" id="rev-fontes"></div>
-      <div class="small-note" style="margin-bottom:20px;">Confere, para o mes selecionado no topo, se as pessoas da sua planilha (matricula + taxa) estao com horas na aba HC das suas PRs e se a taxa e a mesma. A taxa da PR e a coluna TX da aba HC; a taxa do mes (bloco TAXA) aparece so como referencia. As PRs enviadas pelo botao "Subir PRs" do topo tambem alimentam esta aba. Os dados ficam salvos criptografados com a senha do gestor.</div>
+      <div class="small-note" style="margin-bottom:20px;">Confere, para o mes selecionado no topo, se as pessoas da sua planilha (matricula + taxa) estao com horas na aba HC das suas PRs e se a taxa e a mesma. A taxa da PR comparada e a do mes selecionado (bloco TAXA da aba HC). As PRs enviadas pelo botao "Subir PRs" do topo tambem alimentam esta aba. Os dados ficam salvos criptografados com a senha do gestor.</div>
       <div class="kpi-grid rev-kpi-grid">
         <div class="kpi-card"><div class="kpi-label">Pessoas na planilha</div><div class="kpi-value" id="rev-kpi-pessoas">-</div><div class="kpi-sub" id="rev-kpi-pessoas-sub"></div></div>
         <div class="kpi-card"><div class="kpi-label">Sem horas nas PRs</div><div class="kpi-value" id="rev-kpi-sem">-</div><div class="kpi-sub" id="rev-kpi-sem-sub"></div></div>
@@ -8962,18 +8966,28 @@ async function revUploadPRs(inp) {
 }
 
 // ---- Analise do mes ----
-function revAnalisar(mkey) {
+// Taxa da PR usada na comparacao: a do bloco TAXA no mes selecionado (ja reflete reajustes do mes).
+function revTaxaMes(o, mkey) { return o.taxa && typeof o.taxa[mkey] === 'number' ? o.taxa[mkey] : null; }
+
+// proj: '' = todos os projetos; senao so o que diz respeito aquele projeto (pessoas da planilha
+// alocadas nele ou presentes na PR dele, e lancamentos da PR dele).
+function revAnalisar(mkey, proj) {
   const byMat = {};
   Object.keys(REV.hc).forEach(function(code) {
     (REV.hc[code].pessoas || []).forEach(function(pe) {
       (byMat[pe.matricula] || (byMat[pe.matricula] = [])).push(Object.assign({ code: code }, pe));
     });
   });
+  const doProj = function(o) { return !proj || o.code === proj; };
   const planMats = new Set(REV.pessoas.map(function(p) { return p.matricula; }));
+  const pessoas = REV.pessoas.filter(function(p) {
+    return !proj || p.projetos.indexOf(proj) !== -1 || (byMat[p.matricula] || []).some(doProj);
+  });
   const semHoras = [], divergentes = [], fora = [];
   let comHoras = 0;
-  REV.pessoas.forEach(function(p) {
+  pessoas.forEach(function(p) {
     const occ = byMat[p.matricula] || [];
+    // "Tem horas" considera todas as PRs: quem esta alocado no projeto X mas lancado no Y nao e falta de horas.
     const comHorasMes = occ.filter(function(o) { return (o.horas[mkey] || 0) > 0; });
     if (!comHorasMes.length) {
       const semPR = p.projetos.filter(function(c) { return !REV.hc[c]; });
@@ -8985,20 +8999,42 @@ function revAnalisar(mkey) {
       return;
     }
     comHoras++;
-    comHorasMes.forEach(function(o) {
+    comHorasMes.filter(doProj).forEach(function(o) {
       if (p.taxa === null) return;
-      if (o.tx === null || Math.abs(o.tx - p.taxa) > 0.005) {
+      const tm = revTaxaMes(o, mkey);
+      if (tm === null || Math.abs(tm - p.taxa) > 0.005) {
         const h = o.horas[mkey];
-        divergentes.push({ p: p, code: o.code, taxaPR: o.tx, taxaMes: o.taxa[mkey] !== undefined ? o.taxa[mkey] : null, horas: h, impacto: o.tx === null ? null : (p.taxa - o.tx) * h });
+        divergentes.push({ p: p, code: o.code, taxaMes: tm, horas: h, impacto: tm === null ? null : (p.taxa - tm) * h });
       }
     });
   });
   Object.keys(byMat).forEach(function(mat) {
     if (planMats.has(mat)) return;
-    byMat[mat].forEach(function(o) { if ((o.horas[mkey] || 0) > 0) fora.push(o); });
+    byMat[mat].forEach(function(o) { if (doProj(o) && (o.horas[mkey] || 0) > 0) fora.push(o); });
   });
-  const citadosSemPR = Array.from(new Set([].concat.apply([], REV.pessoas.map(function(p) { return p.projetos; })))).filter(function(c) { return !REV.hc[c]; }).sort();
-  return { semHoras: semHoras, divergentes: divergentes, fora: fora, comHoras: comHoras, citadosSemPR: citadosSemPR };
+  const citadosSemPR = proj ? (REV.hc[proj] ? [] : [proj]) :
+    Array.from(new Set([].concat.apply([], REV.pessoas.map(function(p) { return p.projetos; })))).filter(function(c) { return !REV.hc[c]; }).sort();
+  return { pessoas: pessoas, semHoras: semHoras, divergentes: divergentes, fora: fora, comHoras: comHoras, citadosSemPR: citadosSemPR };
+}
+
+function revProjetoSel() { const el = document.getElementById('rev-projeto'); return el ? el.value : ''; }
+
+function revSetProjeto(v) {
+  try { localStorage.setItem('pr_rev_projeto', v); } catch (e) {}
+  renderRevisaoTab(document.getElementById('month-select').value);
+}
+
+// Opcoes do filtro: projetos com PR enviada + projetos citados na planilha.
+function revRenderFiltro() {
+  const sel = document.getElementById('rev-projeto');
+  const codes = Array.from(new Set(Object.keys(REV.hc).concat([].concat.apply([], REV.pessoas.map(function(p) { return p.projetos; }))))).sort();
+  let atual = sel.value;
+  if (!sel.options.length) { try { atual = localStorage.getItem('pr_rev_projeto') || ''; } catch (e) {} }
+  const nome = function(c) { const p = DATA.find(function(d) { return d.code === c; }); return p ? ' - ' + p.name : ''; };
+  sel.innerHTML = '<option value="">Todos os projetos</option>' + codes.map(function(c) {
+    return '<option value="' + c + '">' + c + rpEsc(nome(c)).slice(0, 60) + (REV.hc[c] ? '' : ' (sem PR)') + '</option>';
+  }).join('');
+  sel.value = codes.indexOf(atual) !== -1 ? atual : '';
 }
 
 function renderRevisaoTab(mkey) {
@@ -9008,6 +9044,7 @@ function renderRevisaoTab(mkey) {
   document.getElementById('rev-fontes').innerHTML =
     '<b>Planilha:</b> ' + (REV.pessoasArquivo ? rpEsc(REV.pessoasArquivo) + ' (' + REV.pessoas.length + ' pessoas, enviada em ' + dt(REV.pessoasData) + ')' : 'nenhuma enviada') +
     ' &middot; <b>PRs com HC:</b> ' + (prs.length ? prs.map(function(c) { return '<span title="' + rpEsc(REV.hc[c].arquivo) + ' - ' + dt(REV.hc[c].data) + '">' + c + '</span>'; }).join(', ') : 'nenhuma enviada');
+  revRenderFiltro();
   const vazio = function(id, msg) { document.getElementById(id).innerHTML = '<div class="small-note">' + msg + '</div>'; };
   const setKpi = function(id, v, sub) { document.getElementById('rev-kpi-' + id).textContent = v; document.getElementById('rev-kpi-' + id + '-sub').textContent = sub || ''; };
   if (!REV.pessoas.length || !prs.length) {
@@ -9016,27 +9053,34 @@ function renderRevisaoTab(mkey) {
     document.getElementById('rev-resumo').innerHTML = 'Para comecar, suba ' + (!REV.pessoas.length ? '<b>a planilha de pessoas</b>' : '') + (!REV.pessoas.length && !prs.length ? ' e ' : '') + (!prs.length ? '<b>as suas PRs</b> (a aba HC e lida automaticamente)' : '') + '.';
     return;
   }
-  const a = revAnalisar(mkey);
+  const proj = revProjetoSel();
+  const a = revAnalisar(mkey, proj);
   const mes = revMesNome(mkey);
+  const escopo = proj ? ' do ' + proj : '';
   const impacto = a.divergentes.reduce(function(s, d) { return s + (d.impacto || 0); }, 0);
+  const custoFora = a.fora.reduce(function(s, o) { return s + (o.horas[mkey] || 0) * (revTaxaMes(o, mkey) || o.tx || 0); }, 0);
   const pct = function(n, d) { return d ? Math.round(n / d * 100) + '%' : '-'; };
-  setKpi('pessoas', REV.pessoas.length, a.comHoras + ' com horas em ' + mes + ' (' + pct(a.comHoras, REV.pessoas.length) + ')');
+  setKpi('pessoas', a.pessoas.length, a.comHoras + ' com horas em ' + mes + ' (' + pct(a.comHoras, a.pessoas.length) + ')');
   setKpi('sem', a.semHoras.length, a.semHoras.filter(function(s) { return s.prNaoEnviada; }).length + ' por PR nao enviada');
   setKpi('taxa', a.divergentes.length, 'Impacto no mes: ' + brl(impacto));
-  setKpi('fora', a.fora.length, brl(a.fora.reduce(function(s, o) { return s + (o.horas[mkey] || 0) * (o.tx || 0); }, 0)) + ' de custo na PR');
+  setKpi('fora', a.fora.length, brl(custoFora) + ' de custo na PR');
 
   // Resumo executivo
   const nomes = function(list, f) { const n = list.slice(0, 5).map(f).join(', '); return n + (list.length > 5 ? ' e mais ' + (list.length - 5) : ''); };
   const itens = [];
-  itens.push('A planilha tem <b>' + REV.pessoas.length + ' pessoas</b>; <b>' + a.comHoras + ' (' + pct(a.comHoras, REV.pessoas.length) + ')</b> estao com horas nas PRs em ' + mes + ' (' + prs.length + ' PR(s) consideradas).');
+  if (proj) {
+    const p = DATA.find(function(d) { return d.code === proj; });
+    itens.push('<b>Projeto ' + proj + (p ? ' - ' + rpEsc(p.name) : '') + '</b>' + (REV.hc[proj] ? '' : ' -- <b>PR nao enviada</b>, so da para ver quem esta alocado nele pela planilha') + '.');
+  }
+  itens.push((proj ? 'Sao' : 'A planilha tem') + ' <b>' + a.pessoas.length + ' pessoas</b>' + (proj ? ' ligadas ao projeto' : '') + '; <b>' + a.comHoras + ' (' + pct(a.comHoras, a.pessoas.length) + ')</b> estao com horas nas PRs em ' + mes + (proj ? '' : ' (' + prs.length + ' PR(s) consideradas)') + '.');
   if (a.semHoras.length) itens.push('<b>' + a.semHoras.length + ' pessoa(s) sem horas</b> em ' + mes + ': ' + nomes(a.semHoras, function(s) { return rpEsc(s.p.nome || s.p.matricula); }) + '.');
-  else itens.push('Todas as pessoas da planilha estao com horas em ' + mes + '.');
+  else itens.push('Todas as pessoas' + (proj ? ' do projeto' : ' da planilha') + ' estao com horas em ' + mes + '.');
   if (a.divergentes.length) {
-    itens.push('<b>' + a.divergentes.length + ' taxa(s) divergente(s)</b> entre planilha e PR. Impacto estimado no custo de ' + mes + ': <b>' + brl(impacto) + '</b> ' +
+    itens.push('<b>' + a.divergentes.length + ' taxa(s) divergente(s)</b> entre a planilha e a taxa de ' + mes + ' na PR' + escopo + '. Impacto estimado no custo: <b>' + brl(impacto) + '</b> ' +
       (impacto > 0 ? '(a PR esta <b>subestimando</b> o custo).' : impacto < 0 ? '(a PR esta <b>superestimando</b> o custo).' : '.'));
-  } else itens.push('Todas as taxas das pessoas com horas em ' + mes + ' batem com a planilha.');
-  if (a.fora.length) itens.push('<b>' + a.fora.length + ' lancamento(s)</b> com horas nas PRs de pessoas que nao estao na planilha: ' + nomes(a.fora, function(o) { return rpEsc(o.nome || o.matricula) + ' (' + o.code + ')'; }) + '.');
-  if (a.citadosSemPR.length) itens.push('Projetos citados na planilha sem PR enviada: ' + a.citadosSemPR.join(', ') + '.');
+  } else itens.push('Todas as taxas de ' + mes + ' na PR' + escopo + ' batem com a planilha.');
+  if (a.fora.length) itens.push('<b>' + a.fora.length + ' lancamento(s)</b> com horas na PR' + (proj ? escopo : 's') + ' de pessoas que nao estao na planilha: ' + nomes(a.fora, function(o) { return rpEsc(o.nome || o.matricula) + (proj ? '' : ' (' + o.code + ')'); }) + '.');
+  if (!proj && a.citadosSemPR.length) itens.push('Projetos citados na planilha sem PR enviada: ' + a.citadosSemPR.join(', ') + '.');
   document.getElementById('rev-resumo').innerHTML = '<ul style="margin:0; padding-left:18px;">' + itens.map(function(t) { return '<li>' + t + '</li>'; }).join('') + '</ul>';
 
   // Tabelas
@@ -9048,18 +9092,21 @@ function renderRevisaoTab(mkey) {
 
   document.getElementById('rev-taxa-count').textContent = a.divergentes.length;
   if (!a.divergentes.length) vazio('rev-taxa', 'Nenhuma divergencia de taxa em ' + mes + '.');
-  else document.getElementById('rev-taxa').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th class="num">Taxa planilha</th><th class="num">Taxa PR (TX)</th><th class="num">Diferenca</th><th class="num">Taxa PR no mes</th><th class="num">Horas ' + mkey + '</th><th class="num">Impacto no mes</th></tr></thead><tbody>' +
+  else document.getElementById('rev-taxa').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th class="num">Taxa planilha</th><th class="num">Taxa PR ' + mkey + '</th><th class="num">Diferenca</th><th class="num">Horas ' + mkey + '</th><th class="num">Impacto no mes</th></tr></thead><tbody>' +
     a.divergentes.map(function(d) {
-      const dif = d.taxaPR === null ? null : d.p.taxa - d.taxaPR;
-      return '<tr><td>' + d.p.matricula + '</td><td>' + rpEsc(d.p.nome) + '</td><td>' + d.code + '</td><td class="num">' + brl(d.p.taxa) + '</td><td class="num">' + (d.taxaPR === null ? 'sem taxa' : brl(d.taxaPR)) +
-        '</td><td class="num ' + (dif > 0 ? 'bad' : 'ok') + '">' + (dif === null ? '-' : brl(dif)) + '</td><td class="num">' + (d.taxaMes === null ? '-' : brl(d.taxaMes)) + '</td><td class="num">' + rpNum(d.horas, 2) + '</td><td class="num">' + (d.impacto === null ? '-' : brl(d.impacto)) + '</td></tr>';
+      const dif = d.taxaMes === null ? null : d.p.taxa - d.taxaMes;
+      return '<tr><td>' + d.p.matricula + '</td><td>' + rpEsc(d.p.nome) + '</td><td>' + d.code + '</td><td class="num">' + brl(d.p.taxa) + '</td><td class="num">' + (d.taxaMes === null ? 'sem taxa no mes' : brl(d.taxaMes)) +
+        '</td><td class="num ' + (dif > 0 ? 'bad' : 'ok') + '">' + (dif === null ? '-' : brl(dif)) + '</td><td class="num">' + rpNum(d.horas, 2) + '</td><td class="num">' + (d.impacto === null ? '-' : brl(d.impacto)) + '</td></tr>';
     }).join('') +
-    '</tbody><tfoot><tr><td colspan="8">Total</td><td class="num">' + brl(impacto) + '</td></tr></tfoot></table></div>';
+    '</tbody><tfoot><tr><td colspan="7">Total</td><td class="num">' + brl(impacto) + '</td></tr></tfoot></table></div>';
 
   document.getElementById('rev-fora-count').textContent = a.fora.length;
-  if (!a.fora.length) vazio('rev-fora', 'Todas as pessoas com horas nas PRs em ' + mes + ' estao na planilha.');
-  else document.getElementById('rev-fora').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th>Status na PR</th><th class="num">Horas ' + mkey + '</th><th class="num">Taxa PR (TX)</th><th class="num">Custo no mes</th></tr></thead><tbody>' +
-    a.fora.map(function(o) { return '<tr><td>' + o.matricula + '</td><td>' + rpEsc(o.nome) + '</td><td>' + o.code + '</td><td>' + rpEsc(o.status) + '</td><td class="num">' + rpNum(o.horas[mkey], 2) + '</td><td class="num">' + (o.tx === null ? '-' : brl(o.tx)) + '</td><td class="num">' + brl((o.horas[mkey] || 0) * (o.tx || 0)) + '</td></tr>'; }).join('') +
+  if (!a.fora.length) vazio('rev-fora', 'Todas as pessoas com horas na' + (proj ? ' PR' + escopo : 's PRs') + ' em ' + mes + ' estao na planilha.');
+  else document.getElementById('rev-fora').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th>Status na PR</th><th class="num">Horas ' + mkey + '</th><th class="num">Taxa PR ' + mkey + '</th><th class="num">Custo no mes</th></tr></thead><tbody>' +
+    a.fora.map(function(o) {
+      const tm = revTaxaMes(o, mkey);
+      return '<tr><td>' + o.matricula + '</td><td>' + rpEsc(o.nome) + '</td><td>' + o.code + '</td><td>' + rpEsc(o.status) + '</td><td class="num">' + rpNum(o.horas[mkey], 2) + '</td><td class="num">' + (tm === null ? '-' : brl(tm)) + '</td><td class="num">' + brl((o.horas[mkey] || 0) * (tm || o.tx || 0)) + '</td></tr>';
+    }).join('') +
     '</tbody></table></div>';
 }
 
