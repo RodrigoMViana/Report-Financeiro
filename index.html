@@ -5452,20 +5452,20 @@
         <select class="rp-input" id="rev-projeto" style="min-width:280px;" onchange="revSetProjeto(this.value)"></select>
       </div>
       <div class="small-note" style="margin-bottom:6px;" id="rev-fontes"></div>
-      <div class="small-note" style="margin-bottom:20px;">Confere, para o mes selecionado no topo, se as pessoas da sua planilha (matricula + taxa) estao com horas na aba HC das suas PRs e se a taxa e a mesma. A taxa da PR comparada e a do mes selecionado (bloco TAXA da aba HC). As PRs enviadas pelo botao "Subir PRs" do topo tambem alimentam esta aba. Os dados ficam salvos criptografados com a senha do gestor.</div>
+      <div class="small-note" style="margin-bottom:20px;">Confere, para o mes selecionado no topo, as atribuicoes da sua planilha de pessoas (PEOPLE+ "Plano de recursos" ou "Recursos por UORG") contra a aba HC das suas PRs: quem esta atribuido ao projeto e sem horas na PR dele, quem tem horas na PR sem atribuicao ao projeto, e se a taxa da planilha bate com a taxa do mes na PR (bloco TAXA). Entram so os seus projetos e os que tem PR enviada. As PRs enviadas pelo botao "Subir PRs" do topo tambem alimentam esta aba. Os dados ficam salvos criptografados com a senha do gestor.</div>
       <div class="kpi-grid rev-kpi-grid">
-        <div class="kpi-card"><div class="kpi-label">Pessoas na planilha</div><div class="kpi-value" id="rev-kpi-pessoas">-</div><div class="kpi-sub" id="rev-kpi-pessoas-sub"></div></div>
+        <div class="kpi-card"><div class="kpi-label">Atribuicoes no mes</div><div class="kpi-value" id="rev-kpi-pessoas">-</div><div class="kpi-sub" id="rev-kpi-pessoas-sub"></div></div>
         <div class="kpi-card"><div class="kpi-label">Sem horas nas PRs</div><div class="kpi-value" id="rev-kpi-sem">-</div><div class="kpi-sub" id="rev-kpi-sem-sub"></div></div>
         <div class="kpi-card"><div class="kpi-label">Taxas divergentes</div><div class="kpi-value" id="rev-kpi-taxa">-</div><div class="kpi-sub" id="rev-kpi-taxa-sub"></div></div>
-        <div class="kpi-card"><div class="kpi-label">Nas PRs fora da planilha</div><div class="kpi-value" id="rev-kpi-fora">-</div><div class="kpi-sub" id="rev-kpi-fora-sub"></div></div>
+        <div class="kpi-card"><div class="kpi-label">Horas sem atribuicao</div><div class="kpi-value" id="rev-kpi-fora">-</div><div class="kpi-sub" id="rev-kpi-fora-sub"></div></div>
       </div>
       <div class="section-title">Resumo executivo</div>
       <div class="kpi-card" id="rev-resumo" style="font-size:13.5px; line-height:1.6;"></div>
-      <div class="section-title">Pessoas sem horas nas PRs <span class="count" id="rev-sem-count">0</span></div>
+      <div class="section-title">Atribuicoes sem horas na PR <span class="count" id="rev-sem-count">0</span></div>
       <div id="rev-sem"></div>
       <div class="section-title">Taxas divergentes <span class="count" id="rev-taxa-count">0</span></div>
       <div id="rev-taxa"></div>
-      <div class="section-title">Com horas nas PRs, fora da planilha <span class="count" id="rev-fora-count">0</span></div>
+      <div class="section-title">Horas na PR sem atribuicao na planilha <span class="count" id="rev-fora-count">0</span></div>
       <div id="rev-fora"></div>
     </div>
   </div>
@@ -8878,31 +8878,88 @@ function revPlanilhaRows(buf) {
   return rows;
 }
 
+// Dois formatos de planilha de pessoas:
+//  - "Plano de recursos" (PEOPLE+ planrecursos): uma linha por atribuicao (pessoa x projeto x elemento),
+//    com datas, % de atribuicao e % mes a mes (a partir do mes do relatorio).
+//  - "Recursos por UORG" (PEOPLE+ empleadosuorg) ou planilha simples: uma linha por pessoa, com o(s)
+//    projeto(s) citados e a taxa; vira uma atribuicao sem datas por projeto.
+var REV_MES_LABELS = { ENE: 0, JAN: 0, FEB: 1, FEV: 1, MAR: 2, ABR: 3, MAY: 4, MAI: 4, JUN: 5, JUL: 6, AGO: 7, SEP: 8, SET: 8, OCT: 9, OUT: 9, NOV: 10, DIC: 11, DEZ: 11 };
+
+function revTaxaNivel(v) {
+  const m = /^\s*([A-Z]{1,3}\d{0,2})\s*\/\s*([\d.,]+)\s*$/.exec(String(v == null ? '' : v));
+  return m ? { taxa: revNum(m[2]), nivel: m[1] } : null;
+}
+
+// Datas do PEOPLE+ vem como serial do Excel ("46266.00") ou dd/mm/aaaa.
+function revData(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  if (/^\d+(\.\d+)?$/.test(s)) return new Date(Date.UTC(1899, 11, 30) + Math.round(parseFloat(s)) * 86400000).toISOString().slice(0, 10);
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
+  return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : null;
+}
+
 function revParsePessoas(rows) {
   let h = -1;
   for (let i = 0; i < Math.min(rows.length, 30); i++) {
     const r = (rows[i] || []).map(revNorm);
-    if (r.some(function(v) { return v === 'CODIGO DE RECURSO' || v === 'MATRICULA'; })) { h = i; break; }
+    if (r.some(function(v) { return v === 'CODIGO DE RECURSO' || v === 'MATRICULA' || v === 'PROFISSIONAL'; })) { h = i; break; }
   }
-  if (h === -1) throw new Error('nao encontrei a coluna "Codigo de recurso" ou "Matricula".');
+  if (h === -1) throw new Error('nao encontrei a coluna "Profissional", "Codigo de recurso" ou "Matricula".');
   const head = rows[h].map(revNorm);
   const find = function(labels) { for (const l of labels) { const j = head.indexOf(l); if (j !== -1) return j; } return -1; };
-  const cMat = find(['CODIGO DE RECURSO', 'MATRICULA']);
-  const cNome = find(['NOME']);
+  const cMat = find(['PROFISSIONAL', 'CODIGO DE RECURSO', 'MATRICULA']);
+  const cNome = find(['NOME DO PROFISSIONAL', 'NOME']);
+  const cProj = find(['CODIGO PROJETO']);
+  const out = {};
+
+  if (cProj !== -1) {
+    // Plano de recursos. Colunas de mes: rotulos Sep/Oct/.../Ene/... no cabecalho; o ano inicial e o
+    // primeiro ano que aparece na linha de cima, e vira a cada "Ene".
+    const cTaxa = find(['TAXA/MONTANTE', 'TAXA / MONTANTE']);
+    const cElem = find(['ELEMENTO']);
+    const cIni = find(['DATA INICIO ATRIBUICAO']);
+    const cFim = find(['DATA FIM ATRIBUICAO']);
+    const cPct = find(['% ATRIBUICAO']);
+    const anoIni = (rows[h - 1] || []).map(function(v) { return parseInt(v, 10); }).find(function(n) { return n >= 2000 && n < 2100; }) || new Date().getFullYear();
+    const mesCols = [];
+    let ano = anoIni, prev = -1;
+    head.forEach(function(v, j) {
+      if (!(v in REV_MES_LABELS)) return;
+      const idx = REV_MES_LABELS[v];
+      if (prev !== -1 && idx <= prev) ano++;
+      prev = idx;
+      mesCols.push({ col: j, chave: ano + '-' + String(idx + 1).padStart(2, '0') });
+    });
+    for (let i = h + 1; i < rows.length; i++) {
+      const r = rows[i] || [];
+      const mat = revMat(r[cMat]);
+      const code = (String(r[cProj] || '').match(/\d{2}AP\d{1,3}/) || [])[0];
+      if (!mat) continue;
+      const tn = revTaxaNivel(r[cTaxa]);
+      const pe = out[mat] || (out[mat] = { matricula: mat, nome: String(r[cNome] || '').replace(/\u00a0/g, ' ').trim(), taxa: tn ? tn.taxa : null, nivel: tn ? tn.nivel : '', projetos: [], atrib: [] });
+      if (pe.taxa === null && tn) { pe.taxa = tn.taxa; pe.nivel = tn.nivel; }
+      if (!code) continue;
+      const meses = {};
+      mesCols.forEach(function(mc) { const v = revNum(r[mc.col]); if (v !== null) meses[mc.chave] = v; });
+      pe.atrib.push({ code: code, elemento: String(r[cElem] || '').trim(), ini: revData(r[cIni]), fim: revData(r[cFim]), pct: revNum(r[cPct]), meses: meses, mesInicial: mesCols.length ? mesCols[0].chave : null });
+      if (pe.projetos.indexOf(code) === -1) pe.projetos.push(code);
+    }
+    return Object.values(out);
+  }
+
+  // Recursos por UORG / planilha simples.
   const cValor = find(['VALOR', 'TAXA (R$)', 'TAXA R$', 'VALOR TAXA']);
   const cTaxa = find(['TAXA']);
-  const out = {};
   for (let i = h + 1; i < rows.length; i++) {
     const r = rows[i] || [];
     const mat = revMat(r[cMat]);
     if (!mat) continue;
-    // No PEOPLE+ as linhas de dados vem com uma coluna a menos que o cabecalho ("Comentario UGR"),
+    // No PEOPLE+ por UORG as linhas de dados vem com uma coluna a menos que o cabecalho ("Comentario UGR"),
     // entao taxa e projetos sao achados pelo conteudo ("R8 / 155,48" e "22AP09") e nao pela posicao.
-    let taxa = null, nivel = '';
-    for (const v of r) {
-      const m = /^\s*([A-Z]{1,3}\d{0,2})\s*\/\s*([\d.,]+)\s*$/.exec(String(v == null ? '' : v));
-      if (m) { taxa = revNum(m[2]); nivel = m[1]; break; }
-    }
+    let tn = null;
+    for (const v of r) { tn = revTaxaNivel(v); if (tn) break; }
+    let taxa = tn ? tn.taxa : null;
     if (taxa === null && cValor !== -1) taxa = revNum(r[cValor]);
     if (taxa === null && cTaxa !== -1) taxa = revNum(r[cTaxa]);
     const projetos = [];
@@ -8910,13 +8967,7 @@ function revParsePessoas(rows) {
       if (j === cNome) return;
       (String(v == null ? '' : v).match(/\d{2}AP\d{1,3}/g) || []).forEach(function(c) { if (projetos.indexOf(c) === -1) projetos.push(c); });
     });
-    out[mat] = {
-      matricula: mat,
-      nome: String(cNome !== -1 ? r[cNome] || '' : '').replace(/\u00a0/g, ' ').trim(),
-      taxa: taxa,
-      nivel: nivel,
-      projetos: projetos
-    };
+    out[mat] = { matricula: mat, nome: String(cNome !== -1 ? r[cNome] || '' : '').replace(/\u00a0/g, ' ').trim(), taxa: taxa, nivel: tn ? tn.nivel : '', projetos: projetos };
   }
   return Object.values(out);
 }
@@ -8969,52 +9020,90 @@ async function revUploadPRs(inp) {
 // Taxa da PR usada na comparacao: a do bloco TAXA no mes selecionado (ja reflete reajustes do mes).
 function revTaxaMes(o, mkey) { return o.taxa && typeof o.taxa[mkey] === 'number' ? o.taxa[mkey] : null; }
 
-// proj: '' = todos os projetos; senao so o que diz respeito aquele projeto (pessoas da planilha
-// alocadas nele ou presentes na PR dele, e lancamentos da PR dele).
+// Atribuicoes da pessoa. Planilhas por UORG (sem atribuicoes) viram uma atribuicao sem datas por projeto.
+function revAtribs(p) {
+  return p.atrib || p.projetos.map(function(c) { return { code: c, elemento: '', ini: null, fim: null, pct: null, meses: null }; });
+}
+
+// Atribuicao ativa no mes: pelo % do mes quando o relatorio tem a coluna; senao, pelas datas de inicio/fim.
+// Retorna o % do mes (ou o % da atribuicao), null se nao se sabe, ou false se nao esta ativa.
+function revAtivaNoMes(a, mkey) {
+  const ano = rpAnoRef(mkey), idx = MESES.indexOf(mkey);
+  const chave = ano + '-' + String(idx + 1).padStart(2, '0');
+  if (a.meses && a.mesInicial && chave >= a.mesInicial) return (a.meses[chave] || 0) > 0 ? a.meses[chave] : false;
+  const ini = chave + '-01', fim = chave + '-' + String(new Date(ano, idx + 1, 0).getDate()).padStart(2, '0');
+  if (a.ini && a.ini > fim) return false;
+  if (a.fim && a.fim < ini) return false;
+  return a.pct;
+}
+
+// So entram na conferencia os projetos do gestor e os que tem PR enviada -- a planilha do PEOPLE+
+// traz a unidade inteira, e projetos de outros gestores sem PR so gerariam alerta falso.
+function revProjetoConsiderado(code) {
+  if (REV.hc[code]) return true;
+  const p = DATA.find(function(d) { return d.code === code; });
+  return !!p && (p.gestor || 'Rodrigo') === RP_GESTOR;
+}
+
+// proj: '' = todos os projetos considerados; senao so aquele projeto.
 function revAnalisar(mkey, proj) {
-  const byMat = {};
+  const mes = revMesNome(mkey);
+  const hcDe = function(code, mat) { const h = REV.hc[code]; return h ? (h.pessoas || []).find(function(pe) { return pe.matricula === mat; }) || null : null; };
+  const doProj = function(code) { return !proj || code === proj; };
+  const planByMat = {};
+  REV.pessoas.forEach(function(p) { planByMat[p.matricula] = p; });
+  const horasEm = {};  // matricula -> [codigos com horas no mes]
   Object.keys(REV.hc).forEach(function(code) {
-    (REV.hc[code].pessoas || []).forEach(function(pe) {
-      (byMat[pe.matricula] || (byMat[pe.matricula] = [])).push(Object.assign({ code: code }, pe));
-    });
+    (REV.hc[code].pessoas || []).forEach(function(pe) { if ((pe.horas[mkey] || 0) > 0) (horasEm[pe.matricula] || (horasEm[pe.matricula] = [])).push(code); });
   });
-  const doProj = function(o) { return !proj || o.code === proj; };
-  const planMats = new Set(REV.pessoas.map(function(p) { return p.matricula; }));
-  const pessoas = REV.pessoas.filter(function(p) {
-    return !proj || p.projetos.indexOf(proj) !== -1 || (byMat[p.matricula] || []).some(doProj);
-  });
-  const semHoras = [], divergentes = [], fora = [];
-  let comHoras = 0;
-  pessoas.forEach(function(p) {
-    const occ = byMat[p.matricula] || [];
-    // "Tem horas" considera todas as PRs: quem esta alocado no projeto X mas lancado no Y nao e falta de horas.
-    const comHorasMes = occ.filter(function(o) { return (o.horas[mkey] || 0) > 0; });
-    if (!comHorasMes.length) {
-      const semPR = p.projetos.filter(function(c) { return !REV.hc[c]; });
+
+  // 1) Atribuicoes ativas no mes x horas na PR do mesmo projeto.
+  const atribuicoes = [], semHoras = [], ignorados = {};
+  REV.pessoas.forEach(function(p) {
+    revAtribs(p).forEach(function(a) {
+      const ativa = revAtivaNoMes(a, mkey);
+      if (ativa === false || !doProj(a.code)) return;
+      if (!revProjetoConsiderado(a.code)) { ignorados[a.code] = (ignorados[a.code] || 0) + 1; return; }
+      const o = hcDe(a.code, p.matricula);
+      const horas = o ? (o.horas[mkey] || 0) : 0;
+      atribuicoes.push({ p: p, a: a, horas: horas });
+      if (horas > 0) return;
+      const outras = (horasEm[p.matricula] || []).filter(function(c) { return c !== a.code; });
       let situacao;
-      if (occ.length) situacao = 'Esta na PR de ' + occ.map(function(o) { return o.code; }).join(', ') + ', sem horas em ' + revMesNome(mkey);
-      else if (p.projetos.length && semPR.length === p.projetos.length) situacao = 'PR de ' + semPR.join(', ') + ' nao enviada';
-      else situacao = 'Nao aparece em nenhuma PR enviada';
-      semHoras.push({ p: p, situacao: situacao, prNaoEnviada: !occ.length && p.projetos.length > 0 && semPR.length === p.projetos.length });
-      return;
-    }
-    comHoras++;
-    comHorasMes.filter(doProj).forEach(function(o) {
-      if (p.taxa === null) return;
-      const tm = revTaxaMes(o, mkey);
-      if (tm === null || Math.abs(tm - p.taxa) > 0.005) {
-        const h = o.horas[mkey];
-        divergentes.push({ p: p, code: o.code, taxaMes: tm, horas: h, impacto: tm === null ? null : (p.taxa - tm) * h });
-      }
+      if (!REV.hc[a.code]) situacao = 'PR do ' + a.code + ' nao enviada';
+      else if (!o) situacao = 'Nao esta na PR do ' + a.code;
+      else situacao = 'Esta na PR do ' + a.code + ', sem horas em ' + mes;
+      if (outras.length) situacao += ' (tem horas em ' + outras.join(', ') + ')';
+      semHoras.push({ p: p, a: a, pct: ativa, situacao: situacao, prNaoEnviada: !REV.hc[a.code] });
     });
   });
-  Object.keys(byMat).forEach(function(mat) {
-    if (planMats.has(mat)) return;
-    byMat[mat].forEach(function(o) { if (doProj(o) && (o.horas[mkey] || 0) > 0) fora.push(o); });
+
+  // 2) e 3) Lancamentos com horas no mes: taxa x planilha e se ha atribuicao ao projeto.
+  const divergentes = [], fora = [];
+  Object.keys(REV.hc).forEach(function(code) {
+    if (!doProj(code)) return;
+    (REV.hc[code].pessoas || []).forEach(function(o) {
+      const h = o.horas[mkey] || 0;
+      if (h <= 0) return;
+      const p = planByMat[o.matricula];
+      const tm = revTaxaMes(o, mkey);
+      if (p && p.taxa !== null && (tm === null || Math.abs(tm - p.taxa) > 0.005)) {
+        divergentes.push({ p: p, code: code, taxaMes: tm, horas: h, impacto: tm === null ? null : (p.taxa - tm) * h });
+      }
+      const ativas = p ? revAtribs(p).filter(function(a) { return revAtivaNoMes(a, mkey) !== false; }) : [];
+      if (ativas.some(function(a) { return a.code === code; })) return;
+      let situacao;
+      if (!p) situacao = 'Nao esta na planilha';
+      else if (ativas.length) situacao = 'Na planilha esta atribuido a ' + ativas.map(function(a) { return a.code; }).join(', ') + ' em ' + mes;
+      else if (revAtribs(p).some(function(a) { return a.code === code; })) situacao = 'Atribuicao ao ' + code + ' fora do periodo';
+      else situacao = 'Sem atribuicao ativa em ' + mes;
+      fora.push(Object.assign({ code: code, situacao: situacao, taxaMes: tm }, o));
+    });
   });
-  const citadosSemPR = proj ? (REV.hc[proj] ? [] : [proj]) :
-    Array.from(new Set([].concat.apply([], REV.pessoas.map(function(p) { return p.projetos; })))).filter(function(c) { return !REV.hc[c]; }).sort();
-  return { pessoas: pessoas, semHoras: semHoras, divergentes: divergentes, fora: fora, comHoras: comHoras, citadosSemPR: citadosSemPR };
+
+  const comHoras = atribuicoes.filter(function(x) { return x.horas > 0; }).length;
+  const pessoas = new Set(atribuicoes.map(function(x) { return x.p.matricula; })).size;
+  return { atribuicoes: atribuicoes, pessoas: pessoas, comHoras: comHoras, semHoras: semHoras, divergentes: divergentes, fora: fora, ignorados: ignorados };
 }
 
 function revProjetoSel() { const el = document.getElementById('rev-projeto'); return el ? el.value : ''; }
@@ -9024,10 +9113,11 @@ function revSetProjeto(v) {
   renderRevisaoTab(document.getElementById('month-select').value);
 }
 
-// Opcoes do filtro: projetos com PR enviada + projetos citados na planilha.
+// Opcoes do filtro: projetos com PR enviada + projetos do gestor citados na planilha.
 function revRenderFiltro() {
   const sel = document.getElementById('rev-projeto');
-  const codes = Array.from(new Set(Object.keys(REV.hc).concat([].concat.apply([], REV.pessoas.map(function(p) { return p.projetos; }))))).sort();
+  const citados = [].concat.apply([], REV.pessoas.map(function(p) { return revAtribs(p).map(function(a) { return a.code; }); }));
+  const codes = Array.from(new Set(Object.keys(REV.hc).concat(citados))).filter(revProjetoConsiderado).sort();
   let atual = sel.value;
   if (!sel.options.length) { try { atual = localStorage.getItem('pr_rev_projeto') || ''; } catch (e) {} }
   const nome = function(c) { const p = DATA.find(function(d) { return d.code === c; }); return p ? ' - ' + p.name : ''; };
@@ -9058,9 +9148,10 @@ function renderRevisaoTab(mkey) {
   const mes = revMesNome(mkey);
   const escopo = proj ? ' do ' + proj : '';
   const impacto = a.divergentes.reduce(function(s, d) { return s + (d.impacto || 0); }, 0);
-  const custoFora = a.fora.reduce(function(s, o) { return s + (o.horas[mkey] || 0) * (revTaxaMes(o, mkey) || o.tx || 0); }, 0);
+  const custoFora = a.fora.reduce(function(s, o) { return s + (o.horas[mkey] || 0) * (o.taxaMes || o.tx || 0); }, 0);
   const pct = function(n, d) { return d ? Math.round(n / d * 100) + '%' : '-'; };
-  setKpi('pessoas', a.pessoas.length, a.comHoras + ' com horas em ' + mes + ' (' + pct(a.comHoras, a.pessoas.length) + ')');
+  const pctAtr = function(v) { return v === null || v === undefined ? '-' : rpNum(v, 0) + '%'; };
+  setKpi('pessoas', a.atribuicoes.length, a.comHoras + ' com horas na PR (' + pct(a.comHoras, a.atribuicoes.length) + ') - ' + a.pessoas + ' pessoa(s)');
   setKpi('sem', a.semHoras.length, a.semHoras.filter(function(s) { return s.prNaoEnviada; }).length + ' por PR nao enviada');
   setKpi('taxa', a.divergentes.length, 'Impacto no mes: ' + brl(impacto));
   setKpi('fora', a.fora.length, brl(custoFora) + ' de custo na PR');
@@ -9070,24 +9161,25 @@ function renderRevisaoTab(mkey) {
   const itens = [];
   if (proj) {
     const p = DATA.find(function(d) { return d.code === proj; });
-    itens.push('<b>Projeto ' + proj + (p ? ' - ' + rpEsc(p.name) : '') + '</b>' + (REV.hc[proj] ? '' : ' -- <b>PR nao enviada</b>, so da para ver quem esta alocado nele pela planilha') + '.');
+    itens.push('<b>Projeto ' + proj + (p ? ' - ' + rpEsc(p.name) : '') + '</b>' + (REV.hc[proj] ? '' : ' -- <b>PR nao enviada</b>, so da para ver quem esta atribuido nele pela planilha') + '.');
   }
-  itens.push((proj ? 'Sao' : 'A planilha tem') + ' <b>' + a.pessoas.length + ' pessoas</b>' + (proj ? ' ligadas ao projeto' : '') + '; <b>' + a.comHoras + ' (' + pct(a.comHoras, a.pessoas.length) + ')</b> estao com horas nas PRs em ' + mes + (proj ? '' : ' (' + prs.length + ' PR(s) consideradas)') + '.');
-  if (a.semHoras.length) itens.push('<b>' + a.semHoras.length + ' pessoa(s) sem horas</b> em ' + mes + ': ' + nomes(a.semHoras, function(s) { return rpEsc(s.p.nome || s.p.matricula); }) + '.');
-  else itens.push('Todas as pessoas' + (proj ? ' do projeto' : ' da planilha') + ' estao com horas em ' + mes + '.');
+  itens.push('<b>' + a.atribuicoes.length + ' atribuicao(oes) ativa(s)</b> em ' + mes + escopo + ' na planilha (' + a.pessoas + ' pessoa(s)); <b>' + a.comHoras + ' (' + pct(a.comHoras, a.atribuicoes.length) + ')</b> com horas na PR do projeto' + (proj ? '' : ' (' + prs.length + ' PR(s) consideradas)') + '.');
+  if (a.semHoras.length) itens.push('<b>' + a.semHoras.length + ' atribuicao(oes) sem horas</b> na PR em ' + mes + ': ' + nomes(a.semHoras, function(s) { return rpEsc(s.p.nome || s.p.matricula) + (proj ? '' : ' (' + s.a.code + ')'); }) + '.');
+  else itens.push('Todas as atribuicoes ativas' + escopo + ' estao com horas na PR em ' + mes + '.');
   if (a.divergentes.length) {
     itens.push('<b>' + a.divergentes.length + ' taxa(s) divergente(s)</b> entre a planilha e a taxa de ' + mes + ' na PR' + escopo + '. Impacto estimado no custo: <b>' + brl(impacto) + '</b> ' +
       (impacto > 0 ? '(a PR esta <b>subestimando</b> o custo).' : impacto < 0 ? '(a PR esta <b>superestimando</b> o custo).' : '.'));
   } else itens.push('Todas as taxas de ' + mes + ' na PR' + escopo + ' batem com a planilha.');
-  if (a.fora.length) itens.push('<b>' + a.fora.length + ' lancamento(s)</b> com horas na PR' + (proj ? escopo : 's') + ' de pessoas que nao estao na planilha: ' + nomes(a.fora, function(o) { return rpEsc(o.nome || o.matricula) + (proj ? '' : ' (' + o.code + ')'); }) + '.');
-  if (!proj && a.citadosSemPR.length) itens.push('Projetos citados na planilha sem PR enviada: ' + a.citadosSemPR.join(', ') + '.');
+  if (a.fora.length) itens.push('<b>' + a.fora.length + ' lancamento(s)</b> com horas ' + (proj ? 'na PR' + escopo : 'nas PRs') + ' sem atribuicao ao projeto na planilha: ' + nomes(a.fora, function(o) { return rpEsc(o.nome || o.matricula) + (proj ? '' : ' (' + o.code + ')'); }) + '.');
+  const ign = Object.keys(a.ignorados).sort();
+  if (!proj && ign.length) itens.push('Atribuicoes em projetos de outros gestores sem PR enviada nao foram conferidas: ' + ign.map(function(c) { return c + ' (' + a.ignorados[c] + ')'; }).join(', ') + '.');
   document.getElementById('rev-resumo').innerHTML = '<ul style="margin:0; padding-left:18px;">' + itens.map(function(t) { return '<li>' + t + '</li>'; }).join('') + '</ul>';
 
   // Tabelas
   document.getElementById('rev-sem-count').textContent = a.semHoras.length;
-  if (!a.semHoras.length) vazio('rev-sem', 'Nenhuma pessoa sem horas em ' + mes + '.');
-  else document.getElementById('rev-sem').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto(s) na planilha</th><th class="num">Taxa planilha</th><th>Situacao</th></tr></thead><tbody>' +
-    a.semHoras.map(function(s) { return '<tr><td>' + s.p.matricula + '</td><td>' + rpEsc(s.p.nome) + '</td><td>' + (s.p.projetos.join(', ') || '-') + '</td><td class="num">' + (s.p.taxa === null ? '-' : brl(s.p.taxa)) + '</td><td>' + rpEsc(s.situacao) + '</td></tr>'; }).join('') +
+  if (!a.semHoras.length) vazio('rev-sem', 'Nenhuma atribuicao sem horas em ' + mes + '.');
+  else document.getElementById('rev-sem').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto</th><th>Elemento</th><th class="num">% ' + mkey + '</th><th class="num">Taxa planilha</th><th>Situacao</th></tr></thead><tbody>' +
+    a.semHoras.map(function(s) { return '<tr><td>' + s.p.matricula + '</td><td>' + rpEsc(s.p.nome) + '</td><td>' + s.a.code + '</td><td>' + rpEsc(s.a.elemento || '-') + '</td><td class="num">' + pctAtr(s.pct) + '</td><td class="num">' + (s.p.taxa === null ? '-' : brl(s.p.taxa)) + '</td><td>' + rpEsc(s.situacao) + '</td></tr>'; }).join('') +
     '</tbody></table></div>';
 
   document.getElementById('rev-taxa-count').textContent = a.divergentes.length;
@@ -9101,11 +9193,10 @@ function renderRevisaoTab(mkey) {
     '</tbody><tfoot><tr><td colspan="7">Total</td><td class="num">' + brl(impacto) + '</td></tr></tfoot></table></div>';
 
   document.getElementById('rev-fora-count').textContent = a.fora.length;
-  if (!a.fora.length) vazio('rev-fora', 'Todas as pessoas com horas na' + (proj ? ' PR' + escopo : 's PRs') + ' em ' + mes + ' estao na planilha.');
-  else document.getElementById('rev-fora').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th>Status na PR</th><th class="num">Horas ' + mkey + '</th><th class="num">Taxa PR ' + mkey + '</th><th class="num">Custo no mes</th></tr></thead><tbody>' +
+  if (!a.fora.length) vazio('rev-fora', 'Todos os lancamentos com horas na' + (proj ? ' PR' + escopo : 's PRs') + ' em ' + mes + ' tem atribuicao ao projeto na planilha.');
+  else document.getElementById('rev-fora').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th>Status na PR</th><th class="num">Horas ' + mkey + '</th><th class="num">Taxa PR ' + mkey + '</th><th class="num">Custo no mes</th><th>Situacao</th></tr></thead><tbody>' +
     a.fora.map(function(o) {
-      const tm = revTaxaMes(o, mkey);
-      return '<tr><td>' + o.matricula + '</td><td>' + rpEsc(o.nome) + '</td><td>' + o.code + '</td><td>' + rpEsc(o.status) + '</td><td class="num">' + rpNum(o.horas[mkey], 2) + '</td><td class="num">' + (tm === null ? '-' : brl(tm)) + '</td><td class="num">' + brl((o.horas[mkey] || 0) * (tm || o.tx || 0)) + '</td></tr>';
+      return '<tr><td>' + o.matricula + '</td><td>' + rpEsc(o.nome) + '</td><td>' + o.code + '</td><td>' + rpEsc(o.status) + '</td><td class="num">' + rpNum(o.horas[mkey], 2) + '</td><td class="num">' + (o.taxaMes === null ? '-' : brl(o.taxaMes)) + '</td><td class="num">' + brl((o.horas[mkey] || 0) * (o.taxaMes || o.tx || 0)) + '</td><td>' + rpEsc(o.situacao) + '</td></tr>';
     }).join('') +
     '</tbody></table></div>';
 }
@@ -9130,7 +9221,13 @@ var RP = null;           // { pessoas: [{id, nome, taxa}], meses: { MKEY: { id: 
 var RP_OPEN = {};
 var RP_SAVE_TIMER = null;
 
-function rpB64(buf) { return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+// Em blocos: String.fromCharCode.apply com o buffer inteiro estoura a pilha em dados grandes (Revisao).
+function rpB64(buf) {
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
 function rpUnB64(s) { return Uint8Array.from(atob(s), function(c) { return c.charCodeAt(0); }); }
 function rpEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function rpNum(v, d) { return (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
