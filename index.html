@@ -151,6 +151,8 @@
   @media (max-width: 760px) { .tr-row-4, .tr-row-3 { grid-template-columns:1fr; } }
   table.tr-table td { white-space:nowrap; }
   table.tr-table a { font-size:12px; margin-left:8px; }
+  .rev-kpi-grid { grid-template-columns:repeat(4, 1fr); }
+  @media (max-width: 760px) { .rev-kpi-grid { grid-template-columns:1fr 1fr; } }
   .rp-lock { max-width:420px; margin:40px auto; background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; text-align:center; }
   .rp-lock h3 { margin:0 0 6px; color:var(--navy); font-size:18px; }
   .rp-lock p { margin:0 0 16px; color:var(--slate); font-size:13px; }
@@ -163,7 +165,7 @@
   table.rp-table tfoot td { font-weight:700; color:var(--navy); border-top:2px solid var(--border); }
 
   @media print {
-    #tab-rateio, .tab-btn[data-tab="rateio"], #tab-transferencias, .tab-btn[data-tab="transferencias"] { display:none !important; }
+    #tab-rateio, .tab-btn[data-tab="rateio"], #tab-transferencias, .tab-btn[data-tab="transferencias"], #tab-revisao, .tab-btn[data-tab="revisao"] { display:none !important; }
     .report-bar, .email-panel, .month-picker, .chevron, .obs-toolbar { display:none !important; }
     .project-card summary { cursor:default; }
     body { background:#fff; }
@@ -277,6 +279,7 @@
     <button type="button" class="tab-btn" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
     <button type="button" class="tab-btn" data-tab="transferencias" onclick="showTab('transferencias')">&#128274; Transferencias</button>
     <button type="button" class="tab-btn" data-tab="rateio" onclick="showTab('rateio')">&#128274; Rateio</button>
+    <button type="button" class="tab-btn" data-tab="revisao" onclick="showTab('revisao')">&#128274; Revisao</button>
   </div>
 
   <div id="tab-geral" class="tab-panel active">
@@ -5425,6 +5428,44 @@
     </div>
   </div>
 
+  <div id="tab-revisao" class="tab-panel">
+    <div id="rev-locked">
+      <div class="rp-lock">
+        <h3 id="rev-lock-title">&#128274; Revisao</h3>
+        <p id="rev-lock-msg">Area restrita. Informe a senha do rateio.</p>
+        <input type="password" id="rev-pass" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter') revUnlock()">
+        <button type="button" id="rev-unlock-btn" onclick="revUnlock()">Entrar</button>
+        <div class="email-status" id="rev-lock-status"></div>
+      </div>
+    </div>
+    <div id="rev-unlocked" style="display:none;">
+      <div class="report-bar" style="align-items:center;">
+        <button type="button" onclick="document.getElementById('rev-pessoas-file').click()">Subir planilha de pessoas</button>
+        <button type="button" onclick="document.getElementById('rev-pr-file').click()">Subir PRs (aba HC)</button>
+        <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
+        <input type="file" id="rev-pessoas-file" accept=".xls,.xlsx,.xml,.csv" style="display:none;" onchange="revUploadPessoas(this)">
+        <input type="file" id="rev-pr-file" accept=".xlsb,.xlsx" multiple style="display:none;" onchange="revUploadPRs(this)">
+        <span class="email-status" id="rev-status"></span>
+      </div>
+      <div class="small-note" style="margin-bottom:6px;" id="rev-fontes"></div>
+      <div class="small-note" style="margin-bottom:20px;">Confere, para o mes selecionado no topo, se as pessoas da sua planilha (matricula + taxa) estao com horas na aba HC das suas PRs e se a taxa e a mesma. A taxa da PR e a coluna TX da aba HC; a taxa do mes (bloco TAXA) aparece so como referencia. As PRs enviadas pelo botao "Subir PRs" do topo tambem alimentam esta aba. Os dados ficam salvos criptografados com a senha do gestor.</div>
+      <div class="kpi-grid rev-kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Pessoas na planilha</div><div class="kpi-value" id="rev-kpi-pessoas">-</div><div class="kpi-sub" id="rev-kpi-pessoas-sub"></div></div>
+        <div class="kpi-card"><div class="kpi-label">Sem horas nas PRs</div><div class="kpi-value" id="rev-kpi-sem">-</div><div class="kpi-sub" id="rev-kpi-sem-sub"></div></div>
+        <div class="kpi-card"><div class="kpi-label">Taxas divergentes</div><div class="kpi-value" id="rev-kpi-taxa">-</div><div class="kpi-sub" id="rev-kpi-taxa-sub"></div></div>
+        <div class="kpi-card"><div class="kpi-label">Nas PRs fora da planilha</div><div class="kpi-value" id="rev-kpi-fora">-</div><div class="kpi-sub" id="rev-kpi-fora-sub"></div></div>
+      </div>
+      <div class="section-title">Resumo executivo</div>
+      <div class="kpi-card" id="rev-resumo" style="font-size:13.5px; line-height:1.6;"></div>
+      <div class="section-title">Pessoas sem horas nas PRs <span class="count" id="rev-sem-count">0</span></div>
+      <div id="rev-sem"></div>
+      <div class="section-title">Taxas divergentes <span class="count" id="rev-taxa-count">0</span></div>
+      <div id="rev-taxa"></div>
+      <div class="section-title">Com horas nas PRs, fora da planilha <span class="count" id="rev-fora-count">0</span></div>
+      <div id="rev-fora"></div>
+    </div>
+  </div>
+
   <div class="footer-note">
     Gerado automaticamente a partir das planilhas de PR (aba RESUMO) e do Pre Cierre (aba FC) &middot; AAPP Sanidad
   </div>
@@ -6073,7 +6114,7 @@ function enviarEmail() {
 }
 
 function normalizeText(s) {
-  return (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  return (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
 // ---------- Filtro multi-selecao de projetos (Geral/Faturamento/Cobro/Fechamento/Parametrizacao) ----------
@@ -6185,7 +6226,7 @@ function clearProjectFilter() {
 }
 
 function showTab(name) {
-  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'transferencias', 'rateio'].forEach(function(t) {
+  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'transferencias', 'rateio', 'revisao'].forEach(function(t) {
     var panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
     var btn = document.querySelector('.tab-btn[data-tab="' + t + '"]');
@@ -6627,6 +6668,7 @@ function renderAllTabs(mkey) {
   renderParamTab(mkey);
   renderRateioTab(mkey);
   loadTransfMonth(mkey);
+  renderRevisaoTab(mkey);
   loadStatusForMonth('fat', mkey);
   loadStatusForMonth('cob', mkey);
   loadStatusForMonth('fech', mkey);
@@ -7491,7 +7533,7 @@ function tokenizeFichaParagraphs(html) {
   let m;
   while ((m = re.exec(html)) !== null) {
     let t = m[1].replace(/<[^>]+>/g, '');
-    t = htmlUnescapeFicha(t).replace(/ /g, ' ').trim();
+    t = htmlUnescapeFicha(t).replace(/\u00a0/g, ' ').trim();
     if (t !== '') tokens.push(t);
   }
   return tokens;
@@ -8175,6 +8217,8 @@ async function handlePrFiles(event){
       const colmap = mapPrYearColumnsJS(rows, 2026);
       if (!colmap){ parseErrors.push(file.name + ' (ano 2026 nao encontrado)'); continue; }
       PR_CACHE[code] = getPrProjectJS(rows, colmap);
+      // A aba HC da mesma PR alimenta a Revisao (pessoas x horas x taxa) do gestor.
+      try { const hc = revExtractHC(wb, code, file.name); if (hc) revQueueHC(hc); } catch (e) {}
       touched.push(code);
     } catch (e) {
       parseErrors.push(file.name + ' (' + e.message + ')');
@@ -8635,6 +8679,390 @@ async function trPreencherPlanilha(file, linhas) {
   return { blob: blob, preenchidas: usadas.length, primeira: usadas[0], ultima: usadas[usadas.length - 1], aba: sheetEl.getAttribute('name') };
 }
 
+// ---------- Revisao: planilha de pessoas x aba HC das PRs ----------
+// Cada gestor sobe a sua planilha de pessoas (matricula + taxa, ex.: relatorio PEOPLE+ por UORG) e as
+// suas PRs; a aba confere, no mes selecionado, quem esta sem horas nas PRs, quem esta com taxa diferente
+// e quem tem horas nas PRs mas nao esta na planilha. Tudo fica num JSON cifrado com a mesma chave do
+// Rateio do gestor ('__REVISAO__::<gestor>' na tabela notes) -- nomes e taxas nao ficam legiveis.
+var REV = null;              // { pessoas: [...], pessoasArquivo, pessoasData, hc: { code: {arquivo, data, pessoas: [...]} } }
+var REV_HC_PENDING = {};     // HC lido pelo "Atualizar PRs" do topo enquanto a Revisao estava bloqueada
+var REV_REMOTE = SUPABASE_CONFIGURED && !/^(localhost|127\.0\.0\.1|\[::1\]|)$/.test(location.hostname);
+
+function revComposite(g) { return '__REVISAO__::' + g; }
+function revLocalKey(g) { return NOTES_PREFIX + revComposite(g); }
+function revNorm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u00a0/g, ' ').trim().toUpperCase().replace(/\s+/g, ' '); }
+function revNum(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  const n = s.indexOf(',') !== -1 ? parseBRNum(s) : parseFloat(s);
+  return isFinite(n) ? n : null;
+}
+function revMat(v) { const s = String(v == null ? '' : v).trim().replace(/\.0+$/, ''); return /^\d+$/.test(s) ? String(+s) : ''; }
+function revMesNome(mkey) { return TR_MES_NOMES[mkey].charAt(0) + TR_MES_NOMES[mkey].slice(1).toLowerCase(); }
+
+// ---- Senha (mesma do Rateio) ----
+async function revUnlock() {
+  const inp = document.getElementById('rev-pass');
+  if (RP_MODE === 'setup') { rpSetStatus('rev-lock-status', 'Defina primeiro a senha de ' + CURRENT_GESTOR + ' na aba Rateio.', 'bad'); return; }
+  if (RP_MODE !== 'login') return;
+  document.getElementById('rp-pass').value = inp.value;
+  rpSetStatus('rev-lock-status', 'Verificando...', null);
+  await rpUnlock();
+  inp.value = '';
+  if (RP_MODE !== 'unlocked') rpSetStatus('rev-lock-status', document.getElementById('rp-lock-status').textContent, 'bad');
+  else rpSetStatus('rev-lock-status', '', null);
+}
+
+function revUpdateLockUi(g) {
+  const locked = document.getElementById('rev-locked');
+  const unlocked = document.getElementById('rev-unlocked');
+  if (!locked || !unlocked) return;
+  locked.style.display = RP_MODE === 'unlocked' ? 'none' : '';
+  unlocked.style.display = RP_MODE === 'unlocked' ? '' : 'none';
+  document.getElementById('rev-lock-title').textContent = '🔒 Revisao de ' + g;
+  document.getElementById('rev-lock-msg').textContent = RP_MODE === 'loading' ? 'Carregando...'
+    : RP_MODE === 'setup' ? g + ' ainda nao definiu senha. Defina a senha na aba Rateio -- ela vale para esta aba tambem.'
+    : 'Area restrita. Informe a senha de ' + g + ' (a mesma do Rateio).';
+  document.getElementById('rev-pass').style.display = RP_MODE === 'login' ? '' : 'none';
+  document.getElementById('rev-unlock-btn').style.display = RP_MODE === 'login' ? '' : 'none';
+}
+
+// ---- Persistencia (cifrada com a chave do Rateio do gestor) ----
+async function revLoad() {
+  const g = RP_GESTOR;
+  let blob = null;
+  if (REV_REMOTE) {
+    try {
+      const { data, error } = await sb.from('notes').select('text').eq('code', revComposite(g)).eq('month', RP_MONTH).maybeSingle();
+      if (!error && data && data.text) blob = data.text;
+    } catch (e) {}
+  }
+  if (!blob) { try { blob = localStorage.getItem(revLocalKey(g)); } catch (e) {} }
+  let data = { pessoas: [], hc: {} };
+  if (blob && RP_KEY) {
+    try {
+      const b = JSON.parse(blob);
+      const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, RP_KEY, rpUnB64(b.ct));
+      data = JSON.parse(new TextDecoder().decode(plain));
+    } catch (e) {
+      rpSetStatus('rev-status', 'Nao foi possivel abrir os dados salvos da Revisao. Suba a planilha e as PRs novamente.', 'bad');
+    }
+  }
+  if (g !== RP_GESTOR || RP_MODE !== 'unlocked') return;
+  REV = data;
+  if (!REV.pessoas) REV.pessoas = [];
+  if (!REV.hc) REV.hc = {};
+  if (revMergePending()) await revPersist();
+  renderRevisaoTab(document.getElementById('month-select').value);
+}
+
+// msg: resultado da acao (ex.: "67 pessoas lidas"), mostrado junto com o status do salvamento.
+async function revPersist(msg, cls) {
+  if (!REV || !RP_KEY) return;
+  const pre = msg ? msg + ' ' : '';
+  const g = RP_GESTOR;
+  const text = await rpEncrypt(REV, RP_KEY, RP_SALT);
+  try { localStorage.setItem(revLocalKey(g), text); } catch (e) {}
+  if (!REV_REMOTE) { rpSetStatus('rev-status', pre + 'Salvo neste navegador (preview local: nao sincroniza com o Supabase).', cls || 'warn'); return; }
+  const { error } = await sb.from('notes').upsert({ code: revComposite(g), month: RP_MONTH, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+  if (error) rpSetStatus('rev-status', pre + 'Salvo neste navegador, mas FALHOU ao sincronizar. Tente novamente.', 'bad');
+  else rpSetStatus('rev-status', pre + 'Salvo.', cls || 'ok');
+}
+
+// HC lido pelo "Atualizar PRs" do topo: entra na Revisao do gestor dono do projeto.
+function revQueueHC(hc) {
+  REV_HC_PENDING[hc.code] = hc;
+  if (REV && RP_MODE === 'unlocked' && revMergePending()) {
+    revPersist();
+    renderRevisaoTab(document.getElementById('month-select').value);
+  }
+}
+
+function revMergePending() {
+  let n = 0;
+  Object.keys(REV_HC_PENDING).forEach(function(code) {
+    const p = DATA.find(function(d) { return d.code === code; });
+    if (p && (p.gestor || 'Rodrigo') !== RP_GESTOR) return;
+    REV.hc[code] = REV_HC_PENDING[code];
+    delete REV_HC_PENDING[code];
+    n++;
+  });
+  return n > 0;
+}
+
+// ---- Leitura da aba HC de uma PR ----
+// Cabecalho: linha com TIPO / Matricula / Nome / ... / TX / JAN..DEZ (2025) / JAN..DEZ (2026).
+// Blocos por TIPO: HORAS, TAXA (taxa mes a mes), CALEND., CUSTO, FTE. Usamos HORAS e TAXA de 2026.
+function revExtractHC(wb, code, arquivo) {
+  const ws = wb.Sheets['HC'];
+  if (!ws) return null;
+  const rows = xlsxSheetRows(ws);
+  let h = -1;
+  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+    const r = rows[i] || [];
+    if (r.some(function(v) { return revNorm(v) === 'TIPO'; }) && r.some(function(v) { return revNorm(v) === 'MATRICULA'; })) { h = i; break; }
+  }
+  if (h === -1) throw new Error('cabecalho TIPO/Matricula nao encontrado na aba HC');
+  const head = rows[h];
+  const col = function(label) { return head.findIndex(function(v) { return revNorm(v) === label; }); };
+  const cTipo = col('TIPO'), cMat = col('MATRICULA'), cNome = col('NOME'), cStatus = col('STATUS'), cTx = col('TX');
+  // Colunas dos meses de 2026: pela linha de anos (acima do cabecalho); sem ela, o 2o JAN..DEZ.
+  let anoRow = null;
+  for (let i = 0; i < h; i++) {
+    if ((rows[i] || []).filter(function(v) { return v === 2026; }).length >= 6) { anoRow = rows[i]; break; }
+  }
+  const mesCol = {};
+  MESES.forEach(function(m) {
+    const idxs = [];
+    head.forEach(function(v, j) { if (revNorm(v) === m) idxs.push(j); });
+    const j = anoRow ? idxs.find(function(j) { return anoRow[j] === 2026; }) : idxs[1];
+    if (j !== undefined) mesCol[m] = j;
+  });
+  if (!Object.keys(mesCol).length) throw new Error('meses de 2026 nao encontrados na aba HC');
+  const pessoas = {};
+  for (let i = h + 1; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const tipo = revNorm(r[cTipo]);
+    if (tipo !== 'HORAS' && tipo !== 'TAXA') continue;
+    const mat = revMat(r[cMat]);
+    if (!mat) continue;
+    const pe = pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: String(r[cNome] || '').replace(/\u00a0/g, ' ').trim(), status: String(r[cStatus] || '').trim(), tx: null, horas: {}, taxa: {} });
+    const tx = revNum(r[cTx]);
+    if (tx !== null && pe.tx === null) pe.tx = tx;
+    MESES.forEach(function(m) {
+      if (mesCol[m] === undefined) return;
+      const v = revNum(r[mesCol[m]]);
+      if (v === null || v === 0) return;
+      if (tipo === 'HORAS') pe.horas[m] = (pe.horas[m] || 0) + v;
+      else pe.taxa[m] = v;
+    });
+  }
+  return { code: code, arquivo: arquivo, data: new Date().toISOString(), pessoas: Object.values(pessoas) };
+}
+
+// ---- Leitura da planilha de pessoas ----
+// Aceita o relatorio PEOPLE+ (Codigo de recurso / Nome / Projetos / Taxa / Valor) ou qualquer planilha
+// com colunas Matricula, Nome, Taxa (e opcionalmente Projeto).
+// O relatorio do PEOPLE+ vem em XML do Excel 2003 (SpreadsheetML) com CDATA, que o SheetJS 0.18 nao le;
+// esse formato e lido aqui direto. Demais formatos (.xlsx/.xls binario/.csv) vao pelo SheetJS.
+function revPlanilhaRows(buf) {
+  const head = new TextDecoder().decode(buf.slice(0, 2000));
+  if (head.indexOf('urn:schemas-microsoft-com:office:spreadsheet') === -1) {
+    const wb = XLSX.read(buf, { type: 'array' });
+    return xlsxSheetRows(wb.Sheets[wb.SheetNames[0]]);
+  }
+  const NS = 'urn:schemas-microsoft-com:office:spreadsheet';
+  const doc = new DOMParser().parseFromString(new TextDecoder().decode(buf), 'application/xml');
+  const ws = doc.getElementsByTagNameNS(NS, 'Worksheet')[0];
+  if (!ws) throw new Error('planilha sem abas.');
+  const rows = [];
+  Array.from(ws.getElementsByTagNameNS(NS, 'Row')).forEach(function(rowEl) {
+    const ri = rowEl.getAttributeNS(NS, 'Index');
+    if (ri) while (rows.length < +ri - 1) rows.push([]);
+    const row = [];
+    let c = 0;
+    Array.from(rowEl.getElementsByTagNameNS(NS, 'Cell')).forEach(function(cell) {
+      const ci = cell.getAttributeNS(NS, 'Index');
+      if (ci) c = +ci - 1;
+      const data = cell.getElementsByTagNameNS(NS, 'Data')[0];
+      if (data) row[c] = data.getAttributeNS(NS, 'Type') === 'Number' ? Number(data.textContent) : data.textContent;
+      c += 1 + (+cell.getAttributeNS(NS, 'MergeAcross') || 0);
+    });
+    rows.push(row);
+  });
+  return rows;
+}
+
+function revParsePessoas(rows) {
+  let h = -1;
+  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+    const r = (rows[i] || []).map(revNorm);
+    if (r.some(function(v) { return v === 'CODIGO DE RECURSO' || v === 'MATRICULA'; })) { h = i; break; }
+  }
+  if (h === -1) throw new Error('nao encontrei a coluna "Codigo de recurso" ou "Matricula".');
+  const head = rows[h].map(revNorm);
+  const find = function(labels) { for (const l of labels) { const j = head.indexOf(l); if (j !== -1) return j; } return -1; };
+  const cMat = find(['CODIGO DE RECURSO', 'MATRICULA']);
+  const cNome = find(['NOME']);
+  const cValor = find(['VALOR', 'TAXA (R$)', 'TAXA R$', 'VALOR TAXA']);
+  const cTaxa = find(['TAXA']);
+  const out = {};
+  for (let i = h + 1; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const mat = revMat(r[cMat]);
+    if (!mat) continue;
+    // No PEOPLE+ as linhas de dados vem com uma coluna a menos que o cabecalho ("Comentario UGR"),
+    // entao taxa e projetos sao achados pelo conteudo ("R8 / 155,48" e "22AP09") e nao pela posicao.
+    let taxa = null, nivel = '';
+    for (const v of r) {
+      const m = /^\s*([A-Z]{1,3}\d{0,2})\s*\/\s*([\d.,]+)\s*$/.exec(String(v == null ? '' : v));
+      if (m) { taxa = revNum(m[2]); nivel = m[1]; break; }
+    }
+    if (taxa === null && cValor !== -1) taxa = revNum(r[cValor]);
+    if (taxa === null && cTaxa !== -1) taxa = revNum(r[cTaxa]);
+    const projetos = [];
+    r.forEach(function(v, j) {
+      if (j === cNome) return;
+      (String(v == null ? '' : v).match(/\d{2}AP\d{1,3}/g) || []).forEach(function(c) { if (projetos.indexOf(c) === -1) projetos.push(c); });
+    });
+    out[mat] = {
+      matricula: mat,
+      nome: String(cNome !== -1 ? r[cNome] || '' : '').replace(/\u00a0/g, ' ').trim(),
+      taxa: taxa,
+      nivel: nivel,
+      projetos: projetos
+    };
+  }
+  return Object.values(out);
+}
+
+async function revUploadPessoas(inp) {
+  const file = inp.files && inp.files[0];
+  inp.value = '';
+  if (!file || !REV) return;
+  rpSetStatus('rev-status', 'Lendo ' + file.name + '...', null);
+  try {
+    const pessoas = revParsePessoas(revPlanilhaRows(new Uint8Array(await file.arrayBuffer())));
+    if (!pessoas.length) throw new Error('nenhuma pessoa com matricula encontrada.');
+    REV.pessoas = pessoas;
+    REV.pessoasArquivo = file.name;
+    REV.pessoasData = new Date().toISOString();
+    renderRevisaoTab(document.getElementById('month-select').value);
+    await revPersist(pessoas.length + ' pessoa(s) lida(s) de ' + file.name + '.', 'ok');
+  } catch (e) {
+    rpSetStatus('rev-status', 'Nao foi possivel ler a planilha: ' + e.message, 'bad');
+  }
+}
+
+async function revUploadPRs(inp) {
+  const files = Array.from(inp.files || []);
+  inp.value = '';
+  if (!files.length || !REV) return;
+  const ok = [], erros = [];
+  for (const file of files) {
+    rpSetStatus('rev-status', 'Lendo a aba HC de ' + file.name + '...', null);
+    try {
+      const m = /(\d{2}AP\d{1,3})/.exec(file.name);
+      if (!m) throw new Error('codigo do projeto nao identificado no nome do arquivo');
+      const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', sheets: ['HC'], cellFormula: false, cellHTML: false, cellText: false, cellStyles: false });
+      const hc = revExtractHC(wb, m[1], file.name);
+      if (!hc) throw new Error('aba HC nao encontrada');
+      REV.hc[m[1]] = hc;
+      ok.push(m[1]);
+    } catch (e) {
+      erros.push(file.name + ' (' + e.message + ')');
+    }
+  }
+  renderRevisaoTab(document.getElementById('month-select').value);
+  const msg = (ok.length ? 'HC lido de ' + ok.length + ' PR(s): ' + ok.join(', ') + '.' : 'Nenhuma PR lida.') + (erros.length ? ' Erros: ' + erros.join('; ') + '.' : '');
+  const cls = erros.length ? (ok.length ? 'warn' : 'bad') : 'ok';
+  if (ok.length) await revPersist(msg, cls);
+  else rpSetStatus('rev-status', msg, cls);
+}
+
+// ---- Analise do mes ----
+function revAnalisar(mkey) {
+  const byMat = {};
+  Object.keys(REV.hc).forEach(function(code) {
+    (REV.hc[code].pessoas || []).forEach(function(pe) {
+      (byMat[pe.matricula] || (byMat[pe.matricula] = [])).push(Object.assign({ code: code }, pe));
+    });
+  });
+  const planMats = new Set(REV.pessoas.map(function(p) { return p.matricula; }));
+  const semHoras = [], divergentes = [], fora = [];
+  let comHoras = 0;
+  REV.pessoas.forEach(function(p) {
+    const occ = byMat[p.matricula] || [];
+    const comHorasMes = occ.filter(function(o) { return (o.horas[mkey] || 0) > 0; });
+    if (!comHorasMes.length) {
+      const semPR = p.projetos.filter(function(c) { return !REV.hc[c]; });
+      let situacao;
+      if (occ.length) situacao = 'Esta na PR de ' + occ.map(function(o) { return o.code; }).join(', ') + ', sem horas em ' + revMesNome(mkey);
+      else if (p.projetos.length && semPR.length === p.projetos.length) situacao = 'PR de ' + semPR.join(', ') + ' nao enviada';
+      else situacao = 'Nao aparece em nenhuma PR enviada';
+      semHoras.push({ p: p, situacao: situacao, prNaoEnviada: !occ.length && p.projetos.length > 0 && semPR.length === p.projetos.length });
+      return;
+    }
+    comHoras++;
+    comHorasMes.forEach(function(o) {
+      if (p.taxa === null) return;
+      if (o.tx === null || Math.abs(o.tx - p.taxa) > 0.005) {
+        const h = o.horas[mkey];
+        divergentes.push({ p: p, code: o.code, taxaPR: o.tx, taxaMes: o.taxa[mkey] !== undefined ? o.taxa[mkey] : null, horas: h, impacto: o.tx === null ? null : (p.taxa - o.tx) * h });
+      }
+    });
+  });
+  Object.keys(byMat).forEach(function(mat) {
+    if (planMats.has(mat)) return;
+    byMat[mat].forEach(function(o) { if ((o.horas[mkey] || 0) > 0) fora.push(o); });
+  });
+  const citadosSemPR = Array.from(new Set([].concat.apply([], REV.pessoas.map(function(p) { return p.projetos; })))).filter(function(c) { return !REV.hc[c]; }).sort();
+  return { semHoras: semHoras, divergentes: divergentes, fora: fora, comHoras: comHoras, citadosSemPR: citadosSemPR };
+}
+
+function renderRevisaoTab(mkey) {
+  if (typeof REV === 'undefined' || !REV || RP_MODE !== 'unlocked') return;
+  const prs = Object.keys(REV.hc).sort();
+  const dt = function(iso) { return iso ? new Date(iso).toLocaleDateString('pt-BR') : ''; };
+  document.getElementById('rev-fontes').innerHTML =
+    '<b>Planilha:</b> ' + (REV.pessoasArquivo ? rpEsc(REV.pessoasArquivo) + ' (' + REV.pessoas.length + ' pessoas, enviada em ' + dt(REV.pessoasData) + ')' : 'nenhuma enviada') +
+    ' &middot; <b>PRs com HC:</b> ' + (prs.length ? prs.map(function(c) { return '<span title="' + rpEsc(REV.hc[c].arquivo) + ' - ' + dt(REV.hc[c].data) + '">' + c + '</span>'; }).join(', ') : 'nenhuma enviada');
+  const vazio = function(id, msg) { document.getElementById(id).innerHTML = '<div class="small-note">' + msg + '</div>'; };
+  const setKpi = function(id, v, sub) { document.getElementById('rev-kpi-' + id).textContent = v; document.getElementById('rev-kpi-' + id + '-sub').textContent = sub || ''; };
+  if (!REV.pessoas.length || !prs.length) {
+    ['pessoas', 'sem', 'taxa', 'fora'].forEach(function(k) { setKpi(k, '-', ''); });
+    ['sem', 'taxa', 'fora'].forEach(function(k) { document.getElementById('rev-' + k + '-count').textContent = 0; vazio('rev-' + k, ''); });
+    document.getElementById('rev-resumo').innerHTML = 'Para comecar, suba ' + (!REV.pessoas.length ? '<b>a planilha de pessoas</b>' : '') + (!REV.pessoas.length && !prs.length ? ' e ' : '') + (!prs.length ? '<b>as suas PRs</b> (a aba HC e lida automaticamente)' : '') + '.';
+    return;
+  }
+  const a = revAnalisar(mkey);
+  const mes = revMesNome(mkey);
+  const impacto = a.divergentes.reduce(function(s, d) { return s + (d.impacto || 0); }, 0);
+  const pct = function(n, d) { return d ? Math.round(n / d * 100) + '%' : '-'; };
+  setKpi('pessoas', REV.pessoas.length, a.comHoras + ' com horas em ' + mes + ' (' + pct(a.comHoras, REV.pessoas.length) + ')');
+  setKpi('sem', a.semHoras.length, a.semHoras.filter(function(s) { return s.prNaoEnviada; }).length + ' por PR nao enviada');
+  setKpi('taxa', a.divergentes.length, 'Impacto no mes: ' + brl(impacto));
+  setKpi('fora', a.fora.length, brl(a.fora.reduce(function(s, o) { return s + (o.horas[mkey] || 0) * (o.tx || 0); }, 0)) + ' de custo na PR');
+
+  // Resumo executivo
+  const nomes = function(list, f) { const n = list.slice(0, 5).map(f).join(', '); return n + (list.length > 5 ? ' e mais ' + (list.length - 5) : ''); };
+  const itens = [];
+  itens.push('A planilha tem <b>' + REV.pessoas.length + ' pessoas</b>; <b>' + a.comHoras + ' (' + pct(a.comHoras, REV.pessoas.length) + ')</b> estao com horas nas PRs em ' + mes + ' (' + prs.length + ' PR(s) consideradas).');
+  if (a.semHoras.length) itens.push('<b>' + a.semHoras.length + ' pessoa(s) sem horas</b> em ' + mes + ': ' + nomes(a.semHoras, function(s) { return rpEsc(s.p.nome || s.p.matricula); }) + '.');
+  else itens.push('Todas as pessoas da planilha estao com horas em ' + mes + '.');
+  if (a.divergentes.length) {
+    itens.push('<b>' + a.divergentes.length + ' taxa(s) divergente(s)</b> entre planilha e PR. Impacto estimado no custo de ' + mes + ': <b>' + brl(impacto) + '</b> ' +
+      (impacto > 0 ? '(a PR esta <b>subestimando</b> o custo).' : impacto < 0 ? '(a PR esta <b>superestimando</b> o custo).' : '.'));
+  } else itens.push('Todas as taxas das pessoas com horas em ' + mes + ' batem com a planilha.');
+  if (a.fora.length) itens.push('<b>' + a.fora.length + ' lancamento(s)</b> com horas nas PRs de pessoas que nao estao na planilha: ' + nomes(a.fora, function(o) { return rpEsc(o.nome || o.matricula) + ' (' + o.code + ')'; }) + '.');
+  if (a.citadosSemPR.length) itens.push('Projetos citados na planilha sem PR enviada: ' + a.citadosSemPR.join(', ') + '.');
+  document.getElementById('rev-resumo').innerHTML = '<ul style="margin:0; padding-left:18px;">' + itens.map(function(t) { return '<li>' + t + '</li>'; }).join('') + '</ul>';
+
+  // Tabelas
+  document.getElementById('rev-sem-count').textContent = a.semHoras.length;
+  if (!a.semHoras.length) vazio('rev-sem', 'Nenhuma pessoa sem horas em ' + mes + '.');
+  else document.getElementById('rev-sem').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto(s) na planilha</th><th class="num">Taxa planilha</th><th>Situacao</th></tr></thead><tbody>' +
+    a.semHoras.map(function(s) { return '<tr><td>' + s.p.matricula + '</td><td>' + rpEsc(s.p.nome) + '</td><td>' + (s.p.projetos.join(', ') || '-') + '</td><td class="num">' + (s.p.taxa === null ? '-' : brl(s.p.taxa)) + '</td><td>' + rpEsc(s.situacao) + '</td></tr>'; }).join('') +
+    '</tbody></table></div>';
+
+  document.getElementById('rev-taxa-count').textContent = a.divergentes.length;
+  if (!a.divergentes.length) vazio('rev-taxa', 'Nenhuma divergencia de taxa em ' + mes + '.');
+  else document.getElementById('rev-taxa').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th class="num">Taxa planilha</th><th class="num">Taxa PR (TX)</th><th class="num">Diferenca</th><th class="num">Taxa PR no mes</th><th class="num">Horas ' + mkey + '</th><th class="num">Impacto no mes</th></tr></thead><tbody>' +
+    a.divergentes.map(function(d) {
+      const dif = d.taxaPR === null ? null : d.p.taxa - d.taxaPR;
+      return '<tr><td>' + d.p.matricula + '</td><td>' + rpEsc(d.p.nome) + '</td><td>' + d.code + '</td><td class="num">' + brl(d.p.taxa) + '</td><td class="num">' + (d.taxaPR === null ? 'sem taxa' : brl(d.taxaPR)) +
+        '</td><td class="num ' + (dif > 0 ? 'bad' : 'ok') + '">' + (dif === null ? '-' : brl(dif)) + '</td><td class="num">' + (d.taxaMes === null ? '-' : brl(d.taxaMes)) + '</td><td class="num">' + rpNum(d.horas, 2) + '</td><td class="num">' + (d.impacto === null ? '-' : brl(d.impacto)) + '</td></tr>';
+    }).join('') +
+    '</tbody><tfoot><tr><td colspan="8">Total</td><td class="num">' + brl(impacto) + '</td></tr></tfoot></table></div>';
+
+  document.getElementById('rev-fora-count').textContent = a.fora.length;
+  if (!a.fora.length) vazio('rev-fora', 'Todas as pessoas com horas nas PRs em ' + mes + ' estao na planilha.');
+  else document.getElementById('rev-fora').innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>Projeto (PR)</th><th>Status na PR</th><th class="num">Horas ' + mkey + '</th><th class="num">Taxa PR (TX)</th><th class="num">Custo no mes</th></tr></thead><tbody>' +
+    a.fora.map(function(o) { return '<tr><td>' + o.matricula + '</td><td>' + rpEsc(o.nome) + '</td><td>' + o.code + '</td><td>' + rpEsc(o.status) + '</td><td class="num">' + rpNum(o.horas[mkey], 2) + '</td><td class="num">' + (o.tx === null ? '-' : brl(o.tx)) + '</td><td class="num">' + brl((o.horas[mkey] || 0) * (o.tx || 0)) + '</td></tr>'; }).join('') +
+    '</tbody></table></div>';
+}
+
 // ---------- Rateio de pessoas (aba protegida por senha) ----------
 // Toda a configuracao (pessoas, taxas, horas e projetos marcados por mes) fica num unico JSON
 // criptografado (AES-GCM, chave derivada da senha via PBKDF2). No Supabase/localStorage so vai o
@@ -8732,6 +9160,7 @@ function rpUpdateLockUi() {
   }
   btn.disabled = RP_MODE === 'loading';
   trUpdateLockUi(g);
+  revUpdateLockUi(g);
 }
 
 function rpSetStatus(id, text, cls) {
@@ -8773,11 +9202,13 @@ async function rpUnlock() {
   rpUpdateLockUi();
   renderRateioTab(document.getElementById('month-select').value);
   renderTransfTab(document.getElementById('month-select').value);
+  revLoad();
 }
 
 function rpLock() {
   if (RP_SAVE_TIMER) { clearTimeout(RP_SAVE_TIMER); RP_SAVE_TIMER = null; rpPersist(); }
   RP = null; RP_KEY = null; RP_SALT = null;
+  REV = null;
   RP_OPEN = {};
   rpSetStatus('rp-lock-status', '', null);
   rpCheckSetup();
