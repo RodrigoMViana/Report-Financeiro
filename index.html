@@ -8815,7 +8815,7 @@ function revExtractHC(wb, code, arquivo) {
   if (h === -1) throw new Error('cabecalho TIPO/Matricula nao encontrado na aba HC');
   const head = rows[h];
   const col = function(label) { return head.findIndex(function(v) { return revNorm(v) === label; }); };
-  const cTipo = col('TIPO'), cMat = col('MATRICULA'), cNome = col('NOME'), cStatus = col('STATUS'), cTx = col('TX'), cCh = col('CH_DIA');
+  const cTipo = col('TIPO'), cMat = col('MATRICULA'), cNome = col('NOME'), cStatus = col('STATUS'), cTx = col('TX'), cCh = col('CH_DIA'), cEst = col('ESTADO'), cCid = col('CIDADE');
   // Colunas dos meses de 2026: pela linha de anos (acima do cabecalho); sem ela, o 2o JAN..DEZ.
   let anoRow = null;
   for (let i = 0; i < h; i++) {
@@ -8829,6 +8829,14 @@ function revExtractHC(wb, code, arquivo) {
     if (j !== undefined) mesCol[m] = j;
   });
   if (!Object.keys(mesCol).length) throw new Error('meses de 2026 nao encontrados na aba HC');
+  // Dias uteis de cada mes no calendario da PR (linha "Calendario" acima do cabecalho; ja considera feriados locais).
+  const calendario = {};
+  for (let i = 0; i < h; i++) {
+    const r = rows[i] || [];
+    if (!r.some(function(v) { return revNorm(v) === 'CALENDARIO'; })) continue;
+    MESES.forEach(function(m) { const v = revNum(r[mesCol[m]]); if (v && Math.abs(v - Math.round(v)) < 1e-6) calendario[m] = Math.round(v); });
+    break;
+  }
   const pessoas = {};
   for (let i = h + 1; i < rows.length; i++) {
     const r = rows[i] || [];
@@ -8840,6 +8848,7 @@ function revExtractHC(wb, code, arquivo) {
     const tx = revNum(r[cTx]);
     const ch = cCh !== -1 ? revNum(r[cCh]) : null;
     if (ch && !pe.ch) pe.ch = ch;
+    if (!pe.estado && cEst !== -1 && revNorm(r[cEst]) && revNorm(r[cEst]) !== 'INSERIR') { pe.estado = revNorm(r[cEst]); pe.cidade = revNorm(r[cCid]); }
     if (tx !== null && pe.tx === null) pe.tx = tx;
     MESES.forEach(function(m) {
       if (mesCol[m] === undefined) return;
@@ -8849,7 +8858,35 @@ function revExtractHC(wb, code, arquivo) {
       else pe.taxa[m] = v;
     });
   }
-  return { code: code, arquivo: arquivo, data: new Date().toISOString(), pessoas: Object.values(pessoas) };
+  return { code: code, arquivo: arquivo, data: new Date().toISOString(), calendario: calendario, calendarios: revExtractCalendario(wb), pessoas: Object.values(pessoas) };
+}
+
+// Aba CALENDARIO da PR: dias uteis por estado/cidade e mes (ja com feriados locais). O bloco atual tem
+// rotulos "2026JAN", "2026FEV"... numa linha e, abaixo, COD / ESTADO / CIDADE e os numeros.
+function revExtractCalendario(wb) {
+  const nome = wb.SheetNames.find(function(n) { return revNorm(n) === 'CALENDARIO'; });
+  if (!nome) return [];
+  const rows = xlsxSheetRows(wb.Sheets[nome]);
+  const ano = 2026;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const cols = {};
+    r.forEach(function(v, j) { const m = /^(\d{4})([A-Z]{3})$/.exec(revNorm(v)); if (m && +m[1] === ano && MESES.indexOf(m[2]) !== -1) cols[m[2]] = j; });
+    if (Object.keys(cols).length < 6) continue;
+    const head = (rows[i + 1] || []).map(revNorm);
+    const cEst = head.indexOf('ESTADO'), cCid = head.indexOf('CIDADE');
+    if (cEst === -1) continue;
+    const out = [];
+    for (let k = i + 2; k < rows.length; k++) {
+      const d = rows[k] || [];
+      if (revNorm(d[cEst]) === 'ESTADO' || (!d[cEst] && !d[cCid])) break;
+      const dias = {};
+      MESES.forEach(function(m) { const v = revNum(d[cols[m]]); if (v) dias[m] = v; });
+      if (Object.keys(dias).length) out.push({ estado: revNorm(d[cEst]), cidade: revNorm(d[cCid]), dias: dias });
+    }
+    return out;
+  }
+  return [];
 }
 
 // ---- Leitura da planilha de pessoas ----
@@ -9007,7 +9044,7 @@ async function revUploadPRs(inp) {
     try {
       const m = /(\d{2}AP\d{1,3})/.exec(file.name);
       if (!m) throw new Error('codigo do projeto nao identificado no nome do arquivo');
-      const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', sheets: ['HC'], cellFormula: false, cellHTML: false, cellText: false, cellStyles: false });
+      const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', sheets: ['HC', 'CALENDÁRIO', 'CALENDARIO'], cellFormula: false, cellHTML: false, cellText: false, cellStyles: false });
       const hc = revExtractHC(wb, m[1], file.name);
       if (!hc) throw new Error('aba HC nao encontrada');
       REV.hc[m[1]] = hc;
@@ -9267,9 +9304,21 @@ function revDiasFeriasNoMes(l, mkey) {
 }
 
 // Horas do mes de cada pessoa: horas nas PRs + ferias tem que fechar com as horas do mes
-// (dias uteis x carga diaria da aba HC), proporcional ao % atribuido nos projetos com PR enviada.
+// (dias uteis do calendario da aba HC da PR x carga diaria da pessoa, coluna CH_DIA), proporcional
+// ao % atribuido nos projetos com PR enviada. Sem calendario na PR (PR enviada antes desta versao),
+// usa os dias uteis calculados (seg-sex menos feriados nacionais).
+function revDiasUteisPR(code, mkey, pe) {
+  const h = REV.hc[code];
+  if (h && pe && pe.estado && h.calendarios && h.calendarios.length) {
+    const doEstado = h.calendarios.filter(function(c) { return c.estado === pe.estado && c.dias[mkey]; });
+    const c = doEstado.find(function(c) { return c.cidade === pe.cidade; }) || doEstado[0];
+    if (c) return { dias: c.dias[mkey], fonte: 'PR', local: c.cidade + '/' + c.estado };
+  }
+  if (h && h.calendario && h.calendario[mkey]) return { dias: h.calendario[mkey], fonte: 'PR', local: 'calendario da HC' };
+  return { dias: rpDiasUteis(mkey), fonte: 'calculado', local: 'seg-sex menos feriados nacionais' };
+}
+
 function revHorasMes(mkey, proj) {
-  const dias = rpDiasUteis(mkey);
   const planByMat = {};
   REV.pessoas.forEach(function(p) { planByMat[p.matricula] = p; });
   const feriasDe = {};
@@ -9278,7 +9327,7 @@ function revHorasMes(mkey, proj) {
     if (n > 0) feriasDe[l.matricula] = (feriasDe[l.matricula] || 0) + n;
   });
   const pessoas = {};
-  const add = function(mat) { return pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: '', horasPR: 0, codes: [], ch: null, noProj: !proj }); };
+  const add = function(mat) { return pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: '', horasPR: 0, codes: [], ch: null, noProj: !proj, calCode: null, calHoras: -1 }); };
   Object.keys(REV.hc).forEach(function(code) {
     (REV.hc[code].pessoas || []).forEach(function(o) {
       const h = o.horas[mkey] || 0;
@@ -9287,7 +9336,9 @@ function revHorasMes(mkey, proj) {
       x.nome = x.nome || o.nome;
       x.horasPR += h;
       x.codes.push(code);
+      if (h > x.calHoras) { x.calCode = code; x.calHoras = h; }  // calendario da PR com mais horas
       if (x.ch === null && o.ch) x.ch = o.ch;
+      if (!x.pe && o.estado) x.pe = o;
       if (code === proj) x.noProj = true;
     });
   });
@@ -9295,6 +9346,7 @@ function revHorasMes(mkey, proj) {
     revAtribs(p).forEach(function(a) {
       if (!REV.hc[a.code] || revAtivaNoMes(a, mkey) === false) return;
       const x = add(p.matricula);
+      if (!x.calCode) x.calCode = a.code;
       if (a.code === proj) x.noProj = true;
     });
   });
@@ -9307,6 +9359,8 @@ function revHorasMes(mkey, proj) {
       Object.keys(REV.hc).some(function(c) { const o = (REV.hc[c].pessoas || []).find(function(pe) { return pe.matricula === x.matricula && pe.ch; }); if (o) x.ch = o.ch; return !!o; });
     }
     const ch = x.ch || 8.8;
+    if (!x.pe) Object.keys(REV.hc).some(function(c) { const o = (REV.hc[c].pessoas || []).find(function(pe) { return pe.matricula === x.matricula && pe.estado; }); if (o) x.pe = o; return !!o; });
+    const du = x.calCode ? revDiasUteisPR(x.calCode, mkey, x.pe) : { dias: rpDiasUteis(mkey), fonte: 'calculado', local: 'seg-sex menos feriados nacionais' };
     // % atribuido nos projetos com PR enviada (planilha "Plano de recursos"); sem essa informacao, 100%.
     let pctAtr = 100;
     if (p && p.atrib) {
@@ -9319,26 +9373,28 @@ function revHorasMes(mkey, proj) {
       if (pctAtr === 0 && x.horasPR > 0) pctAtr = 100;
     }
     const diasFerias = feriasDe[x.matricula] || 0;
-    const horasMes = dias * ch;
+    const horasMes = du.dias * ch;
     const horasFerias = diasFerias * ch;
     const esperado = Math.max(0, horasMes - horasFerias) * pctAtr / 100;
-    linhas.push({ matricula: x.matricula, nome: x.nome, codes: x.codes, ch: ch, horasMes: horasMes, diasFerias: diasFerias, horasFerias: horasFerias, pct: pctAtr, esperado: esperado, horasPR: x.horasPR, dif: x.horasPR - esperado });
+    linhas.push({ matricula: x.matricula, nome: x.nome, codes: x.codes, ch: ch, chPadrao: !x.ch, dias: du.dias, diasFonte: du.fonte, diasLocal: du.local, horasMes: horasMes, diasFerias: diasFerias, horasFerias: horasFerias, pct: pctAtr, esperado: esperado, horasPR: x.horasPR, dif: x.horasPR - esperado });
   });
   linhas.sort(function(a, b) { return Math.abs(b.dif) - Math.abs(a.dif); });
   const comFerias = linhas.filter(function(l) { return l.diasFerias > 0; });
-  return { dias: dias, linhas: linhas, desvios: linhas.filter(function(l) { return Math.abs(l.dif) > 0.5; }), comFerias: comFerias, temFerias: !!(REV.ferias && REV.ferias.linhas && REV.ferias.linhas.length) };
+  return { linhas: linhas, semCalendario: Object.keys(REV.hc).filter(function(c) { return !(REV.hc[c].calendarios && REV.hc[c].calendarios.length); }), desvios: linhas.filter(function(l) { return Math.abs(l.dif) > 0.5; }), comFerias: comFerias, temFerias: !!(REV.ferias && REV.ferias.linhas && REV.ferias.linhas.length) };
 }
 
 function revRenderHorasMes(hm, mkey) {
   const mes = revMesNome(mkey);
   document.getElementById('rev-horas-count').textContent = hm.desvios.length;
-  const nota = '<div class="small-note" style="margin-bottom:8px;">Horas do mes = ' + hm.dias + ' dias uteis x carga diaria (aba HC). Esperado na PR = (horas do mes - ferias) x % atribuido nos projetos com PR enviada.' +
+  const nota = '<div class="small-note" style="margin-bottom:8px;">Horas do mes = dias uteis da cidade da pessoa na aba CALENDARIO da PR (estado/cidade da aba HC) x carga diaria da pessoa (coluna CH_DIA: 8h ou 8,8h). Esperado na PR = (horas do mes - ferias) x % atribuido nos projetos com PR enviada.' +
+    (hm.semCalendario.length ? ' <b>PR(s) sem aba CALENDARIO lida: ' + hm.semCalendario.join(', ') + '</b> -- suba de novo para usar o calendario da PR (dias marcados com * sao calculados).' : '') +
     (hm.temFerias ? ' ' + hm.comFerias.length + ' pessoa(s) com ferias em ' + mes + '.' : ' <b>Nenhum arquivo de ferias enviado</b> -- suba o relatorio de ferias programadas para descontar as ferias.') + '</div>';
   const el = document.getElementById('rev-horas');
   if (!hm.desvios.length) { el.innerHTML = nota + '<div class="small-note">Horas da PR + ferias fecham com as horas do mes para todas as pessoas.</div>'; return; }
-  el.innerHTML = nota + '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>PR(s)</th><th class="num">Horas do mes</th><th class="num">Ferias</th><th class="num">% atrib.</th><th class="num">Esperado na PR</th><th class="num">Horas na PR</th><th class="num">Diferenca</th></tr></thead><tbody>' +
+  el.innerHTML = nota + '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>PR(s)</th><th class="num">Dias uteis</th><th class="num">Base</th><th class="num">Horas do mes</th><th class="num">Ferias</th><th class="num">% atrib.</th><th class="num">Esperado na PR</th><th class="num">Horas na PR</th><th class="num">Diferenca</th></tr></thead><tbody>' +
     hm.desvios.map(function(l) {
-      return '<tr><td>' + l.matricula + '</td><td>' + rpEsc(l.nome) + '</td><td>' + (l.codes.join(', ') || '-') + '</td><td class="num">' + rpNum(l.horasMes, 1) + '</td><td class="num">' +
+      return '<tr><td>' + l.matricula + '</td><td>' + rpEsc(l.nome) + '</td><td>' + (l.codes.join(', ') || '-') + '</td><td class="num" title="' + rpEsc(l.diasLocal || '') + '">' + rpNum(l.dias, 0) + (l.diasFonte === 'PR' ? '' : '*') +
+        '</td><td class="num"' + (l.chPadrao ? ' title="CH_DIA nao informado na PR; usado 8,8h"' : '') + '>' + rpNum(l.ch, l.ch % 1 ? 1 : 0) + 'h' + (l.chPadrao ? '*' : '') + '</td><td class="num">' + rpNum(l.horasMes, 1) + '</td><td class="num">' +
         (l.diasFerias ? l.diasFerias + 'd / ' + rpNum(l.horasFerias, 1) + 'h' : '-') + '</td><td class="num">' + rpNum(l.pct, 0) + '%</td><td class="num">' + rpNum(l.esperado, 1) + '</td><td class="num">' + rpNum(l.horasPR, 1) +
         '</td><td class="num ' + (l.dif < 0 ? 'bad' : 'warn') + '">' + (l.dif > 0 ? '+' : '') + rpNum(l.dif, 1) + 'h</td></tr>';
     }).join('') + '</tbody></table></div>';
@@ -9395,7 +9451,7 @@ function renderRevisaoTab(mkey) {
   const hm = revHorasMes(mkey, proj);
   if (hm.desvios.length) {
     const faltam = hm.desvios.filter(function(l) { return l.dif < 0; });
-    itens.push('<b>' + hm.desvios.length + ' pessoa(s)</b> em que horas da PR + ferias nao fecham com as horas do mes (' + hm.dias + ' dias uteis): ' + faltam.length + ' com horas faltando (' + rpNum(faltam.reduce(function(s, l) { return s - l.dif; }, 0), 1) + 'h) e ' + (hm.desvios.length - faltam.length) + ' com horas a mais.');
+    itens.push('<b>' + hm.desvios.length + ' pessoa(s)</b> em que horas da PR + ferias nao fecham com as horas do mes (calendario da PR): ' + faltam.length + ' com horas faltando (' + rpNum(faltam.reduce(function(s, l) { return s - l.dif; }, 0), 1) + 'h) e ' + (hm.desvios.length - faltam.length) + ' com horas a mais.');
   } else itens.push('Horas da PR + ferias fecham com as horas do mes para todas as pessoas' + escopo + '.');
   if (!hm.temFerias) itens.push('Arquivo de ferias nao enviado: as ferias ainda nao estao sendo descontadas.');
   else if (hm.comFerias.length) itens.push(hm.comFerias.length + ' pessoa(s) com ferias em ' + mes + escopo + ' (' + rpNum(hm.comFerias.reduce(function(s, l) { return s + l.horasFerias; }, 0), 1) + 'h descontadas).');
