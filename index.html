@@ -254,7 +254,7 @@
   </div>
 
   <div class="ficha-modal-overlay" id="tr-resumo-overlay" onclick="if(event.target===this) trFecharResumo()">
-    <div class="ficha-modal" style="max-width:920px;">
+    <div class="ficha-modal" style="max-width:1080px;">
       <div class="ficha-modal-header">
         <h3 id="tr-resumo-title">Resumo das transferencias</h3>
         <button type="button" class="ficha-modal-close" onclick="trFecharResumo()">&times;</button>
@@ -5378,6 +5378,8 @@
     <div id="tr-unlocked" style="display:none;">
       <div class="report-bar" style="align-items:center;">
         <button type="button" onclick="trExportar()">Exportar para planilha...</button>
+        <button type="button" class="secondary" onclick="document.getElementById('tr-folha-file').click()">Subir folha variavel</button>
+        <input type="file" id="tr-folha-file" accept=".xlsx,.xls,.xlsb" style="display:none;" onchange="trUploadFolha(this)">
         <button type="button" class="secondary" onclick="trAbrirResumo()">Resumo das transferencias</button>
         <button type="button" class="secondary" onclick="loadTransfMonth(document.getElementById('month-select').value)">Atualizar lista</button>
         <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
@@ -5391,7 +5393,7 @@
           <div><label>Matricula</label><input type="text" inputmode="numeric" class="rp-input" id="tr-matricula" oninput="trAutoTaxa()"></div>
           <div><label>Qtd. de horas</label><input type="text" inputmode="decimal" class="rp-input" id="tr-horas" placeholder="Ex: 40" oninput="trAtualizaCusto()"></div>
           <div><label>Mes competencia</label><select class="rp-input" id="tr-mescomp" onchange="trAutoTaxa()"></select></div>
-          <div><label>Transferir folha variavel</label><select class="rp-input" id="tr-folha"><option value="">Selecionar</option><option value="SIM">SIM</option><option value="NAO">NÃO</option></select></div>
+          <div><label>Transferir folha variavel</label><select class="rp-input" id="tr-folha" onchange="trAtualizaCusto()"><option value="">Selecionar</option><option value="SIM">SIM</option><option value="NAO">NÃO</option></select></div>
         </div>
         <div class="tr-row tr-row-3">
           <div><label>Projeto origem</label><input type="text" class="rp-input" id="tr-projorig" list="tr-projetos-list" placeholder="Ex: SBPEBR" onchange="trAutoTaxa()"></div>
@@ -5406,7 +5408,7 @@
         <div class="tr-row tr-row-3">
           <div><label>Pessoa</label><input type="text" class="rp-input" id="tr-nome" disabled placeholder="Identificada pela matricula"></div>
           <div><label>Taxa (R$/h)</label><input type="text" inputmode="decimal" class="rp-input" id="tr-taxa" placeholder="Automatica pela matricula" oninput="trTaxaManual()"><div class="small-note" id="tr-taxa-fonte"></div></div>
-          <div><label>Custo da transferencia</label><input type="text" class="rp-input" id="tr-custo" disabled></div>
+          <div><label>Custo da transferencia</label><input type="text" class="rp-input" id="tr-custo" disabled><div class="small-note" id="tr-custo-det"></div></div>
         </div>
         <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <button type="button" style="background:var(--navy); color:#fff; border:none; border-radius:8px; font-weight:600; padding:10px 18px; cursor:pointer;" onclick="trSalvarForm()" id="tr-save-btn">Adicionar</button>
@@ -5416,6 +5418,7 @@
       </div>
       <datalist id="tr-projetos-list"></datalist>
       <div class="section-title">Transferencias do mes <span class="count" id="tr-count">0</span></div>
+      <div class="small-note" id="tr-folha-info" style="margin-bottom:6px;"></div>
       <div id="tr-list"></div>
     </div>
   </div>
@@ -8450,19 +8453,21 @@ function renderTransfTab(mkey) {
     dl.innerHTML = Object.keys(ops).sort().map(function(o) { return '<option value="' + rpEsc(o) + '">' + rpEsc(ops[o]) + '</option>'; }).join('');
   }
   const rows = trLinhasOrdenadas(mkey);
+  trRenderFolhaInfo();
   document.getElementById('tr-count').textContent = rows.length;
   if (rows.length === 0) {
     list.innerHTML = '<div class="no-results" style="display:block;">Nenhuma transferencia de ' + CURRENT_GESTOR + ' cadastrada para ' + TR_MES_NOMES[mkey] + '.</div>';
     return;
   }
   const totCusto = rows.reduce(function(s, x) { return s + (x.r.custo || 0); }, 0);
-  list.innerHTML = '<div class="small-note" style="margin-bottom:6px;">Custo total das transferencias de ' + CURRENT_GESTOR + ' no mes: <b>' + brl(totCusto) + '</b> (horas x taxa; nao inclui folha variavel nem desmantelamento, que a planilha calcula).</div>' + `<div class="table-wrap"><table class="tr-table">
-    <thead><tr><th>Matricula</th><th class="num">Horas</th><th>Competencia</th><th>Folha var.</th><th>Proj. origem</th><th>EDT origem</th><th>Emp. origem</th><th>Proj. destino</th><th>EDT destino</th><th>Emp. destino</th><th class="num">Taxa</th><th class="num">Custo</th><th></th></tr></thead>
+  list.innerHTML = '<div class="small-note" style="margin-bottom:6px;">Custo total das transferencias de ' + CURRENT_GESTOR + ' no mes: <b>' + brl(totCusto) + '</b> (horas x taxa + desmantelamento 1,5% + folha variavel proporcional as horas).</div>' + `<div class="table-wrap"><table class="tr-table">
+    <thead><tr><th>Matricula</th><th class="num">Horas</th><th>Competencia</th><th>Folha var.</th><th>Proj. origem</th><th>EDT origem</th><th>Emp. origem</th><th>Proj. destino</th><th>EDT destino</th><th>Emp. destino</th><th class="num">Taxa</th><th class="num">Horas x taxa</th><th class="num">Desmant. 1,5%</th><th class="num">Folha var.</th><th class="num">Custo total</th><th></th></tr></thead>
     <tbody>${rows.map(function(x) {
       const r = x.r;
       return '<tr><td>' + rpEsc(r.matricula) + '</td><td class="num">' + rpNum(r.horas, 2) + '</td><td>' + rpEsc(r.mescomp) + '</td><td>' + (r.folha === 'NAO' ? 'NÃO' : rpEsc(r.folha)) +
         '</td><td>' + rpEsc(r.projorig) + '</td><td>' + rpEsc(r.edtorig) + '</td><td>' + rpEsc(r.emporig) + '</td><td>' + rpEsc(r.projdest) + '</td><td>' + rpEsc(r.edtdest) + '</td><td>' + rpEsc(r.empdest) +
-        '</td><td class="num">' + (r.taxa ? brl(r.taxa) : '<span style="color:var(--warn);">sem taxa</span>') + '</td><td class="num">' + (r.custo ? brl(r.custo) : '-') +
+        '</td><td class="num">' + (r.taxa ? brl(r.taxa) : '<span style="color:var(--warn);">sem taxa</span>') + '</td><td class="num">' + (r.custoHoras ? brl(r.custoHoras) : '-') + '</td><td class="num">' + (r.desmant != null ? brl(r.desmant) : '-') +
+        '</td><td class="num" title="' + rpEsc(r.folhaInfo || '') + '">' + (r.folhaVar != null ? brl(r.folhaVar) : '-') + '</td><td class="num"><b>' + (r.custo ? brl(r.custo) : '-') + '</b>' +
         '</td><td><a href="#" onclick="trEditar(\'' + x.id + '\'); return false;">Editar</a><a href="#" style="color:var(--bad);" onclick="trExcluir(\'' + x.id + '\'); return false;">Excluir</a></td></tr>';
     }).join('')}</tbody></table></div>`;
 }
@@ -8471,6 +8476,7 @@ function trLimparForm() {
   TR_EDIT_ID = null;
   TR_FIELDS.forEach(function(f) { if (f !== 'mescomp') trFormEl(f).value = ''; });
   ['taxa', 'nome', 'custo'].forEach(function(f) { trFormEl(f).value = ''; });
+  document.getElementById('tr-custo-det').textContent = '';
   trFormEl('taxa').dataset.manual = '';
   document.getElementById('tr-taxa-fonte').textContent = '';
   trFillMesComp(document.getElementById('month-select').value);
@@ -8495,7 +8501,7 @@ async function trSalvarForm() {
   if (!o.emporig) faltando.push('empresa origem');
   if (faltando.length) { rpSetStatus('tr-form-status', 'Preencha: ' + faltando.join(', ') + '.', 'bad'); return; }
   o.taxa = parseBRNum(trFormEl('taxa').value) || null;
-  o.custo = o.taxa ? Math.round(o.taxa * o.horas * 100) / 100 : null;
+  trAplicarCusto(o);
   o.taxaFonte = document.getElementById('tr-taxa-fonte').textContent || '';
   o.nome = trFormEl('nome').value || '';
   const id = TR_EDIT_ID || ('t' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
@@ -8582,9 +8588,11 @@ function trTaxaPessoa(mat, mkeyComp, projorig) {
 }
 
 function trAtualizaCusto() {
-  const taxa = parseBRNum(trFormEl('taxa').value);
-  const horas = parseBRNum(trFormEl('horas').value);
-  trFormEl('custo').value = taxa && horas ? brl(taxa * horas) : '';
+  const c = trCalcCusto({ taxa: parseBRNum(trFormEl('taxa').value), horas: parseBRNum(trFormEl('horas').value), mescomp: trFormEl('mescomp').value,
+    folha: trFormEl('folha').value, projorig: trFormEl('projorig').value, matricula: trFormEl('matricula').value });
+  trFormEl('custo').value = c.custo !== null ? brl(c.custo) : '';
+  document.getElementById('tr-custo-det').textContent = c.custo !== null
+    ? 'Horas x taxa ' + brl(c.custoHoras) + ' + desmantelamento 1,5% ' + brl(c.desmant) + ' + folha variavel ' + brl(c.folhaVar) + ' (' + c.folhaInfo + ')' : '';
 }
 
 // Preenche a taxa sozinha (a menos que o usuario tenha digitado uma) ao mudar matricula/mes/projeto de origem.
@@ -8630,6 +8638,112 @@ function trRefreshFech(mkey) {
   filterProgress('fech');
 }
 
+// ---------- Folha variavel e desmantelamento (mesma regra da planilha de transferencia) ----------
+// Desmantelamento = 1,5% x (horas x taxa).
+// Folha variavel = (folha variavel da pessoa no projeto de origem no mes de competencia) / (horas dela nesse
+// projeto no mes, aba HC da PR) x horas transferidas; zero se "Transferir folha variavel" = NAO.
+// A folha variavel (relatorio por rubrica: PROJETO, MES, ANO, CODIGO_FUNCIONARIO, VALOR) fica no JSON
+// cifrado da Revisao do gestor (REV.folha), porque tem valores de salario.
+var TR_DESMANT = 0.015;
+
+function trCalcCusto(o) {
+  const out = { custoHoras: null, desmant: null, folhaVar: null, folhaInfo: '', custo: null };
+  if (!o.taxa || !o.horas) return out;
+  out.custoHoras = Math.round(o.taxa * o.horas * 100) / 100;
+  out.desmant = Math.round(out.custoHoras * TR_DESMANT * 100) / 100;
+  const mk = trMkeyDeMes(o.mescomp);
+  if (o.folha === 'NAO') { out.folhaVar = 0; out.folhaInfo = 'nao transfere folha variavel'; }
+  else {
+    const proj = trProjetoSite(o.projorig);
+    const code = proj ? proj.code : String(o.projorig || '').toUpperCase();
+    const fv = typeof REV !== 'undefined' && REV && REV.folha ? REV.folha : null;
+    if (!fv || !fv.meses || fv.meses.indexOf(mk) === -1) { out.folhaVar = 0; out.folhaInfo = 'folha variavel de ' + (mk ? TR_MES_NOMES[mk].toLowerCase() : '?') + ' nao enviada'; }
+    else {
+      const valor = fv.valores[revMat(o.matricula) + '|' + code + '|' + mk] || 0;
+      const pe = REV.hc && REV.hc[code] ? (REV.hc[code].pessoas || []).find(function(x) { return x.matricula === revMat(o.matricula); }) : null;
+      const horasProj = pe ? (pe.horas[mk] || 0) : 0;
+      if (!valor) { out.folhaVar = 0; out.folhaInfo = 'sem folha variavel no ' + code + ' em ' + TR_MES_NOMES[mk].toLowerCase(); }
+      else if (!horasProj) { out.folhaVar = 0; out.folhaInfo = 'folha variavel de ' + brl(valor) + ' sem horas na PR do ' + code + ' para ratear'; }
+      else {
+        out.folhaVar = Math.round(valor / horasProj * o.horas * 100) / 100;
+        out.folhaInfo = brl(valor) + ' / ' + rpNum(horasProj, 2) + 'h no ' + code + ' x ' + rpNum(o.horas, 2) + 'h';
+      }
+    }
+  }
+  out.custo = Math.round((out.custoHoras + out.desmant + out.folhaVar) * 100) / 100;
+  return out;
+}
+
+function trAplicarCusto(o) { Object.assign(o, trCalcCusto(o)); return o; }
+
+async function trUploadFolha(inp) {
+  const file = inp.files && inp.files[0];
+  inp.value = '';
+  if (!file) return;
+  if (typeof REV === 'undefined' || !REV) { rpSetStatus('tr-status', 'Aguarde carregar os dados da Revisao e tente de novo.', 'bad'); return; }
+  rpSetStatus('tr-status', 'Lendo ' + file.name + '...', null);
+  try {
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+    const rows = xlsxSheetRows(wb.Sheets[wb.SheetNames[0]]);
+    const h = rows.findIndex(function(r) { return (r || []).some(function(v) { return revNorm(v) === 'CODIGO_FUNCIONARIO'; }); });
+    if (h === -1) throw new Error('coluna CODIGO_FUNCIONARIO nao encontrada.');
+    const head = rows[h].map(revNorm);
+    const cP = head.indexOf('PROJETO'), cM = head.indexOf('MES'), cA = head.indexOf('ANO'), cF = head.indexOf('CODIGO_FUNCIONARIO'), cV = head.indexOf('VALOR');
+    if ([cP, cM, cF, cV].some(function(c) { return c === -1; })) throw new Error('colunas PROJETO / MES / CODIGO_FUNCIONARIO / VALOR nao encontradas.');
+    const valores = {}, meses = new Set();
+    let n = 0;
+    for (let i = h + 1; i < rows.length; i++) {
+      const r = rows[i] || [];
+      const mat = revMat(r[cF]), mes = parseInt(r[cM], 10), v = revNum(r[cV]);
+      if (!mat || !(mes >= 1 && mes <= 12) || v === null) continue;
+      if (cA !== -1 && r[cA] && parseInt(r[cA], 10) !== rpAnoRef(MESES[mes - 1])) continue;
+      const mk = MESES[mes - 1];
+      const k = mat + '|' + String(r[cP] || '').trim().toUpperCase() + '|' + mk;
+      valores[k] = Math.round(((valores[k] || 0) + v) * 100) / 100;
+      meses.add(mk); n++;
+    }
+    if (!n) throw new Error('nenhuma linha valida encontrada.');
+    // Mantem os outros meses ja enviados; substitui so os meses que vieram neste arquivo.
+    const atual = REV.folha || { valores: {}, meses: [] };
+    Object.keys(atual.valores).forEach(function(k) { if (meses.has(k.split('|')[2])) delete atual.valores[k]; });
+    Object.assign(atual.valores, valores);
+    atual.meses = Array.from(new Set(atual.meses.filter(function(m) { return !meses.has(m); }).concat(Array.from(meses))));
+    atual.arquivo = file.name; atual.data = new Date().toISOString();
+    REV.folha = atual;
+    await revPersist();
+    const recalc = await trRecalcularCustos(Array.from(meses));
+    renderTransfTab(document.getElementById('month-select').value);
+    rpSetStatus('tr-status', 'Folha variavel de ' + Array.from(meses).map(function(m) { return revMesNome(m); }).join(', ') + ' lida (' + n + ' linhas, ' + Object.keys(valores).length + ' pessoa/projeto). ' +
+      (recalc ? recalc + ' transferencia(s) recalculada(s).' : ''), 'ok');
+  } catch (e) {
+    rpSetStatus('tr-status', 'Nao foi possivel ler a folha variavel: ' + e.message, 'bad');
+  }
+}
+
+// Recalcula e salva o custo das transferencias do gestor cuja competencia esta nos meses informados.
+async function trRecalcularCustos(meses) {
+  let n = 0;
+  for (const mkey of Object.keys(TR_ROWS)) {
+    const rows = TR_ROWS[mkey] || {};
+    for (const id of Object.keys(rows)) {
+      const r = rows[id];
+      if (!trDoGestor(r) || meses.indexOf(trMkeyDeMes(r.mescomp)) === -1) continue;
+      const antes = JSON.stringify(r);
+      trAplicarCusto(r);
+      if (JSON.stringify(r) !== antes) { await trPersist(id, mkey, r); n++; }
+    }
+  }
+  trRefreshFech(document.getElementById('month-select').value);
+  return n;
+}
+
+function trRenderFolhaInfo() {
+  const el = document.getElementById('tr-folha-info');
+  if (!el) return;
+  const fv = typeof REV !== 'undefined' && REV ? REV.folha : null;
+  el.textContent = fv ? 'Folha variavel: ' + fv.arquivo + ' (' + fv.meses.map(function(m) { return revMesNome(m); }).join(', ') + ')' : 'Folha variavel: nenhuma enviada';
+}
+
 // ---------- Resumo das transferencias ----------
 function trResumoDados(mkey, todos) {
   const rows = TR_ROWS[mkey] || {};
@@ -8662,6 +8776,27 @@ function trAbrirResumo() {
 }
 function trFecharResumo() { document.getElementById('tr-resumo-overlay').classList.remove('show'); }
 
+// Margem do mes no Fechamento sem transferencias (atual) e com o saldo das transferencias do resumo (prevista).
+function trMargens(code, mkey, saldo) {
+  const p = DATA.find(function(d) { return d.code === code; });
+  if (!p || !p.months[mkey]) return null;
+  const r = computeFechRow(p, mkey);
+  if (!r.ingreso) return null;
+  const custoSem = r.custoTotal - (r.transf ? r.transf.saldo : 0);
+  const atual = (r.ingreso + r.existencia - custoSem) / r.ingreso * 100;
+  const prevista = (r.ingreso + r.existencia - custoSem - saldo) / r.ingreso * 100;
+  return { atual: atual, prevista: prevista, delta: prevista - atual, meta: r.metaPct };
+}
+
+function trMargemCell(m) {
+  if (!m) return '<td class="num">-</td><td class="num">-</td>';
+  const cor = m.delta < -0.005 ? 'var(--bad)' : m.delta > 0.005 ? 'var(--ok)' : 'var(--slate)';
+  const seta = m.delta < -0.005 ? '&#9660;' : m.delta > 0.005 ? '&#9650;' : '&#8226;';
+  const meta = m.meta !== null && m.meta !== undefined ? ' title="Meta (PR): ' + pctf(m.meta, 1) + '"' : '';
+  return '<td class="num"' + meta + '>' + pctf(m.atual, 1) + '</td>' +
+    '<td class="num"' + meta + ' style="white-space:nowrap;"><b>' + pctf(m.prevista, 1) + '</b> <span style="color:' + cor + '; font-size:11.5px;">' + seta + ' ' + (m.delta > 0 ? '+' : '') + rpNum(m.delta, 1) + 'pp</span></td>';
+}
+
 function trRenderResumo() {
   const mkey = document.getElementById('month-select').value;
   const todos = document.getElementById('tr-resumo-todos').checked;
@@ -8672,11 +8807,11 @@ function trRenderResumo() {
   const sinal = function(v) { return '<span style="color:var(' + (v > 0 ? '--bad' : v < 0 ? '--ok' : '--slate') + '); font-weight:600;">' + (v > 0 ? '+' : '') + brl(v) + '</span>'; };
   body.innerHTML =
     '<div class="small-note" style="margin-bottom:10px;">' + d.lista.length + ' transferencia(s), ' + rpNum(d.horas, 2) + 'h, custo total ' + brl(d.total) + '.' +
-      (d.semTaxa ? ' <b style="color:var(--warn);">' + d.semTaxa + ' sem taxa</b> (custo nao calculado).' : '') + ' Saldo positivo = projeto recebe custo; negativo = projeto cede custo.</div>' +
-    '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Projeto</th><th class="num">Horas cedidas</th><th class="num">Custo cedido</th><th class="num">Horas recebidas</th><th class="num">Custo recebido</th><th class="num">Saldo de custo</th></tr></thead><tbody>' +
+      (d.semTaxa ? ' <b style="color:var(--warn);">' + d.semTaxa + ' sem taxa</b> (custo nao calculado).' : '') + ' Saldo positivo = projeto recebe custo; negativo = projeto cede custo. Margem atual = margem do mes no Fechamento sem as transferencias; margem prevista = com as transferencias deste resumo (passe o mouse para ver a meta).</div>' +
+    '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Projeto</th><th class="num">Horas cedidas</th><th class="num">Custo cedido</th><th class="num">Horas recebidas</th><th class="num">Custo recebido</th><th class="num">Saldo de custo</th><th class="num">Margem atual</th><th class="num">Margem prevista</th></tr></thead><tbody>' +
     d.projetos.map(function(p) {
       return '<tr><td><b>' + rpEsc(p.code) + '</b> <span class="small-note">' + rpEsc(p.nome).slice(0, 50) + '</span></td><td class="num">' + (p.hCede ? rpNum(p.hCede, 2) : '-') + '</td><td class="num">' + (p.cCede ? brl(p.cCede) : '-') +
-        '</td><td class="num">' + (p.hRecebe ? rpNum(p.hRecebe, 2) : '-') + '</td><td class="num">' + (p.cRecebe ? brl(p.cRecebe) : '-') + '</td><td class="num">' + sinal(p.cRecebe - p.cCede) + '</td></tr>';
+        '</td><td class="num">' + (p.hRecebe ? rpNum(p.hRecebe, 2) : '-') + '</td><td class="num">' + (p.cRecebe ? brl(p.cRecebe) : '-') + '</td><td class="num">' + sinal(p.cRecebe - p.cCede) + '</td>' + trMargemCell(trMargens(p.code, mkey, p.cRecebe - p.cCede)) + '</tr>';
     }).join('') + '</tbody></table></div>' +
     '<div class="section-title" style="font-size:14px; margin:18px 0 8px;">Por empresa</div>' +
     '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Origem -> Destino</th><th class="num">Transferencias</th><th class="num">Horas</th><th class="num">Custo</th></tr></thead><tbody>' +
@@ -8691,7 +8826,9 @@ function trCopiarResumo() {
   const linhas = ['Resumo das transferencias - ' + revMesNome(mkey) + (todos ? ' (todos os gestores)' : ' (' + CURRENT_GESTOR + ')'),
     d.lista.length + ' transferencia(s), ' + rpNum(d.horas, 2) + 'h, custo total ' + brl(d.total) + (d.semTaxa ? ' (' + d.semTaxa + ' sem taxa)' : ''), '', 'Por projeto (saldo + recebe / - cede):'];
   d.projetos.forEach(function(p) {
-    linhas.push('- ' + p.code + ' ' + p.nome + ': cede ' + rpNum(p.hCede, 2) + 'h / ' + brl(p.cCede) + '; recebe ' + rpNum(p.hRecebe, 2) + 'h / ' + brl(p.cRecebe) + '; saldo ' + brl(p.cRecebe - p.cCede));
+    const m = trMargens(p.code, mkey, p.cRecebe - p.cCede);
+    linhas.push('- ' + p.code + ' ' + p.nome + ': cede ' + rpNum(p.hCede, 2) + 'h / ' + brl(p.cCede) + '; recebe ' + rpNum(p.hRecebe, 2) + 'h / ' + brl(p.cRecebe) + '; saldo ' + brl(p.cRecebe - p.cCede) +
+      (m ? '; margem ' + pctf(m.atual, 1) + ' -> ' + pctf(m.prevista, 1) + ' (' + (m.delta > 0 ? '+' : '') + rpNum(m.delta, 1) + 'pp)' : ''));
   });
   linhas.push('', 'Por empresa:');
   Object.keys(d.emp).sort().forEach(function(k) { const e = d.emp[k]; linhas.push('- ' + k + ': ' + e.n + ' transf., ' + rpNum(e.horas, 2) + 'h, ' + brl(e.custo)); });
