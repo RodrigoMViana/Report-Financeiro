@@ -23,6 +23,11 @@
   .month-picker { display:flex; flex-direction:column; gap:6px; }
   .month-picker label { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#9fb8dd; font-weight:600; }
   .month-picker select { font-size:15px; font-weight:700; padding:10px 16px; border-radius:8px; border:none; background:#fff; color:var(--navy); cursor:pointer; min-width:180px; }
+  .mes-padrao-btn { background:rgba(255,255,255,0.12); color:#fff; border:1px solid rgba(255,255,255,0.28); border-radius:8px; font-size:12px; font-weight:600; padding:6px 10px; cursor:pointer; }
+  .mes-padrao-btn:hover:not(:disabled) { background:rgba(255,255,255,0.22); }
+  .mes-padrao-btn:disabled { opacity:0.5; cursor:default; }
+  .mes-padrao-info { font-size:11px; color:#9fb8dd; min-height:14px; }
+  .mes-padrao-info a { color:#fff; }
   .gestor-picker { display:flex; flex-direction:column; gap:6px; }
   .gestor-picker label { font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:#9fb8dd; font-weight:600; }
   .gestor-toggle { display:flex; background:rgba(255,255,255,0.12); border-radius:8px; padding:3px; gap:3px; }
@@ -226,6 +231,8 @@
 <option value="NOV" >Novembro/2026</option>
 <option value="DEZ" >Dezembro/2026</option>
       </select>
+      <button type="button" class="mes-padrao-btn" id="mes-padrao-btn" onclick="mesPadraoAvancar()"></button>
+      <div class="mes-padrao-info" id="mes-padrao-info"></div>
     </div>
   </div>
 
@@ -10519,11 +10526,75 @@ function getDefaultMonthKey() {
   }
   return codes[idx];
 }
+// ---------- Mes padrao do site ----------
+// Por padrao o mes e automatico (getDefaultMonthKey). O botao abaixo do seletor "vira" o mes padrao para o
+// proximo (para todos os gestores): fica salvo no Supabase ('__GLOBAL__::mes_padrao') e em cache no navegador.
+var MES_PADRAO = null;           // mes definido pelo botao (null = automatico)
+var MES_PADRAO_DESFAZER = null;  // mes anterior, para o link "Desfazer"
+var MES_ESCOLHIDO_NA_MAO = false;
+var MES_PADRAO_CODE = '__GLOBAL__::mes_padrao';
+
+function mesPadraoAtual() { return MES_PADRAO || getDefaultMonthKey(); }
+
+function mesPadraoRender() {
+  const btn = document.getElementById('mes-padrao-btn');
+  const info = document.getElementById('mes-padrao-info');
+  if (!btn) return;
+  const atual = mesPadraoAtual();
+  const prox = MESES[MESES.indexOf(atual) + 1];
+  btn.disabled = !prox;
+  btn.textContent = prox ? 'Virar para ' + revMesNome(prox) + ' \u25B8' : 'Ultimo mes do ano';
+  btn.title = 'Mes padrao atual: ' + revMesNome(atual) + (MES_PADRAO ? ' (definido)' : ' (automatico)') + '. Clique para que o site abra em ' + (prox ? revMesNome(prox) : '-') + ' para todos.';
+  info.innerHTML = 'Padrao: ' + revMesNome(atual) + (MES_PADRAO ? '' : ' (automatico)') +
+    (MES_PADRAO_DESFAZER ? ' &middot; <a href="#" onclick="mesPadraoDesfazer(); return false;">Desfazer</a>' : '');
+}
+
+async function mesPadraoSalvar(key) {
+  MES_PADRAO = key;
+  try { localStorage.setItem('pr_mes_padrao', key); } catch (e) {}
+  const sel = document.getElementById('month-select');
+  sel.value = key;
+  MES_ESCOLHIDO_NA_MAO = false;
+  renderAllTabs(key);
+  mesPadraoRender();
+  if (!SUPABASE_CONFIGURED) return;
+  const { error } = await sb.from('notes').upsert({ code: MES_PADRAO_CODE, month: 'PARAM', text: key, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+  if (error) document.getElementById('mes-padrao-info').textContent = 'Padrao: ' + revMesNome(key) + ' (so neste navegador -- falhou ao sincronizar)';
+}
+
+function mesPadraoAvancar() {
+  const atual = mesPadraoAtual();
+  const prox = MESES[MESES.indexOf(atual) + 1];
+  if (!prox || !confirm('Definir ' + revMesNome(prox) + ' como mes padrao do site (vale para todos os gestores)?')) return;
+  MES_PADRAO_DESFAZER = atual;
+  mesPadraoSalvar(prox);
+}
+
+function mesPadraoDesfazer() {
+  const ant = MES_PADRAO_DESFAZER;
+  MES_PADRAO_DESFAZER = null;
+  if (ant) mesPadraoSalvar(ant);
+}
+
 (function applyDefaultMonth(){
   const sel = document.getElementById('month-select');
-  const key = getDefaultMonthKey();
+  try { const m = localStorage.getItem('pr_mes_padrao'); if (m && MESES.indexOf(m) !== -1) MES_PADRAO = m; } catch (e) {}
+  const key = mesPadraoAtual();
   if (sel.querySelector('option[value="' + key + '"]')) {
     sel.value = key;
+  }
+  sel.addEventListener('change', function() { MES_ESCOLHIDO_NA_MAO = true; });
+  mesPadraoRender();
+  // O padrao definido por outra pessoa chega do Supabase; so troca o mes da tela se ninguem mexeu nele ainda.
+  if (SUPABASE_CONFIGURED) {
+    sb.from('notes').select('text').eq('code', MES_PADRAO_CODE).eq('month', 'PARAM').maybeSingle().then(function(res) {
+      const m = res && res.data && res.data.text;
+      if (!m || MESES.indexOf(m) === -1 || m === MES_PADRAO) return;
+      MES_PADRAO = m;
+      try { localStorage.setItem('pr_mes_padrao', m); } catch (e) {}
+      if (!MES_ESCOLHIDO_NA_MAO && sel.value !== m) { sel.value = m; renderAllTabs(m); }
+      mesPadraoRender();
+    });
   }
 })();
 
