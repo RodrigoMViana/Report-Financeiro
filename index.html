@@ -6548,7 +6548,7 @@ function blurRateioPct(kind) {
 function computeParamCost(p, mkey, ingreso) {
   const params = getParams(p.code);
   const zeroed = getZeroed(p.code, mkey);
-  const rateioCalc = zeroed.rateio ? 0 : ingreso * (RATEIO_PCT[params.rateioTipo] || 0);
+  const rateioCalc = zeroed.rateio ? 0 : ingreso * paramRateioFrac(params);
   const impostoCalc = zeroed.imposto ? 0 : ingreso * ((params.impostoPct || 0) / 100);
   return { rateioCalc: rateioCalc, impostoCalc: impostoCalc };
 }
@@ -6738,10 +6738,58 @@ function renderAllTabs(mkey) {
 }
 
 // ---------- Parametrizacao: render, edicao e zerar em massa ----------
-function paramRateioLabel(tipo) {
+function paramRateioLabel(tipo, params) {
+  if (params && typeof params.rateioPctManual === 'number') return 'Manual (' + pctf(params.rateioPctManual, 2) + ')';
   if (tipo === 'ds') return 'DS (' + pctf(RATEIO_PCT.ds * 100, 2) + ')';
   if (tipo === 'vertical') return 'Vertical (' + pctf(RATEIO_PCT.vertical * 100, 2) + ')';
   return 'Nenhum';
+}
+
+// Rateio do projeto: por padrao o % do tipo marcado (DS/Vertical/Nenhum); se o usuario digitar um % no
+// campo "Rateio (%)", vale esse valor manual (params.rateioPctManual, em %) ate escolher um tipo de novo
+// ou clicar em "Voltar ao padrao".
+function paramRateioFrac(params) {
+  return typeof params.rateioPctManual === 'number' ? params.rateioPctManual / 100 : (RATEIO_PCT[params.rateioTipo] || 0);
+}
+
+function paramRateioNota(code) {
+  const params = getParams(code);
+  const padrao = paramRateioLabel(params.rateioTipo);
+  return typeof params.rateioPctManual === 'number'
+    ? 'Valor manual (padrao do tipo marcado: ' + padrao + '). <a href="#" onclick="restaurarRateioPadrao(\'' + code + '\'); return false;">Voltar ao padrao</a>'
+    : 'Preenchido pelo tipo marcado acima. Digite outro % para usar um valor proprio.';
+}
+
+function saveParamRateioPct(code) {
+  const el = document.getElementById('param-rateio-pct-' + code);
+  if (!el) return;
+  const params = getParams(code);
+  const padrao = (RATEIO_PCT[params.rateioTipo] || 0) * 100;
+  const txt = el.value.trim();
+  const pct = parseBRNum(txt);
+  params.rateioPctManual = txt === '' || Math.abs(pct - padrao) < 1e-9 ? null : pct;
+  markParamPending(code);
+  const mkey = document.getElementById('month-select').value;
+  const labelEl = document.getElementById('param-rateio-label-' + code);
+  if (labelEl) labelEl.textContent = paramRateioLabel(params.rateioTipo, params);
+  const notaEl = document.getElementById('param-rateio-pct-nota-' + code);
+  if (notaEl) notaEl.innerHTML = paramRateioNota(code);
+  const previewEl = document.getElementById('param-rateio-calc-preview-' + code);
+  const p = DATA.find(function(x) { return x.code === code; });
+  if (previewEl && p) previewEl.textContent = brl(computeParamCost(p, mkey, resolveIngreso(p, mkey)).rateioCalc);
+}
+
+function blurParamRateioPct(code) {
+  const el = document.getElementById('param-rateio-pct-' + code);
+  if (!el) return;
+  const params = getParams(code);
+  el.value = (paramRateioFrac(params) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function restaurarRateioPadrao(code) {
+  getParams(code).rateioPctManual = null;
+  markParamPending(code);
+  renderParamTab(document.getElementById('month-select').value);
 }
 
 function renderParamTab(mkey) {
@@ -6769,7 +6817,7 @@ function renderParamTab(mkey) {
           <div class="summary-right">
             <div class="mini-metric">
               <span class="mini-label">Rateio</span>
-              <span class="mini-value" id="param-rateio-label-${p.code}">${paramRateioLabel(params.rateioTipo)}</span>
+              <span class="mini-value" id="param-rateio-label-${p.code}">${paramRateioLabel(params.rateioTipo, params)}</span>
             </div>
             <div class="mini-metric">
               <span class="mini-label">Imposto %</span>
@@ -6785,6 +6833,13 @@ function renderParamTab(mkey) {
             <label><input type="radio" name="rateio-${p.code}" value="vertical" ${params.rateioTipo === 'vertical' ? 'checked' : ''} onchange="saveParamRateio('${p.code}','vertical')"> Vertical (${pctf(RATEIO_PCT.vertical * 100, 2)})</label>
           </div>
           <div class="extra-row" style="margin-top:16px;">
+            <div class="obs-block extra-block">
+              <div class="obs-header">
+                <label>Rateio (%)</label>
+              </div>
+              <input type="text" inputmode="decimal" id="param-rateio-pct-${p.code}" class="obs-textarea" style="min-height:auto;${typeof params.rateioPctManual === 'number' ? ' background:var(--warn-bg); border-color:var(--warn);' : ''}" value="${(paramRateioFrac(params) * 100).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})}" oninput="saveParamRateioPct('${p.code}')" onblur="blurParamRateioPct('${p.code}')">
+              <div class="small-note" id="param-rateio-pct-nota-${p.code}">${paramRateioNota(p.code)}</div>
+            </div>
             <div class="obs-block extra-block">
               <div class="obs-header">
                 <label>Imposto (%)</label>
@@ -6831,6 +6886,7 @@ function updateAplicarButtonState() {
 
 function saveParamRateio(code, tipo) {
   getParams(code).rateioTipo = tipo;
+  getParams(code).rateioPctManual = null;
   markParamPending(code);
   const mkey = document.getElementById('month-select').value;
   renderParamTab(mkey);
@@ -6868,6 +6924,7 @@ async function aplicarParametrizacao() {
     try {
       localStorage.setItem(paramLocalKey(p.code, 'rateiotipo'), params.rateioTipo);
       localStorage.setItem(paramLocalKey(p.code, 'impostopct'), String(params.impostoPct || 0));
+      localStorage.setItem(paramLocalKey(p.code, 'rateiopct'), typeof params.rateioPctManual === 'number' ? String(params.rateioPctManual) : '');
     } catch (e) {}
   });
   try {
@@ -6882,6 +6939,7 @@ async function aplicarParametrizacao() {
       const params = getParams(p.code);
       rows.push({ code: paramComposite(p.code, 'rateiotipo'), month: 'PARAM', text: params.rateioTipo, updated_at: nowIso });
       rows.push({ code: paramComposite(p.code, 'impostopct'), month: 'PARAM', text: String(params.impostoPct || 0), updated_at: nowIso });
+      rows.push({ code: paramComposite(p.code, 'rateiopct'), month: 'PARAM', text: typeof params.rateioPctManual === 'number' ? String(params.rateioPctManual) : '', updated_at: nowIso });
     });
     rows.push({ code: rateioPctComposite('ds'), month: 'PARAM', text: String(RATEIO_PCT.ds), updated_at: nowIso });
     rows.push({ code: rateioPctComposite('vertical'), month: 'PARAM', text: String(RATEIO_PCT.vertical), updated_at: nowIso });
@@ -7000,6 +7058,9 @@ function loadParamsFromSupabase() {
       const ipRaw = localStorage.getItem(paramLocalKey(p.code, 'impostopct'));
       const ip = parseFloat(ipRaw);
       if (!isNaN(ip)) getParams(p.code).impostoPct = ip;
+      const rpRaw = localStorage.getItem(paramLocalKey(p.code, 'rateiopct'));
+      const rpv = parseFloat(rpRaw);
+      getParams(p.code).rateioPctManual = rpRaw !== null && rpRaw !== '' && !isNaN(rpv) ? rpv : null;
     } catch (e) {}
     MESES.forEach(function(mkey) {
       try {
@@ -7026,10 +7087,19 @@ function loadParamsFromSupabase() {
     fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::zerado_imposto')),
     fetchAllNotes(() => sb.from('notes').select('code,month,text').eq('code', rateioPctComposite('ds')).eq('month', 'PARAM')),
     fetchAllNotes(() => sb.from('notes').select('code,month,text').eq('code', rateioPctComposite('vertical')).eq('month', 'PARAM')),
+    fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::param_rateiopct').eq('month', 'PARAM')),
   ]).then(function(results) {
     let touched = false;
     const rtRows = results[0], ipRows = results[1], zrRows = results[2], ziRows = results[3];
     const rateioDsRows = results[4], rateioVerticalRows = results[5];
+    (results[6] || []).forEach(function(row) {
+      const idx = row.code.lastIndexOf('::param_rateiopct');
+      if (idx === -1) return;
+      const code = row.code.slice(0, idx);
+      if (!DATA.some(function(p) { return p.code === code; })) return;
+      const num = parseFloat(row.text);
+      getParams(code).rateioPctManual = row.text !== '' && !isNaN(num) ? num : null; touched = true;
+    });
     rtRows.forEach(function(row) {
       const idx = row.code.lastIndexOf('::param_rateiotipo');
       if (idx === -1) return;
