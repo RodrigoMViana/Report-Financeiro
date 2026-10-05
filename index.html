@@ -264,7 +264,14 @@
         <div id="tr-resumo-body"></div>
       </div>
       <div class="ficha-modal-footer" style="display:flex; align-items:center; justify-content:space-between;">
-        <span class="email-status" id="tr-resumo-status"></span>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <span id="tr-resumo-pend" style="display:none;">
+            <b style="color:var(--warn); font-size:12.5px;" id="tr-resumo-pend-n"></b>
+            <button type="button" style="margin-left:8px;" onclick="trResumoSalvar()">Salvar alteracoes</button>
+            <button type="button" style="background:#fff; color:var(--navy); border:1px solid var(--border);" onclick="trResumoDescartar()">Descartar</button>
+          </span>
+          <span class="email-status" id="tr-resumo-status"></span>
+        </div>
         <div style="display:flex; gap:8px;">
           <button type="button" style="background:#fff; color:var(--navy); border:1px solid var(--border);" onclick="trCopiarResumo()">Copiar resumo</button>
           <button type="button" onclick="trFecharResumo()">Fechar</button>
@@ -8752,36 +8759,97 @@ function trRenderFolhaInfo() {
 }
 
 // ---------- Resumo das transferencias ----------
+// Cada projeto pode ser expandido para ver as transferencias (pessoas) que o envolvem. As horas das
+// transferencias do proprio gestor sao editaveis ali: o custo, os saldos e as margens sao simulados na hora
+// (rascunho em TR_RESUMO_DRAFT) e so vao para a lista principal ao clicar em "Salvar alteracoes".
+var TR_RESUMO_DRAFT = {};   // id -> horas simuladas
+var TR_RESUMO_OPEN = {};    // codigo do projeto -> expandido
+
+// Transferencia com as horas do rascunho aplicadas (custo recalculado), sem alterar a original.
+function trResumoEfetiva(id, r) {
+  if (TR_RESUMO_DRAFT[id] === undefined) return r;
+  return Object.assign({}, r, { horas: TR_RESUMO_DRAFT[id] }, trCalcCusto(Object.assign({}, r, { horas: TR_RESUMO_DRAFT[id] })));
+}
+
 function trResumoDados(mkey, todos) {
   const rows = TR_ROWS[mkey] || {};
-  const lista = Object.keys(rows).map(function(id) { return rows[id]; }).filter(function(r) { return todos || trDoGestor(r); });
-  const proj = {}, emp = {};
+  const lista = Object.keys(rows).filter(function(id) { return todos || trDoGestor(rows[id]); })
+    .map(function(id) { return { id: id, r: trResumoEfetiva(id, rows[id]), orig: rows[id] }; });
+  const proj = {};
   let semTaxa = 0, total = 0, horas = 0;
   const chave = function(txt) {
     const p = trProjetoSite(txt);
     const k = p ? p.code : String(txt || '').toUpperCase();
-    return proj[k] || (proj[k] = { code: k, nome: p ? p.name : '(fora do site)', hCede: 0, cCede: 0, hRecebe: 0, cRecebe: 0 });
+    return proj[k] || (proj[k] = { code: k, nome: p ? p.name : '(fora do site)', hCede: 0, cCede: 0, hRecebe: 0, cRecebe: 0, itens: [] });
   };
-  lista.forEach(function(r) {
-    const c = r.custo || 0;
+  lista.forEach(function(x) {
+    const r = x.r, c = r.custo || 0;
     if (!r.custo) semTaxa++;
     total += c; horas += r.horas || 0;
     const o = chave(r.projorig), d = chave(r.projdest);
     o.hCede += r.horas || 0; o.cCede += c;
     d.hRecebe += r.horas || 0; d.cRecebe += c;
-    const ek = (r.emporig || '?') + ' -> ' + (r.empdest || '?');
-    const e = emp[ek] || (emp[ek] = { n: 0, horas: 0, custo: 0 });
-    e.n++; e.horas += r.horas || 0; e.custo += c;
+    o.itens.push({ id: x.id, r: r, orig: x.orig, sentido: 'cede', outro: d.code });
+    d.itens.push({ id: x.id, r: r, orig: x.orig, sentido: 'recebe', outro: o.code });
   });
   const projetos = Object.values(proj).sort(function(a, b) { return (b.cRecebe - b.cCede) - (a.cRecebe - a.cCede); });
-  return { lista: lista, projetos: projetos, emp: emp, semTaxa: semTaxa, total: total, horas: horas };
+  return { lista: lista, projetos: projetos, semTaxa: semTaxa, total: total, horas: horas };
 }
 
 function trAbrirResumo() {
+  TR_RESUMO_DRAFT = {};
   document.getElementById('tr-resumo-overlay').classList.add('show');
   trRenderResumo();
 }
-function trFecharResumo() { document.getElementById('tr-resumo-overlay').classList.remove('show'); }
+
+function trFecharResumo() {
+  if (Object.keys(TR_RESUMO_DRAFT).length && !confirm('Descartar as alteracoes de horas que nao foram salvas?')) return;
+  TR_RESUMO_DRAFT = {};
+  document.getElementById('tr-resumo-overlay').classList.remove('show');
+}
+
+function trResumoToggle(code) {
+  TR_RESUMO_OPEN[code] = !TR_RESUMO_OPEN[code];
+  trRenderResumo();
+}
+
+function trResumoSetHoras(id, valor) {
+  const mkey = document.getElementById('month-select').value;
+  const r = (TR_ROWS[mkey] || {})[id];
+  if (!r) return;
+  const h = parseBRNum(valor);
+  if (!(h > 0) || Math.abs(h - r.horas) < 1e-9) delete TR_RESUMO_DRAFT[id];
+  else TR_RESUMO_DRAFT[id] = h;
+  rpSetStatus('tr-resumo-status', '', null);
+  trRenderResumo();
+}
+
+function trResumoDescartar() {
+  TR_RESUMO_DRAFT = {};
+  rpSetStatus('tr-resumo-status', '', null);
+  trRenderResumo();
+}
+
+async function trResumoSalvar() {
+  const mkey = document.getElementById('month-select').value;
+  const ids = Object.keys(TR_RESUMO_DRAFT);
+  if (!ids.length) return;
+  rpSetStatus('tr-resumo-status', 'Salvando...', null);
+  let falhas = 0;
+  for (const id of ids) {
+    const r = (TR_ROWS[mkey] || {})[id];
+    if (!r) continue;
+    r.horas = TR_RESUMO_DRAFT[id];
+    trAplicarCusto(r);
+    const res = await trPersist(id, mkey, r);
+    if (!res.ok) falhas++;
+  }
+  TR_RESUMO_DRAFT = {};
+  renderTransfTab(mkey);
+  trRefreshFech(mkey);
+  trRenderResumo();
+  rpSetStatus('tr-resumo-status', falhas ? 'Salvo neste navegador, mas ' + falhas + ' FALHOU ao sincronizar.' : ids.length + ' transferencia(s) atualizada(s) na lista e no Fechamento.', falhas ? 'bad' : 'ok');
+}
 
 // Margem do mes no Fechamento sem transferencias (atual) e com o saldo das transferencias do resumo (prevista).
 function trMargens(code, mkey, saldo) {
@@ -8808,37 +8876,53 @@ function trRenderResumo() {
   const mkey = document.getElementById('month-select').value;
   const todos = document.getElementById('tr-resumo-todos').checked;
   const d = trResumoDados(mkey, todos);
+  const pend = Object.keys(TR_RESUMO_DRAFT).length;
   document.getElementById('tr-resumo-title').textContent = 'Resumo das transferencias - ' + revMesNome(mkey) + (todos ? ' (todos os gestores)' : ' (' + CURRENT_GESTOR + ')');
+  document.getElementById('tr-resumo-pend').style.display = pend ? '' : 'none';
+  document.getElementById('tr-resumo-pend-n').textContent = pend + ' alteracao(oes) nao salva(s)';
   const body = document.getElementById('tr-resumo-body');
   if (!d.lista.length) { body.innerHTML = '<div class="small-note">Nenhuma transferencia neste mes.</div>'; return; }
   const sinal = function(v) { return '<span style="color:var(' + (v > 0 ? '--bad' : v < 0 ? '--ok' : '--slate') + '); font-weight:600;">' + (v > 0 ? '+' : '') + brl(v) + '</span>'; };
+  const detalhe = function(p) {
+    return '<tr class="tr-res-det"><td colspan="8" style="background:var(--bg); padding:8px 12px 12px 28px;"><table class="rp-table" style="background:#fff; border-radius:8px;"><thead><tr><th>Pessoa</th><th>Sentido</th><th class="num">Horas</th><th class="num">Taxa</th><th class="num">Custo</th>' + (todos ? '<th>Gestor</th>' : '') + '</tr></thead><tbody>' +
+      p.itens.map(function(it) {
+        const r = it.r, editavel = trDoGestor(it.orig), mudou = TR_RESUMO_DRAFT[it.id] !== undefined;
+        const horas = editavel
+          ? '<input type="text" inputmode="decimal" class="rp-input" style="width:90px; text-align:right;' + (mudou ? ' background:var(--warn-bg); border-color:var(--warn);' : '') + '" value="' + rpNum(r.horas, 2) + '" onfocus="this.select()" onchange="trResumoSetHoras(\'' + it.id + '\', this.value)" onkeydown="if(event.key===\'Enter\') this.blur()">' +
+            (mudou ? '<div class="small-note">antes: ' + rpNum(it.orig.horas, 2) + 'h</div>' : '')
+          : rpNum(r.horas, 2);
+        return '<tr><td>' + rpEsc(r.nome || '') + ' <span class="small-note">' + rpEsc(r.matricula) + '</span></td><td>' + (it.sentido === 'cede' ? 'cede para <b>' + rpEsc(it.outro) + '</b>' : 'recebe de <b>' + rpEsc(it.outro) + '</b>') +
+          '</td><td class="num">' + horas + '</td><td class="num">' + (r.taxa ? brl(r.taxa) : '<span style="color:var(--warn);">sem taxa</span>') + '</td><td class="num" title="' + rpEsc(r.folhaInfo || '') + '">' + (r.custo ? brl(r.custo) : '-') +
+          (mudou && it.orig.custo ? '<div class="small-note">antes: ' + brl(it.orig.custo) + '</div>' : '') + '</td>' + (todos ? '<td>' + rpEsc(r.gestor || 'Rodrigo') + '</td>' : '') + '</tr>';
+      }).join('') + '</tbody></table></td></tr>';
+  };
   body.innerHTML =
     '<div class="small-note" style="margin-bottom:10px;">' + d.lista.length + ' transferencia(s), ' + rpNum(d.horas, 2) + 'h, custo total ' + brl(d.total) + '.' +
-      (d.semTaxa ? ' <b style="color:var(--warn);">' + d.semTaxa + ' sem taxa</b> (custo nao calculado).' : '') + ' Saldo positivo = projeto recebe custo; negativo = projeto cede custo. Margem atual = margem do mes no Fechamento sem as transferencias; margem prevista = com as transferencias deste resumo (passe o mouse para ver a meta).</div>' +
+      (d.semTaxa ? ' <b style="color:var(--warn);">' + d.semTaxa + ' sem taxa</b> (custo nao calculado).' : '') + ' Clique no projeto para ver as pessoas e ajustar as horas (simulacao; salve para aplicar). Saldo positivo = projeto recebe custo; negativo = cede. Margem atual = Fechamento sem as transferencias; prevista = com as transferencias deste resumo.</div>' +
     '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Projeto</th><th class="num">Horas cedidas</th><th class="num">Custo cedido</th><th class="num">Horas recebidas</th><th class="num">Custo recebido</th><th class="num">Saldo de custo</th><th class="num">Margem atual</th><th class="num">Margem prevista</th></tr></thead><tbody>' +
     d.projetos.map(function(p) {
-      return '<tr><td><b>' + rpEsc(p.code) + '</b> <span class="small-note">' + rpEsc(p.nome).slice(0, 50) + '</span></td><td class="num">' + (p.hCede ? rpNum(p.hCede, 2) : '-') + '</td><td class="num">' + (p.cCede ? brl(p.cCede) : '-') +
-        '</td><td class="num">' + (p.hRecebe ? rpNum(p.hRecebe, 2) : '-') + '</td><td class="num">' + (p.cRecebe ? brl(p.cRecebe) : '-') + '</td><td class="num">' + sinal(p.cRecebe - p.cCede) + '</td>' + trMargemCell(trMargens(p.code, mkey, p.cRecebe - p.cCede)) + '</tr>';
-    }).join('') + '</tbody></table></div>' +
-    '<div class="section-title" style="font-size:14px; margin:18px 0 8px;">Por empresa</div>' +
-    '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Origem -> Destino</th><th class="num">Transferencias</th><th class="num">Horas</th><th class="num">Custo</th></tr></thead><tbody>' +
-    Object.keys(d.emp).sort().map(function(k) { const e = d.emp[k]; return '<tr><td>' + rpEsc(k) + '</td><td class="num">' + e.n + '</td><td class="num">' + rpNum(e.horas, 2) + '</td><td class="num">' + brl(e.custo) + '</td></tr>'; }).join('') +
-    '</tbody></table></div>';
+      const aberto = !!TR_RESUMO_OPEN[p.code];
+      const mudou = p.itens.some(function(it) { return TR_RESUMO_DRAFT[it.id] !== undefined; });
+      return '<tr style="cursor:pointer;' + (mudou ? ' background:var(--warn-bg);' : '') + '" onclick="trResumoToggle(\'' + rpEsc(p.code) + '\')"><td><span style="display:inline-block; width:14px; color:var(--slate);">' + (aberto ? '&#9662;' : '&#9656;') + '</span><b>' + rpEsc(p.code) + '</b> <span class="small-note">' + rpEsc(p.nome).slice(0, 50) + ' (' + p.itens.length + ')</span></td><td class="num">' + (p.hCede ? rpNum(p.hCede, 2) : '-') + '</td><td class="num">' + (p.cCede ? brl(p.cCede) : '-') +
+        '</td><td class="num">' + (p.hRecebe ? rpNum(p.hRecebe, 2) : '-') + '</td><td class="num">' + (p.cRecebe ? brl(p.cRecebe) : '-') + '</td><td class="num">' + sinal(p.cRecebe - p.cCede) + '</td>' + trMargemCell(trMargens(p.code, mkey, p.cRecebe - p.cCede)) + '</tr>' +
+        (aberto ? detalhe(p) : '');
+    }).join('') + '</tbody></table></div>';
 }
 
 function trCopiarResumo() {
   const mkey = document.getElementById('month-select').value;
   const todos = document.getElementById('tr-resumo-todos').checked;
   const d = trResumoDados(mkey, todos);
-  const linhas = ['Resumo das transferencias - ' + revMesNome(mkey) + (todos ? ' (todos os gestores)' : ' (' + CURRENT_GESTOR + ')'),
+  const linhas = ['Resumo das transferencias - ' + revMesNome(mkey) + (todos ? ' (todos os gestores)' : ' (' + CURRENT_GESTOR + ')') + (Object.keys(TR_RESUMO_DRAFT).length ? ' -- SIMULACAO NAO SALVA' : ''),
     d.lista.length + ' transferencia(s), ' + rpNum(d.horas, 2) + 'h, custo total ' + brl(d.total) + (d.semTaxa ? ' (' + d.semTaxa + ' sem taxa)' : ''), '', 'Por projeto (saldo + recebe / - cede):'];
   d.projetos.forEach(function(p) {
     const m = trMargens(p.code, mkey, p.cRecebe - p.cCede);
     linhas.push('- ' + p.code + ' ' + p.nome + ': cede ' + rpNum(p.hCede, 2) + 'h / ' + brl(p.cCede) + '; recebe ' + rpNum(p.hRecebe, 2) + 'h / ' + brl(p.cRecebe) + '; saldo ' + brl(p.cRecebe - p.cCede) +
       (m ? '; margem ' + pctf(m.atual, 1) + ' -> ' + pctf(m.prevista, 1) + ' (' + (m.delta > 0 ? '+' : '') + rpNum(m.delta, 1) + 'pp)' : ''));
+    p.itens.forEach(function(it) {
+      linhas.push('    ' + (it.r.nome || it.r.matricula) + ' (' + it.r.matricula + '): ' + (it.sentido === 'cede' ? 'cede para ' : 'recebe de ') + it.outro + ', ' + rpNum(it.r.horas, 2) + 'h, ' + (it.r.custo ? brl(it.r.custo) : 'sem taxa'));
+    });
   });
-  linhas.push('', 'Por empresa:');
-  Object.keys(d.emp).sort().forEach(function(k) { const e = d.emp[k]; linhas.push('- ' + k + ': ' + e.n + ' transf., ' + rpNum(e.horas, 2) + 'h, ' + brl(e.custo)); });
   const txt = linhas.join('\n');
   const ok = function() { rpSetStatus('tr-resumo-status', 'Resumo copiado.', 'ok'); };
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, function() { prompt('Copie o resumo:', txt); });
