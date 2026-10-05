@@ -8460,7 +8460,7 @@ function renderTransfTab(mkey) {
     return;
   }
   const totCusto = rows.reduce(function(s, x) { return s + (x.r.custo || 0); }, 0);
-  list.innerHTML = '<div class="small-note" style="margin-bottom:6px;">Custo total das transferencias de ' + CURRENT_GESTOR + ' no mes: <b>' + brl(totCusto) + '</b> (horas x taxa + desmantelamento 1,5% + folha variavel proporcional as horas).</div>' + `<div class="table-wrap"><table class="tr-table">
+  list.innerHTML = '<div class="small-note" style="margin-bottom:6px;">Custo total das transferencias de ' + CURRENT_GESTOR + ' no mes: <b>' + brl(totCusto) + '</b> (horas x taxa + desmantelamento 1,5% + folha variavel / horas do mes da pessoa x horas transferidas).</div>' + `<div class="table-wrap"><table class="tr-table">
     <thead><tr><th>Matricula</th><th class="num">Horas</th><th>Competencia</th><th>Folha var.</th><th>Proj. origem</th><th>EDT origem</th><th>Emp. origem</th><th>Proj. destino</th><th>EDT destino</th><th>Emp. destino</th><th class="num">Taxa</th><th class="num">Horas x taxa</th><th class="num">Desmant. 1,5%</th><th class="num">Folha var.</th><th class="num">Custo total</th><th></th></tr></thead>
     <tbody>${rows.map(function(x) {
       const r = x.r;
@@ -8640,8 +8640,9 @@ function trRefreshFech(mkey) {
 
 // ---------- Folha variavel e desmantelamento (mesma regra da planilha de transferencia) ----------
 // Desmantelamento = 1,5% x (horas x taxa).
-// Folha variavel = (folha variavel da pessoa no projeto de origem no mes de competencia) / (horas dela nesse
-// projeto no mes, aba HC da PR) x horas transferidas; zero se "Transferir folha variavel" = NAO.
+// Folha variavel = (folha variavel da pessoa no projeto de origem no mes de competencia) / (horas do mes da
+// pessoa: dias uteis da cidade dela no calendario da PR x carga diaria 8h/8,8h) x horas transferidas;
+// zero se "Transferir folha variavel" = NAO.
 // A folha variavel (relatorio por rubrica: PROJETO, MES, ANO, CODIGO_FUNCIONARIO, VALOR) fica no JSON
 // cifrado da Revisao do gestor (REV.folha), porque tem valores de salario.
 var TR_DESMANT = 0.015;
@@ -8660,13 +8661,19 @@ function trCalcCusto(o) {
     if (!fv || !fv.meses || fv.meses.indexOf(mk) === -1) { out.folhaVar = 0; out.folhaInfo = 'folha variavel de ' + (mk ? TR_MES_NOMES[mk].toLowerCase() : '?') + ' nao enviada'; }
     else {
       const valor = fv.valores[revMat(o.matricula) + '|' + code + '|' + mk] || 0;
-      const pe = REV.hc && REV.hc[code] ? (REV.hc[code].pessoas || []).find(function(x) { return x.matricula === revMat(o.matricula); }) : null;
-      const horasProj = pe ? (pe.horas[mk] || 0) : 0;
+      // Pessoa na aba HC (de preferencia na PR do projeto de origem) para achar cidade e carga diaria.
+      const mat = revMat(o.matricula);
+      let pe = null, peCode = code;
+      if (REV.hc && REV.hc[code]) pe = (REV.hc[code].pessoas || []).find(function(x) { return x.matricula === mat; }) || null;
+      if (!pe) Object.keys(REV.hc || {}).some(function(c) { const x = (REV.hc[c].pessoas || []).find(function(y) { return y.matricula === mat; }); if (x) { pe = x; peCode = c; } return !!x; });
+      const du = revDiasUteisPR(peCode, mk, pe);
+      const ch = (pe && pe.ch) || 8.8;
+      const horasMes = du.dias * ch;
       if (!valor) { out.folhaVar = 0; out.folhaInfo = 'sem folha variavel no ' + code + ' em ' + TR_MES_NOMES[mk].toLowerCase(); }
-      else if (!horasProj) { out.folhaVar = 0; out.folhaInfo = 'folha variavel de ' + brl(valor) + ' sem horas na PR do ' + code + ' para ratear'; }
+      else if (!horasMes) { out.folhaVar = 0; out.folhaInfo = 'folha variavel de ' + brl(valor) + ' sem horas do mes para ratear'; }
       else {
-        out.folhaVar = Math.round(valor / horasProj * o.horas * 100) / 100;
-        out.folhaInfo = brl(valor) + ' / ' + rpNum(horasProj, 2) + 'h no ' + code + ' x ' + rpNum(o.horas, 2) + 'h';
+        out.folhaVar = Math.round(valor / horasMes * o.horas * 100) / 100;
+        out.folhaInfo = brl(valor) + ' no ' + code + ' / ' + rpNum(horasMes, 1) + 'h do mes (' + rpNum(du.dias, 0) + ' dias x ' + rpNum(ch, ch % 1 ? 1 : 0) + 'h' + (du.fonte === 'PR' ? '' : ', dias calculados') + ') x ' + rpNum(o.horas, 2) + 'h';
       }
     }
   }
