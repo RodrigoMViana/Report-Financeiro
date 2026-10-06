@@ -9365,6 +9365,7 @@ async function revLoad() {
   if (!REV.hc) REV.hc = {};
   if (revMergePending()) await revPersist();
   renderRevisaoTab(document.getElementById('month-select').value);
+  renderRateioTab(document.getElementById('month-select').value);
 }
 
 // msg: resultado da acao (ex.: "67 pessoas lidas"), mostrado junto com o status do salvamento.
@@ -10324,8 +10325,31 @@ function rpSetIngreso(code, value) {
 
 // Distribuicao: % = ingreso do projeto / soma dos ingresos dos projetos marcados.
 // Ingreso negativo (estorno no Pre Cierre) conta como zero para nao distorcer os percentuais.
+// Taxa da pessoa no mes: com matricula e sem taxa digitada, vem da Revisao (taxa do mes na aba HC das PRs >
+// coluna TX > planilha de pessoas -- mesma regra das Transferencias); senao, a taxa digitada no card.
+function rpTaxaAuto(pe, mkey) {
+  if (!pe.matricula) return null;
+  const t = trTaxaPessoa(pe.matricula, mkey, '');
+  return t && t.taxa ? t : (t ? Object.assign({}, t, { taxa: null }) : null);
+}
+
+function rpTaxaEfetiva(pe, mkey) {
+  if (!pe.taxaManual) { const t = rpTaxaAuto(pe, mkey); if (t && t.taxa) return t.taxa; }
+  return pe.taxa || 0;
+}
+
+function rpTaxaNota(pe, mkey) {
+  if (pe.taxaManual) return 'Taxa digitada manualmente.' + (pe.matricula ? ' <a href="#" onclick="rpUsarTaxaAuto(\'' + pe.id + '\'); return false;">Usar taxa automatica</a>' : '');
+  if (!pe.matricula) return 'Informe a matricula para buscar a taxa automaticamente, ou digite a taxa.';
+  const t = rpTaxaAuto(pe, mkey);
+  if (t && t.taxa) return 'Automatica: ' + rpEsc(t.fonte) + '.';
+  if (typeof REV === 'undefined' || !REV) return 'Carregando dados da Revisao...';
+  return 'Taxa nao encontrada nas PRs/planilha da Revisao' + (pe.taxa ? ' (usando a ultima digitada)' : ' -- digite a taxa') + '.';
+}
+
 function rpCalcPessoa(pessoa, mkey) {
   const entry = rpGetMes(mkey, pessoa.id, false);
+  const taxa = rpTaxaEfetiva(pessoa, mkey);
   const codes = entry.projetos.filter(function(c) { return DATA.some(function(d) { return d.code === c; }); });
   const total = codes.reduce(function(s, c) { return s + Math.max(0, rpIngreso(c, mkey)); }, 0);
   const linhas = {};
@@ -10333,9 +10357,9 @@ function rpCalcPessoa(pessoa, mkey) {
     const ing = Math.max(0, rpIngreso(c, mkey));
     const pct = total > 0 ? ing / total : 0;
     const horas = (entry.horas || 0) * pct;
-    linhas[c] = { ingreso: ing, pct: pct, horas: horas, custo: horas * (pessoa.taxa || 0) };
+    linhas[c] = { ingreso: ing, pct: pct, horas: horas, custo: horas * taxa };
   });
-  return { entry: entry, totalIngreso: total, linhas: linhas, horas: entry.horas || 0, custo: (entry.horas || 0) * (pessoa.taxa || 0) };
+  return { entry: entry, totalIngreso: total, linhas: linhas, horas: entry.horas || 0, taxa: taxa, custo: (entry.horas || 0) * taxa };
 }
 
 function rpProjetosVisiveis(extraCodes) {
@@ -10375,13 +10399,17 @@ function renderRateioTab(mkey) {
         <div class="card-body">
           <div class="extra-row">
             <div class="obs-block extra-block">
+              <div class="obs-header"><label>Matricula</label></div>
+              <input type="text" inputmode="numeric" class="rp-input" style="width:100%;" value="${rpEsc(pe.matricula || '')}" placeholder="Ex: 860860" oninput="rpSetMatricula('${pe.id}',this.value)">
+            </div>
+            <div class="obs-block extra-block">
               <div class="obs-header"><label>Nome</label></div>
-              <input type="text" class="rp-input" style="width:100%;" value="${rpEsc(pe.nome)}" oninput="rpSetPessoa('${pe.id}','nome',this.value)">
+              <input type="text" class="rp-input" style="width:100%;" id="rp-nome-${pe.id}" value="${rpEsc(pe.nome)}" oninput="rpSetPessoa('${pe.id}','nome',this.value)">
             </div>
             <div class="obs-block extra-block">
               <div class="obs-header"><label>Taxa (R$/hora)</label></div>
-              <input type="text" inputmode="decimal" class="rp-input" style="width:100%;" value="${pe.taxa ? rpNum(pe.taxa, 2) : ''}" placeholder="Ex: 120,50" oninput="rpSetPessoa('${pe.id}','taxa',this.value)" onblur="this.value = this.value ? rpNum(parseBRNum(this.value), 2) : ''">
-              <div class="small-note">Custo total do profissional por hora (salario, 13o, ferias, encargos...).</div>
+              <input type="text" inputmode="decimal" class="rp-input" style="width:100%;${pe.taxaManual ? ' background:var(--warn-bg); border-color:var(--warn);' : ''}" id="rp-taxa-${pe.id}" value="${rpTaxaEfetiva(pe, mkey) ? rpNum(rpTaxaEfetiva(pe, mkey), 2) : ''}" placeholder="Ex: 120,50" oninput="rpSetPessoa('${pe.id}','taxa',this.value)" onblur="this.value = this.value ? rpNum(parseBRNum(this.value), 2) : ''">
+              <div class="small-note" id="rp-taxa-nota-${pe.id}">${rpTaxaNota(pe, mkey)}</div>
             </div>
             <div class="obs-block extra-block">
               <div class="obs-header"><label>Horas no mes (${mkey})</label></div>
@@ -10471,7 +10499,7 @@ function rpRenderPessoaCalc(id, mkey) {
   const c = rpCalcPessoa(pe, mkey);
   const summary = document.getElementById('rp-summary-' + id);
   if (summary) summary.innerHTML = `
-    <div class="mini-metric"><span class="mini-label">Taxa</span><span class="mini-value">${brl(pe.taxa || 0)}</span></div>
+    <div class="mini-metric"><span class="mini-label">Taxa</span><span class="mini-value">${brl(c.taxa)}</span></div>
     <div class="mini-metric"><span class="mini-label">Horas</span><span class="mini-value">${rpNum(c.horas, 2)}</span></div>
     <div class="mini-metric"><span class="mini-label">Horas/dia</span><span class="mini-value">${rpDiasUteis(mkey) > 0 ? rpNum(c.horas / rpDiasUteis(mkey), 2) : '-'}</span></div>
     <div class="mini-metric"><span class="mini-label">Projetos</span><span class="mini-value">${Object.keys(c.linhas).length}</span></div>
@@ -10558,14 +10586,50 @@ function rpSetPessoa(id, field, value) {
   const pe = RP.pessoas.find(function(x) { return x.id === id; });
   if (!pe) return;
   const mkey = rpCurrentMonth();
-  if (field === 'taxa') pe.taxa = parseBRNum(value);
-  else {
+  if (field === 'taxa') {
+    pe.taxa = parseBRNum(value);
+    pe.taxaManual = String(value).trim() !== '';
+    const nota = document.getElementById('rp-taxa-nota-' + id);
+    if (nota) nota.innerHTML = rpTaxaNota(pe, mkey);
+    if (!pe.taxaManual) { const el = document.getElementById('rp-taxa-' + id); const t = rpTaxaEfetiva(pe, mkey); if (el && t) el.placeholder = rpNum(t, 2); }
+  } else {
     pe.nome = value;
     const lbl = document.getElementById('rp-nome-label-' + id);
     if (lbl) lbl.textContent = value || '(sem nome)';
   }
   rpRenderPessoaCalc(id, mkey);
   rpRenderResumo(mkey);
+  rpScheduleSave();
+}
+
+function rpSetMatricula(id, value) {
+  const pe = RP.pessoas.find(function(x) { return x.id === id; });
+  if (!pe) return;
+  const mkey = rpCurrentMonth();
+  pe.matricula = String(value || '').trim();
+  const t = rpTaxaAuto(pe, mkey);
+  if (t && t.nome && !String(pe.nome || '').trim()) {
+    pe.nome = t.nome;
+    const n = document.getElementById('rp-nome-' + id); if (n) n.value = t.nome;
+    const lbl = document.getElementById('rp-nome-label-' + id); if (lbl) lbl.textContent = t.nome;
+  }
+  if (!pe.taxaManual) {
+    const el = document.getElementById('rp-taxa-' + id);
+    const tx = rpTaxaEfetiva(pe, mkey);
+    if (el) el.value = tx ? rpNum(tx, 2) : '';
+  }
+  const nota = document.getElementById('rp-taxa-nota-' + id);
+  if (nota) nota.innerHTML = rpTaxaNota(pe, mkey);
+  rpRenderPessoaCalc(id, mkey);
+  rpRenderResumo(mkey);
+  rpScheduleSave();
+}
+
+function rpUsarTaxaAuto(id) {
+  const pe = RP.pessoas.find(function(x) { return x.id === id; });
+  if (!pe) return;
+  pe.taxaManual = false;
+  renderRateioTab(rpCurrentMonth());
   rpScheduleSave();
 }
 
