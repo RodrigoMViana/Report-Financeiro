@@ -145,6 +145,27 @@
   .email-status.bad { color:var(--bad); }
   .email-status.warn { color:var(--warn); }
 
+  /* Janela de confirmacao / aviso propria do site (substitui confirm/alert/prompt do navegador) */
+  .ui-dlg-overlay { display:none; position:fixed; inset:0; background:rgba(11,37,69,0.55); z-index:3000; align-items:center; justify-content:center; padding:20px; }
+  .ui-dlg-overlay.show { display:flex; animation:uiDlgFade .12s ease-out; }
+  .ui-dlg { background:#fff; border-radius:14px; width:100%; max-width:440px; box-shadow:0 24px 60px rgba(11,37,69,0.35); padding:24px 24px 20px; animation:uiDlgPop .14s ease-out; }
+  .ui-dlg-head { display:flex; gap:14px; align-items:flex-start; }
+  .ui-dlg-icon { flex:0 0 40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; background:var(--ice); color:var(--navy); }
+  .ui-dlg-icon.perigo { background:var(--bad-bg); color:var(--bad); }
+  .ui-dlg-icon.aviso { background:var(--warn-bg); color:var(--warn); }
+  .ui-dlg h3 { margin:6px 0 6px; font-size:17px; color:var(--navy); }
+  .ui-dlg p { margin:0; font-size:13.5px; line-height:1.5; color:#1b2430; white-space:pre-line; }
+  .ui-dlg textarea { width:100%; min-height:160px; margin-top:12px; border:1px solid var(--border); border-radius:8px; padding:10px; font-size:12px; font-family:inherit; }
+  .ui-dlg-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:22px; }
+  .ui-dlg-actions button { border-radius:8px; font-weight:600; font-size:13px; padding:9px 18px; cursor:pointer; }
+  .ui-dlg-cancel { background:#fff; color:var(--navy); border:1px solid var(--border); }
+  .ui-dlg-cancel:hover { background:var(--ice); }
+  .ui-dlg-ok { background:var(--navy); color:#fff; border:none; }
+  .ui-dlg-ok.perigo { background:var(--bad); }
+  .ui-dlg-ok:hover { opacity:0.9; }
+  @keyframes uiDlgFade { from { opacity:0; } to { opacity:1; } }
+  @keyframes uiDlgPop { from { transform:scale(0.96); opacity:0; } to { transform:scale(1); opacity:1; } }
+
   /* Aba Rateio (protegida por senha) */
   .tr-form { display:flex; flex-direction:column; gap:14px; background:#fff; border:1px solid var(--border); border-radius:12px; padding:18px 20px; margin-bottom:12px; }
   .tr-form label { display:block; font-size:11px; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:4px; }
@@ -5779,7 +5800,7 @@ function loadNotesForMonth(mkey) {
 function exportNotes() {
   if (SUPABASE_CONFIGURED) {
     sb.from('notes').select('code,month,text').then(({ data, error }) => {
-      if (error) { alert('Nao foi possivel buscar as observacoes no Supabase.'); return; }
+      if (error) { uiAlert('Nao foi possivel buscar as observacoes no Supabase.', { titulo: 'Exportar observacoes', aviso: true }); return; }
       const out = {};
       (data || []).forEach(row => { out[row.code + '::' + row.month] = row.text; });
       downloadJSON(out);
@@ -5795,7 +5816,7 @@ function exportNotes() {
       }
     }
   } catch (e) {
-    alert('Nao foi possivel acessar as observacoes salvas neste navegador.');
+    uiAlert('Nao foi possivel acessar as observacoes salvas neste navegador.', { titulo: 'Exportar observacoes', aviso: true });
     return;
   }
   downloadJSON(out);
@@ -5830,16 +5851,16 @@ function importNotes(event) {
       if (SUPABASE_CONFIGURED) {
         const rows = entries.map(en => ({ code: en.code, month: en.month, text: en.text, updated_at: new Date().toISOString() }));
         sb.from('notes').upsert(rows, { onConflict: 'code,month' }).then(({ error }) => {
-          if (error) { alert('Importado localmente, mas falhou ao sincronizar com o Supabase.'); }
-          else { alert('Observacoes importadas e sincronizadas com sucesso.'); }
+          if (error) { uiAlert('Importado localmente, mas falhou ao sincronizar com o Supabase.', { titulo: 'Importar observacoes', aviso: true }); }
+          else { uiAlert('Observacoes importadas e sincronizadas com sucesso.', { titulo: 'Importar observacoes' }); }
           loadNotesForMonth(document.getElementById('month-select').value);
         });
       } else {
         loadNotesForMonth(document.getElementById('month-select').value);
-        alert('Observacoes importadas com sucesso (localmente).');
+        uiAlert('Observacoes importadas com sucesso (localmente).', { titulo: 'Importar observacoes' });
       }
     } catch (err) {
-      alert('Arquivo invalido. Selecione um .json exportado por este mesmo comparativo.');
+      uiAlert('Arquivo invalido. Selecione um .json exportado por este mesmo comparativo.', { titulo: 'Importar observacoes', aviso: true });
     }
   };
   reader.readAsText(file);
@@ -8425,6 +8446,58 @@ document.querySelectorAll('.gestor-btn').forEach(function(b){
 // Mes de referencia padrao: a partir do dia 10 de cada mes, o mes atual passa a
 // ser o default automaticamente (antes do dia 10, mantem o mes anterior, pois
 // os dados do mes atual normalmente ainda nao estao fechados).
+// ---------- Janela de confirmacao / aviso do site ----------
+// uiConfirm / uiAlert / uiCopiar substituem confirm/alert/prompt do navegador por uma janela centralizada no
+// visual do site. Retornam Promise (use await). Enter confirma, Esc ou clique fora cancela.
+var UI_DLG_FILA = Promise.resolve();
+
+function uiDialogo(opts) {
+  const abrir = function() {
+    return new Promise(function(resolve) {
+      let ov = document.getElementById('ui-dlg-overlay');
+      if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'ui-dlg-overlay';
+        ov.className = 'ui-dlg-overlay';
+        document.body.appendChild(ov);
+      }
+      const tipo = opts.perigo ? 'perigo' : (opts.aviso ? 'aviso' : '');
+      const icone = opts.perigo || opts.aviso ? '!' : (opts.cancelar === false ? 'i' : '?');
+      ov.innerHTML = '<div class="ui-dlg" role="dialog" aria-modal="true"><div class="ui-dlg-head"><div class="ui-dlg-icon ' + tipo + '">' + icone + '</div><div style="flex:1; min-width:0;">' +
+        '<h3>' + rpEsc(opts.titulo || 'Confirmar') + '</h3><p>' + rpEsc(opts.mensagem || '') + '</p>' + (opts.texto !== undefined ? '<textarea readonly></textarea>' : '') + '</div></div>' +
+        '<div class="ui-dlg-actions">' + (opts.cancelar === false ? '' : '<button type="button" class="ui-dlg-cancel">' + rpEsc(opts.cancelarTexto || 'Cancelar') + '</button>') +
+        '<button type="button" class="ui-dlg-ok ' + tipo + '">' + rpEsc(opts.okTexto || 'OK') + '</button></div></div>';
+      if (opts.texto !== undefined) ov.querySelector('textarea').value = opts.texto;
+      const anterior = document.activeElement;
+      const fechar = function(v) {
+        ov.classList.remove('show');
+        document.removeEventListener('keydown', tecla, true);
+        if (anterior && anterior.focus) { try { anterior.focus(); } catch (e) {} }
+        resolve(v);
+      };
+      const tecla = function(e) {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); fechar(false); }
+        else if (e.key === 'Enter' && document.activeElement && document.activeElement.tagName !== 'TEXTAREA') { e.preventDefault(); e.stopPropagation(); fechar(true); }
+      };
+      ov.querySelector('.ui-dlg-ok').onclick = function() { fechar(true); };
+      const c = ov.querySelector('.ui-dlg-cancel');
+      if (c) c.onclick = function() { fechar(false); };
+      ov.onclick = function(e) { if (e.target === ov) fechar(opts.cancelar === false); };
+      document.addEventListener('keydown', tecla, true);
+      ov.classList.add('show');
+      const ta = ov.querySelector('textarea');
+      if (ta) { ta.focus(); ta.select(); } else ov.querySelector('.ui-dlg-ok').focus();
+    });
+  };
+  const p = UI_DLG_FILA.then(abrir);
+  UI_DLG_FILA = p.catch(function() {});
+  return p;
+}
+
+function uiConfirm(mensagem, opts) { return uiDialogo(Object.assign({ mensagem: mensagem, okTexto: 'Confirmar' }, opts || {})); }
+function uiAlert(mensagem, opts) { return uiDialogo(Object.assign({ mensagem: mensagem, titulo: 'Aviso', okTexto: 'OK', cancelar: false }, opts || {})); }
+function uiCopiar(texto, titulo) { return uiDialogo({ titulo: titulo || 'Copiar', mensagem: 'Nao foi possivel copiar automaticamente. Selecione o texto abaixo e copie (Ctrl+C).', texto: texto, okTexto: 'Fechar', cancelar: false }); }
+
 // ---------- Transferencias entre empresas ----------
 // Cada transferencia e uma linha da tabela 'notes' (code = '__TRANSF__::<id>', month = mes do topo,
 // text = JSON), assim varias pessoas cadastram ao mesmo tempo sem uma sobrescrever a outra.
@@ -8630,7 +8703,7 @@ function trEditar(id) {
 async function trExcluir(id) {
   const mkey = document.getElementById('month-select').value;
   const r = (TR_ROWS[mkey] || {})[id];
-  if (!r || !confirm('Excluir a transferencia da matricula ' + r.matricula + ' (' + rpNum(r.horas, 2) + 'h)?')) return;
+  if (!r || !(await uiConfirm('Excluir a transferencia de ' + (r.nome ? r.nome + ' (' + r.matricula + ')' : 'matricula ' + r.matricula) + ', ' + rpNum(r.horas, 2) + 'h, de ' + r.projorig + ' para ' + r.projdest + '?\nIsso nao pode ser desfeito.', { titulo: 'Excluir transferencia', okTexto: 'Excluir', perigo: true }))) return;
   delete TR_ROWS[mkey][id];
   if (TR_EDIT_ID === id) trLimparForm();
   renderTransfTab(mkey);
@@ -8879,8 +8952,8 @@ function trAbrirResumo() {
   trRenderResumo();
 }
 
-function trFecharResumo() {
-  if (Object.keys(TR_RESUMO_DRAFT).length && !confirm('Descartar as alteracoes de horas que nao foram salvas?')) return;
+async function trFecharResumo() {
+  if (Object.keys(TR_RESUMO_DRAFT).length && !(await uiConfirm('Ha ' + Object.keys(TR_RESUMO_DRAFT).length + ' alteracao(oes) de horas/custo que ainda nao foram salvas. Fechar o resumo vai descarta-las.', { titulo: 'Descartar alteracoes?', okTexto: 'Descartar', perigo: true }))) return;
   TR_RESUMO_DRAFT = {};
   document.getElementById('tr-resumo-overlay').classList.remove('show');
 }
@@ -9019,8 +9092,8 @@ function trCopiarResumo() {
   });
   const txt = linhas.join('\n');
   const ok = function() { rpSetStatus('tr-resumo-status', 'Resumo copiado.', 'ok'); };
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, function() { prompt('Copie o resumo:', txt); });
-  else prompt('Copie o resumo:', txt);
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, function() { uiCopiar(txt, 'Copiar resumo'); });
+  else uiCopiar(txt, 'Copiar resumo');
 }
 
 // ---------- Exportacao: preenche a planilha do mes direto no XML do .xlsx ----------
@@ -10461,10 +10534,10 @@ function rpAddPessoa() {
 function rpVisivelNoMes(pe, mkey) { return !(pe.ocultoMeses && pe.ocultoMeses[mkey]); }
 function rpPessoasDoMes(mkey) { return RP.pessoas.filter(function(pe) { return rpVisivelNoMes(pe, mkey); }); }
 
-function rpRemovePessoa(id) {
+async function rpRemovePessoa(id) {
   const mkey = rpCurrentMonth();
   const pe = RP.pessoas.find(function(x) { return x.id === id; });
-  if (!pe || !confirm('Remover ' + (pe.nome || 'esta pessoa') + ' do rateio de ' + TR_MES_NOMES[mkey].toLowerCase() + '? Os outros meses nao mudam.')) return;
+  if (!pe || !(await uiConfirm('Remover ' + (pe.nome || 'esta pessoa') + ' do rateio de ' + revMesNome(mkey) + '?\nOs outros meses nao mudam, e da para restaurar depois.', { titulo: 'Remover pessoa do rateio', okTexto: 'Remover', perigo: true }))) return;
   if (!pe.ocultoMeses) pe.ocultoMeses = {};
   pe.ocultoMeses[mkey] = true;
   if (RP.meses[mkey]) delete RP.meses[mkey][id];
@@ -10514,14 +10587,14 @@ function rpToggleProjeto(id, code, on) {
   rpScheduleSave();
 }
 
-function rpCopiarMesAnterior() {
+async function rpCopiarMesAnterior() {
   const mkey = rpCurrentMonth();
   const idx = MESES.indexOf(mkey);
-  if (idx <= 0) { alert('Nao ha mes anterior a ' + mkey + '.'); return; }
+  if (idx <= 0) { uiAlert('Nao ha mes anterior a ' + revMesNome(mkey) + '.', { titulo: 'Copiar do mes anterior' }); return; }
   const prev = RP.meses[MESES[idx - 1]] || {};
-  if (Object.keys(prev).length === 0) { alert('O mes ' + MESES[idx - 1] + ' nao tem rateio configurado.'); return; }
+  if (Object.keys(prev).length === 0) { uiAlert(revMesNome(MESES[idx - 1]) + ' nao tem rateio configurado.', { titulo: 'Copiar do mes anterior', aviso: true }); return; }
   const atual = RP.meses[mkey] || {};
-  if (Object.keys(atual).length > 0 && !confirm('Substituir as horas e projetos de ' + mkey + ' pelos de ' + MESES[idx - 1] + '?')) return;
+  if (Object.keys(atual).length > 0 && !(await uiConfirm('Substituir as horas e projetos de ' + revMesNome(mkey) + ' pelos de ' + revMesNome(MESES[idx - 1]) + '?', { titulo: 'Copiar do mes anterior', okTexto: 'Substituir', aviso: true }))) return;
   RP.meses[mkey] = {};
   Object.keys(prev).forEach(function(id) {
     const pe = RP.pessoas.find(function(x) { return x.id === id; });
@@ -10579,10 +10652,10 @@ async function mesPadraoSalvar(key) {
   if (error) document.getElementById('mes-padrao-info').textContent = 'Padrao: ' + revMesNome(key) + ' (so neste navegador -- falhou ao sincronizar)';
 }
 
-function mesPadraoAvancar() {
+async function mesPadraoAvancar() {
   const atual = mesPadraoAtual();
   const prox = MESES[MESES.indexOf(atual) + 1];
-  if (!prox || !confirm('Definir ' + revMesNome(prox) + ' como mes padrao do site (vale para todos os gestores)?')) return;
+  if (!prox || !(await uiConfirm('O site passa a abrir em ' + revMesNome(prox) + ' para todos os gestores. Da para desfazer logo em seguida.', { titulo: 'Virar o mes padrao', okTexto: 'Virar para ' + revMesNome(prox) }))) return;
   MES_PADRAO_DESFAZER = atual;
   mesPadraoSalvar(prox);
 }
