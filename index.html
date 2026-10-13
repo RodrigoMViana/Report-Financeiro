@@ -235,6 +235,8 @@
         <button type="button" class="gestor-btn" data-gestor="Dinart" onclick="setGestor('Dinart')">Dinart</button>
         <button type="button" class="gestor-btn" data-gestor="Eça" onclick="setGestor('Eça')">Eça</button>
       </div>
+      <button type="button" class="mes-padrao-btn" id="gestor-padrao-btn" onclick="gestorPadraoDefinir()"></button>
+      <div class="mes-padrao-info" id="gestor-padrao-info"></div>
     </div>
     <div class="month-picker">
       <label for="month-select">Mes de referencia</label>
@@ -5552,9 +5554,48 @@ const MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV'
 
 DATA.forEach(function(p){ if (!p.gestor) p.gestor = 'Rodrigo'; });
 
-var CURRENT_GESTOR = (function(){
-  try { return localStorage.getItem('pr_current_gestor') || 'Rodrigo'; } catch(e) { return 'Rodrigo'; }
+var GESTORES_VALIDOS = ['Rodrigo', 'Dinart', 'Eça'];
+// Gestor padrao de quem acessa (salvo neste navegador). Ordem de prioridade ao abrir o site:
+// 1) link com ?gestor=Nome  2) padrao escolhido no botao  3) ultimo gestor usado  4) Rodrigo.
+var GESTOR_PADRAO = (function(){
+  try { var g = localStorage.getItem('pr_gestor_padrao'); return GESTORES_VALIDOS.indexOf(g) !== -1 ? g : null; } catch(e) { return null; }
 })();
+var CURRENT_GESTOR = (function(){
+  try {
+    var q = new URLSearchParams(location.search).get('gestor');
+    if (q) {
+      var achado = GESTORES_VALIDOS.filter(function(x){ return x.toLowerCase() === q.toLowerCase() || x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() === q.toLowerCase(); })[0];
+      if (achado) return achado;
+    }
+  } catch(e) {}
+  if (GESTOR_PADRAO) return GESTOR_PADRAO;
+  try { var u = localStorage.getItem('pr_current_gestor'); if (GESTORES_VALIDOS.indexOf(u) !== -1) return u; } catch(e) {}
+  return 'Rodrigo';
+})();
+
+function gestorPadraoRender() {
+  var btn = document.getElementById('gestor-padrao-btn');
+  var info = document.getElementById('gestor-padrao-info');
+  if (!btn || !info) return;
+  var ehPadrao = GESTOR_PADRAO === CURRENT_GESTOR;
+  btn.textContent = ehPadrao ? 'Padrão: ' + CURRENT_GESTOR + ' ✓' : 'Definir ' + CURRENT_GESTOR + ' como padrão';
+  btn.disabled = ehPadrao;
+  btn.title = ehPadrao ? 'Ao entrar no site, este gestor será selecionado automaticamente neste navegador.' : 'Faz o site abrir sempre em ' + CURRENT_GESTOR + ' neste navegador.';
+  info.innerHTML = GESTOR_PADRAO && !ehPadrao ? 'Seu padrão: ' + GESTOR_PADRAO + ' &middot; <a href="#" onclick="gestorPadraoLimpar(); return false;">Remover</a>'
+    : (ehPadrao ? '<a href="#" onclick="gestorPadraoLimpar(); return false;">Remover padrão</a>' : '');
+}
+
+function gestorPadraoDefinir() {
+  GESTOR_PADRAO = CURRENT_GESTOR;
+  try { localStorage.setItem('pr_gestor_padrao', GESTOR_PADRAO); } catch(e) {}
+  gestorPadraoRender();
+}
+
+function gestorPadraoLimpar() {
+  GESTOR_PADRAO = null;
+  try { localStorage.removeItem('pr_gestor_padrao'); } catch(e) {}
+  gestorPadraoRender();
+}
 
 function currentProjects() {
   return DATA.filter(function(p){ return (p.gestor || 'Rodrigo') === CURRENT_GESTOR; });
@@ -5567,6 +5608,7 @@ function setGestor(g) {
   document.querySelectorAll('.gestor-btn').forEach(function(b){
     b.classList.toggle('active', b.getAttribute('data-gestor') === g);
   });
+  gestorPadraoRender();
   renderAllTabs(document.getElementById('month-select').value);
 }
 
@@ -8463,6 +8505,7 @@ document.getElementById('month-select').setAttribute('onchange', "renderAllTabs(
 document.querySelectorAll('.gestor-btn').forEach(function(b){
   b.classList.toggle('active', b.getAttribute('data-gestor') === CURRENT_GESTOR);
 });
+gestorPadraoRender();
 
 // Mes de referencia padrao: a partir do dia 10 de cada mes, o mes atual passa a
 // ser o default automaticamente (antes do dia 10, mantem o mes anterior, pois
