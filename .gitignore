@@ -18,3 +18,6 @@ Converter_PRs_para_xlsx.bas
 
 # Contexto local do Claude Code (não publicar)
 CLAUDE.md
+
+# token de acesso ao GitHub (nunca commitar)
+.git-token

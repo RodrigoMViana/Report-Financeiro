@@ -8420,6 +8420,9 @@ async function processarPRs(files, opts) {
         const hc = revExtractHC(wb, code, file.name);
         if (hc) {
           if (opts.hcDireto && typeof REV !== 'undefined' && REV) REV.hc[code] = hc; else revQueueHC(hc);
+          REV_HC_VER++;
+          const sr = await hcSharedSalvar(hc);
+          if (!sr.ok) faltou.push('falhou ao compartilhar as horas');
           hcLidos.push(code);
         } else faltou.push('aba HC nao encontrada');
       } catch (e) { faltou.push('aba HC: ' + e.message); }
@@ -8786,18 +8789,22 @@ function trProjetoSite(txt) {
   return DATA.find(function(p) { return p.code.toUpperCase() === t || String(p.operacion || '').toUpperCase() === t; }) || null;
 }
 
-// Taxa da pessoa no mes de competencia: aba HC da PR do projeto de origem > qualquer PR > TX da HC >
-// planilha de pessoas da Revisao. Depende da Revisao do gestor estar carregada (mesma senha).
+// Taxa da pessoa: planilha de pessoas da Revisao (PEOPLE+) > taxa do mes de competencia na aba HC da PR
+// do projeto de origem > qualquer PR > TX da HC. Depende da Revisao do gestor estar carregada (mesma senha).
 function trTaxaPessoa(mat, mkeyComp, projorig) {
   const m = revMat(mat);
   if (!m || typeof REV === 'undefined' || !REV) return null;
   const orig = trProjetoSite(projorig);
   const occ = [];
-  Object.keys(REV.hc || {}).forEach(function(code) {
-    const pe = (REV.hc[code].pessoas || []).find(function(x) { return x.matricula === m; });
+  const HCV = revHC();
+  Object.keys(HCV).forEach(function(code) {
+    const pe = (HCV[code].pessoas || []).find(function(x) { return x.matricula === m; });
     if (pe) occ.push(Object.assign({ code: code }, pe));
   });
   occ.sort(function(a, b) { return (orig && b.code === orig.code ? 1 : 0) - (orig && a.code === orig.code ? 1 : 0); });
+  // 1o a planilha de pessoas (taxa oficial do PEOPLE+); depois a taxa da PR.
+  const pl = (REV.pessoas || []).find(function(x) { return x.matricula === m; });
+  if (pl && pl.taxa) return { taxa: pl.taxa, fonte: 'planilha de pessoas (' + (REV.pessoasArquivo || 'Revisao') + ')', nome: pl.nome || (occ[0] && occ[0].nome) };
   for (const o of occ) {
     if (mkeyComp && o.taxa && typeof o.taxa[mkeyComp] === 'number') return { taxa: o.taxa[mkeyComp], fonte: 'taxa de ' + TR_MES_NOMES[mkeyComp].toLowerCase() + ' na PR do ' + o.code, nome: o.nome };
   }
@@ -8885,8 +8892,9 @@ function trCalcCusto(o) {
       // Pessoa na aba HC (de preferencia na PR do projeto de origem) para achar cidade e carga diaria.
       const mat = revMat(o.matricula);
       let pe = null, peCode = code;
-      if (REV.hc && REV.hc[code]) pe = (REV.hc[code].pessoas || []).find(function(x) { return x.matricula === mat; }) || null;
-      if (!pe) Object.keys(REV.hc || {}).some(function(c) { const x = (REV.hc[c].pessoas || []).find(function(y) { return y.matricula === mat; }); if (x) { pe = x; peCode = c; } return !!x; });
+      const HCV = revHC();
+      if (HCV[code]) pe = (HCV[code].pessoas || []).find(function(x) { return x.matricula === mat; }) || null;
+      if (!pe) Object.keys(HCV).some(function(c) { const x = (HCV[c].pessoas || []).find(function(y) { return y.matricula === mat; }); if (x) { pe = x; peCode = c; } return !!x; });
       const du = revDiasUteisPR(peCode, mk, pe);
       const ch = (pe && pe.ch) || 8.8;
       const horasMes = du.dias * ch;
@@ -9363,6 +9371,68 @@ var REV_HC_PENDING = {};     // HC lido pelo "Atualizar PRs" do topo enquanto a 
 var REV_REMOTE = SUPABASE_CONFIGURED && !/^(localhost|127\.0\.0\.1|\[::1\]|)$/.test(location.hostname);
 
 function revComposite(g) { return '__REVISAO__::' + g; }
+
+// ---- Horas das PRs compartilhadas entre gestores ----
+// Toda PR enviada (por qualquer gestor) grava em '__HC__::<projeto>' so o que e preciso para conferir horas:
+// matricula, nome, status, horas, carga diaria, estado/cidade e calendario -- SEM taxa. As taxas continuam
+// so no JSON cifrado da Revisao de quem subiu (REV.hc). revHC() junta as duas fontes numa visao unica.
+var HC_SHARED = {};
+var REV_HC_VER = 0;
+var REV_HC_MEMO = null;
+function hcSharedKey(code) { return '__HC__::' + code; }
+
+function hcSemTaxa(hc) {
+  return { code: hc.code, arquivo: hc.arquivo, data: hc.data, calendario: hc.calendario || {}, calendarios: hc.calendarios || [],
+    pessoas: (hc.pessoas || []).map(function(p) { return { matricula: p.matricula, nome: p.nome, status: p.status, ch: p.ch, estado: p.estado, cidade: p.cidade, horas: p.horas }; }) };
+}
+
+async function hcSharedSalvar(hc) {
+  const sh = hcSemTaxa(hc);
+  HC_SHARED[hc.code] = sh;
+  REV_HC_VER++;
+  const text = JSON.stringify(sh);
+  try { localStorage.setItem(NOTES_PREFIX + hcSharedKey(hc.code), text); } catch (e) {}
+  if (!REV_REMOTE) return { ok: true, local: true };
+  const { error } = await sb.from('notes').upsert({ code: hcSharedKey(hc.code), month: 'ALL', text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+  return { ok: !error };
+}
+
+async function hcSharedCarregar() {
+  try {
+    const pref = NOTES_PREFIX + '__HC__::';
+    Object.keys(localStorage).forEach(function(k) {
+      if (k.indexOf(pref) !== 0) return;
+      try { const o = JSON.parse(localStorage.getItem(k)); if (o && o.code) HC_SHARED[o.code] = o; } catch (e) {}
+    });
+  } catch (e) {}
+  if (REV_REMOTE) {
+    const rows = await fetchAllNotes(() => sb.from('notes').select('code,text').like('code', '__HC__::%').eq('month', 'ALL'));
+    (rows || []).forEach(function(r) { try { const o = JSON.parse(r.text); if (o && o.code) HC_SHARED[o.code] = o; } catch (e) {} });
+  }
+  REV_HC_VER++;
+  if (typeof REV !== 'undefined' && REV && RP_MODE === 'unlocked') {
+    const mkey = document.getElementById('month-select').value;
+    renderRevisaoTab(mkey); renderRateioTab(mkey);
+  }
+}
+
+// Visao unica das abas HC: a da Revisao do gestor (com taxa) ou a compartilhada (sem taxa). Se a compartilhada
+// for mais nova (alguem subiu a PR depois), valem as horas dela, com as taxas que o gestor tiver dessa pessoa.
+function revHC() {
+  const own = (typeof REV !== 'undefined' && REV && REV.hc) || {};
+  if (REV_HC_MEMO && REV_HC_MEMO.ver === REV_HC_VER && REV_HC_MEMO.own === own) return REV_HC_MEMO.map;
+  const map = {};
+  Object.keys(HC_SHARED).forEach(function(c) { map[c] = HC_SHARED[c]; });
+  Object.keys(own).forEach(function(c) {
+    const o = own[c], sh = HC_SHARED[c];
+    if (!sh || (o.data || '') >= (sh.data || '')) { map[c] = o; return; }
+    const tx = {};
+    (o.pessoas || []).forEach(function(pe) { tx[pe.matricula] = pe; });
+    map[c] = Object.assign({}, sh, { pessoas: (sh.pessoas || []).map(function(pe) { const t = tx[pe.matricula]; return t ? Object.assign({}, pe, { taxa: t.taxa, tx: t.tx }) : pe; }) });
+  });
+  REV_HC_MEMO = { ver: REV_HC_VER, own: own, map: map };
+  return map;
+}
 function revLocalKey(g) { return NOTES_PREFIX + revComposite(g); }
 function revNorm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u00a0/g, ' ').trim().toUpperCase().replace(/\s+/g, ' '); }
 function revNum(v) {
@@ -9461,6 +9531,7 @@ function revMergePending() {
     if (p && (p.gestor || 'Rodrigo') !== RP_GESTOR) return;
     REV.hc[code] = REV_HC_PENDING[code];
     delete REV_HC_PENDING[code];
+    REV_HC_VER++;
     n++;
   });
   return n > 0;
@@ -9739,6 +9810,7 @@ function revAtivaNoMes(a, mkey) {
 // traz a unidade inteira, e projetos de outros gestores sem PR so gerariam alerta falso.
 function revProjetoConsiderado(code) {
   if (REV.hc[code]) return true;
+  if (HC_SHARED[code] && !DATA.some(function(d) { return d.code === code; })) return true;
   const p = DATA.find(function(d) { return d.code === code; });
   return !!p && (p.gestor || 'Rodrigo') === RP_GESTOR;
 }
@@ -9746,13 +9818,14 @@ function revProjetoConsiderado(code) {
 // proj: '' = todos os projetos considerados; senao so aquele projeto.
 function revAnalisar(mkey, proj) {
   const mes = revMesNome(mkey);
-  const hcDe = function(code, mat) { const h = REV.hc[code]; return h ? (h.pessoas || []).find(function(pe) { return pe.matricula === mat; }) || null : null; };
+  const HCV = revHC();
+  const hcDe = function(code, mat) { const h = HCV[code]; return h ? (h.pessoas || []).find(function(pe) { return pe.matricula === mat; }) || null : null; };
   const doProj = function(code) { return !proj || code === proj; };
   const planByMat = {};
   REV.pessoas.forEach(function(p) { planByMat[p.matricula] = p; });
   const horasEm = {};  // matricula -> [codigos com horas no mes]
-  Object.keys(REV.hc).forEach(function(code) {
-    (REV.hc[code].pessoas || []).forEach(function(pe) { if ((pe.horas[mkey] || 0) > 0) (horasEm[pe.matricula] || (horasEm[pe.matricula] = [])).push(code); });
+  Object.keys(HCV).forEach(function(code) {
+    (HCV[code].pessoas || []).forEach(function(pe) { if ((pe.horas[mkey] || 0) > 0) (horasEm[pe.matricula] || (horasEm[pe.matricula] = [])).push(code); });
   });
 
   // 1) Atribuicoes ativas no mes x horas na PR do mesmo projeto.
@@ -9768,24 +9841,25 @@ function revAnalisar(mkey, proj) {
       if (horas > 0) return;
       const outras = (horasEm[p.matricula] || []).filter(function(c) { return c !== a.code; });
       let situacao;
-      if (!REV.hc[a.code]) situacao = 'PR do ' + a.code + ' nao enviada';
+      if (!HCV[a.code]) situacao = 'PR do ' + a.code + ' nao enviada';
       else if (!o) situacao = 'Nao esta na PR do ' + a.code;
       else situacao = 'Esta na PR do ' + a.code + ', sem horas em ' + mes;
       if (outras.length) situacao += ' (tem horas em ' + outras.join(', ') + ')';
-      semHoras.push({ p: p, a: a, pct: ativa, situacao: situacao, prNaoEnviada: !REV.hc[a.code] });
+      semHoras.push({ p: p, a: a, pct: ativa, situacao: situacao, prNaoEnviada: !HCV[a.code] });
     });
   });
 
   // 2) e 3) Lancamentos com horas no mes: taxa x planilha e se ha atribuicao ao projeto.
   const divergentes = [], fora = [];
-  Object.keys(REV.hc).forEach(function(code) {
-    if (!doProj(code)) return;
-    (REV.hc[code].pessoas || []).forEach(function(o) {
+  Object.keys(HCV).forEach(function(code) {
+    if (!doProj(code) || !revProjetoConsiderado(code)) return;
+    (HCV[code].pessoas || []).forEach(function(o) {
       const h = o.horas[mkey] || 0;
       if (h <= 0) return;
       const p = planByMat[o.matricula];
       const tm = revTaxaMes(o, mkey);
-      if (p && p.taxa !== null && (tm === null || Math.abs(tm - p.taxa) > 0.005)) {
+      // Sem a aba HC com taxa (so as horas compartilhadas de outro gestor) nao da para comparar a taxa.
+      if (p && p.taxa !== null && o.taxa && (tm === null || Math.abs(tm - p.taxa) > 0.005)) {
         divergentes.push({ p: p, code: code, taxaMes: tm, horas: h, impacto: tm === null ? null : (p.taxa - tm) * h });
       }
       const ativas = p ? revAtribs(p).filter(function(a) { return revAtivaNoMes(a, mkey) !== false; }) : [];
@@ -9815,12 +9889,13 @@ function revSetProjeto(v) {
 function revRenderFiltro() {
   const sel = document.getElementById('rev-projeto');
   const citados = [].concat.apply([], REV.pessoas.map(function(p) { return revAtribs(p).map(function(a) { return a.code; }); }));
-  const codes = Array.from(new Set(Object.keys(REV.hc).concat(citados))).filter(revProjetoConsiderado).sort();
+  const doGestor = DATA.filter(function(d) { return (d.gestor || 'Rodrigo') === RP_GESTOR; }).map(function(d) { return d.code; });
+  const codes = Array.from(new Set(doGestor.concat(Object.keys(REV.hc), citados))).filter(revProjetoConsiderado).sort();
   let atual = sel.value;
   if (!sel.options.length) { try { atual = localStorage.getItem('pr_rev_projeto') || ''; } catch (e) {} }
   const nome = function(c) { const p = DATA.find(function(d) { return d.code === c; }); return p ? ' - ' + p.name : ''; };
   sel.innerHTML = '<option value="">Todos os projetos</option>' + codes.map(function(c) {
-    return '<option value="' + c + '">' + c + rpEsc(nome(c)).slice(0, 60) + (REV.hc[c] ? '' : ' (sem PR)') + '</option>';
+    return '<option value="' + c + '">' + c + rpEsc(nome(c)).slice(0, 60) + (revHC()[c] ? '' : ' (sem PR)') + '</option>';
   }).join('');
   sel.value = codes.indexOf(atual) !== -1 ? atual : '';
 }
@@ -9962,7 +10037,7 @@ function revDiasFeriasNoMes(l, mkey) {
 // ao % atribuido nos projetos com PR enviada. Sem calendario na PR (PR enviada antes desta versao),
 // usa os dias uteis calculados (seg-sex menos feriados nacionais).
 function revDiasUteisPR(code, mkey, pe) {
-  const h = REV.hc[code];
+  const h = revHC()[code];
   if (h && pe && pe.estado && h.calendarios && h.calendarios.length) {
     const doEstado = h.calendarios.filter(function(c) { return c.estado === pe.estado && c.dias[mkey]; });
     const c = doEstado.find(function(c) { return c.cidade === pe.cidade; }) || doEstado[0];
@@ -9982,14 +10057,17 @@ function revHorasMes(mkey, proj) {
   });
   const pessoas = {};
   const add = function(mat) { return pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: '', horasPR: 0, codes: [], ch: null, noProj: !proj, calCode: null, calHoras: -1 }); };
-  Object.keys(REV.hc).forEach(function(code) {
-    (REV.hc[code].pessoas || []).forEach(function(o) {
+  const HCV = revHC();
+  // Horas de TODAS as PRs enviadas (de qualquer gestor): a pessoa tem que fechar o mes somando todas.
+  Object.keys(HCV).forEach(function(code) {
+    (HCV[code].pessoas || []).forEach(function(o) {
       const h = o.horas[mkey] || 0;
       if (h <= 0) return;
       const x = add(o.matricula);
       x.nome = x.nome || o.nome;
       x.horasPR += h;
       x.codes.push(code);
+      if (revProjetoConsiderado(code)) x.considerado = true;
       if (h > x.calHoras) { x.calCode = code; x.calHoras = h; }  // calendario da PR com mais horas
       if (x.ch === null && o.ch) x.ch = o.ch;
       if (!x.pe && o.estado) x.pe = o;
@@ -9998,28 +10076,29 @@ function revHorasMes(mkey, proj) {
   });
   REV.pessoas.forEach(function(p) {
     revAtribs(p).forEach(function(a) {
-      if (!REV.hc[a.code] || revAtivaNoMes(a, mkey) === false) return;
+      if (!HCV[a.code] || !revProjetoConsiderado(a.code) || revAtivaNoMes(a, mkey) === false) return;
       const x = add(p.matricula);
+      x.considerado = true;
       if (!x.calCode) x.calCode = a.code;
       if (a.code === proj) x.noProj = true;
     });
   });
   const linhas = [];
   Object.values(pessoas).forEach(function(x) {
-    if (!x.noProj) return;
+    if (!x.noProj || !x.considerado) return;
     const p = planByMat[x.matricula];
     if (p) x.nome = p.nome || x.nome;
     if (x.ch === null) {
-      Object.keys(REV.hc).some(function(c) { const o = (REV.hc[c].pessoas || []).find(function(pe) { return pe.matricula === x.matricula && pe.ch; }); if (o) x.ch = o.ch; return !!o; });
+      Object.keys(HCV).some(function(c) { const o = (HCV[c].pessoas || []).find(function(pe) { return pe.matricula === x.matricula && pe.ch; }); if (o) x.ch = o.ch; return !!o; });
     }
     const ch = x.ch || 8.8;
-    if (!x.pe) Object.keys(REV.hc).some(function(c) { const o = (REV.hc[c].pessoas || []).find(function(pe) { return pe.matricula === x.matricula && pe.estado; }); if (o) x.pe = o; return !!o; });
+    if (!x.pe) Object.keys(HCV).some(function(c) { const o = (HCV[c].pessoas || []).find(function(pe) { return pe.matricula === x.matricula && pe.estado; }); if (o) x.pe = o; return !!o; });
     const du = x.calCode ? revDiasUteisPR(x.calCode, mkey, x.pe) : { dias: rpDiasUteis(mkey), fonte: 'calculado', local: 'seg-sex menos feriados nacionais' };
     // % atribuido nos projetos com PR enviada (planilha "Plano de recursos"); sem essa informacao, 100%.
     let pctAtr = 100;
     if (p && p.atrib) {
       const s = p.atrib.reduce(function(acc, a) {
-        if (!REV.hc[a.code]) return acc;
+        if (!HCV[a.code]) return acc;
         const v = revAtivaNoMes(a, mkey);
         return v === false ? acc : acc + (v === null ? 100 : v);
       }, 0);
@@ -10056,11 +10135,13 @@ function revRenderHorasMes(hm, mkey) {
 
 function renderRevisaoTab(mkey) {
   if (typeof REV === 'undefined' || !REV || RP_MODE !== 'unlocked') return;
-  const prs = Object.keys(REV.hc).sort();
+  const prs = Object.keys(revHC()).sort();
+  const prsOutros = prs.filter(function(c) { return !REV.hc[c]; });
   const dt = function(iso) { return iso ? new Date(iso).toLocaleDateString('pt-BR') : ''; };
   document.getElementById('rev-fontes').innerHTML =
     '<b>Planilha:</b> ' + (REV.pessoasArquivo ? rpEsc(REV.pessoasArquivo) + ' (' + REV.pessoas.length + ' pessoas, enviada em ' + dt(REV.pessoasData) + ')' : 'nenhuma enviada') +
-    ' &middot; <b>PRs com HC:</b> ' + (prs.length ? prs.map(function(c) { return '<span title="' + rpEsc(REV.hc[c].arquivo) + ' - ' + dt(REV.hc[c].data) + '">' + c + '</span>'; }).join(', ') : 'nenhuma enviada') +
+    ' &middot; <b>PRs com HC:</b> ' + (prs.length ? prs.map(function(c) { const h = revHC()[c]; return '<span title="' + rpEsc(h.arquivo) + ' - ' + dt(h.data) + (REV.hc[c] ? '' : ' (horas compartilhadas, sem taxa)') + '">' + c + (REV.hc[c] ? '' : '*') + '</span>'; }).join(', ') +
+      (prsOutros.length ? ' <span title="Horas de PRs enviadas por outros gestores: entram na soma de horas da pessoa, sem taxa.">(* de outros gestores, so horas)</span>' : '') : 'nenhuma enviada') +
     ' &middot; <b>Ferias:</b> ' + (REV.ferias ? rpEsc(REV.ferias.arquivo) + ' (' + REV.ferias.linhas.length + ' periodos, enviada em ' + dt(REV.ferias.data) + ')' : 'nenhuma enviada');
   revRenderFiltro();
   revRenderSenhaFerias();
@@ -10090,7 +10171,7 @@ function renderRevisaoTab(mkey) {
   const itens = [];
   if (proj) {
     const p = DATA.find(function(d) { return d.code === proj; });
-    itens.push('<b>Projeto ' + proj + (p ? ' - ' + rpEsc(p.name) : '') + '</b>' + (REV.hc[proj] ? '' : ' -- <b>PR nao enviada</b>, so da para ver quem esta atribuido nele pela planilha') + '.');
+    itens.push('<b>Projeto ' + proj + (p ? ' - ' + rpEsc(p.name) : '') + '</b>' + (revHC()[proj] ? '' : ' -- <b>PR nao enviada</b>, so da para ver quem esta atribuido nele pela planilha') + '.');
   }
   itens.push('<b>' + a.atribuicoes.length + ' atribuicao(oes) ativa(s)</b> em ' + mes + escopo + ' na planilha (' + a.pessoas + ' pessoa(s)); <b>' + a.comHoras + ' (' + pct(a.comHoras, a.atribuicoes.length) + ')</b> com horas na PR do projeto' + (proj ? '' : ' (' + prs.length + ' PR(s) consideradas)') + '.');
   if (a.semHoras.length) itens.push('<b>' + a.semHoras.length + ' atribuicao(oes) sem horas</b> na PR em ' + mes + ': ' + nomes(a.semHoras, function(s) { return rpEsc(s.p.nome || s.p.matricula) + (proj ? '' : ' (' + s.a.code + ')'); }) + '.');
@@ -10404,14 +10485,23 @@ function rpCalcPessoa(pessoa, mkey) {
   const taxa = rpTaxaEfetiva(pessoa, mkey);
   const codes = entry.projetos.filter(function(c) { return DATA.some(function(d) { return d.code === c; }); });
   const total = codes.reduce(function(s, c) { return s + Math.max(0, rpIngreso(c, mkey)); }, 0);
+  // Horas fixadas a mao num projeto (entry.horasFixas) ficam como digitadas; o restante das horas do mes e
+  // distribuido entre os demais projetos marcados, proporcional ao ingreso.
+  const H = entry.horas || 0;
+  const fixas = entry.horasFixas || {};
+  const ehFixa = function(c) { return typeof fixas[c] === 'number'; };
+  const somaFixas = codes.reduce(function(s, c) { return s + (ehFixa(c) ? fixas[c] : 0); }, 0);
+  const totalLivre = codes.reduce(function(s, c) { return s + (ehFixa(c) ? 0 : Math.max(0, rpIngreso(c, mkey))); }, 0);
+  const resto = Math.max(0, H - somaFixas);
   const linhas = {};
+  let horasDist = 0, custo = 0;
   codes.forEach(function(c) {
     const ing = Math.max(0, rpIngreso(c, mkey));
-    const pct = total > 0 ? ing / total : 0;
-    const horas = (entry.horas || 0) * pct;
-    linhas[c] = { ingreso: ing, pct: pct, horas: horas, custo: horas * taxa };
+    const horas = ehFixa(c) ? fixas[c] : (totalLivre > 0 ? resto * ing / totalLivre : 0);
+    linhas[c] = { ingreso: ing, pct: H > 0 ? horas / H : 0, horas: horas, custo: horas * taxa, fixa: ehFixa(c) };
+    horasDist += horas; custo += horas * taxa;
   });
-  return { entry: entry, totalIngreso: total, linhas: linhas, horas: entry.horas || 0, taxa: taxa, custo: (entry.horas || 0) * taxa };
+  return { entry: entry, totalIngreso: total, linhas: linhas, horas: H, horasDist: horasDist, somaFixas: somaFixas, temLivre: codes.some(function(c) { return !ehFixa(c); }), taxa: taxa, custo: custo };
 }
 
 function rpProjetosVisiveis(extraCodes) {
@@ -10465,7 +10555,7 @@ function renderRateioTab(mkey) {
             </div>
             <div class="obs-block extra-block">
               <div class="obs-header"><label>Horas no mes (${mkey})</label></div>
-              <input type="text" inputmode="decimal" class="rp-input" style="width:100%;" value="${entry.horas ? rpNum(entry.horas, 2) : ''}" placeholder="Ex: 80" oninput="rpSetHoras('${pe.id}',this.value)">
+              <input type="text" inputmode="decimal" class="rp-input" style="width:100%;" id="rp-horas-${pe.id}" value="${entry.horas ? rpNum(entry.horas, 2) : ''}" placeholder="Ex: 80" oninput="rpSetHoras('${pe.id}',this.value)">
               <div class="small-note">Horas desta pessoa no mes que sao devidas aos seus projetos.</div>
             </div>
           </div>
@@ -10571,17 +10661,19 @@ function rpRenderPessoaCalc(id, mkey) {
       <td>${rpEsc(p.name)}</td>
       <td class="num">${rpIngresoCell(p.code, mkey)}</td>
       <td class="num">${on ? pctf(l.pct * 100, 2) : '-'}</td>
-      <td class="num">${on ? rpNum(l.horas, 2) : '-'}</td>
+      <td class="num">${on ? '<input type="text" inputmode="decimal" class="rp-input" style="width:90px; text-align:right;' + (l.fixa ? ' background:var(--warn-bg); border-color:var(--warn);' : '') + '" value="' + rpNum(l.horas, 2) + '" onfocus="this.select()" onchange="rpSetHorasProjeto(\'' + id + '\',\'' + p.code + '\',this.value)" onkeydown="if(event.key===\'Enter\') this.blur()" title="Digite para fixar as horas deste projeto; o restante e redistribuido">' + (l.fixa ? '<div class="small-note">fixada &middot; <a href="#" onclick="rpSetHorasProjeto(\'' + id + '\',\'' + p.code + '\',\'\'); return false;">automatica</a></div>' : '') : '-'}</td>
       <td class="num">${on ? porDia(l.horas) : '-'}</td>
       <td class="num">${on ? brl(l.custo) : '-'}</td>
     </tr>`;
   }).join('');
-  const aviso = (Object.keys(c.linhas).length > 0 && c.totalIngreso === 0)
-    ? '<div class="small-note" style="color:var(--warn);">Os projetos marcados nao tem Ingreso no Pre Cierre deste mes -- nao da para distribuir as horas.</div>' : '';
+  let aviso = '';
+  if (c.somaFixas > c.horas + 0.005) aviso = '<div class="small-note" style="color:var(--bad);">As horas fixadas (' + rpNum(c.somaFixas, 2) + 'h) passam das horas do mes (' + rpNum(c.horas, 2) + 'h): os demais projetos ficaram com 0h.</div>';
+  else if (!c.temLivre && Object.keys(c.linhas).length && Math.abs(c.horasDist - c.horas) > 0.005) aviso = '<div class="small-note" style="color:var(--warn);">Todas as horas estao fixadas e somam ' + rpNum(c.horasDist, 2) + 'h, diferente das ' + rpNum(c.horas, 2) + 'h do mes.</div>';
+  else if (c.temLivre && Object.keys(c.linhas).length > 0 && c.totalIngreso === 0) aviso = '<div class="small-note" style="color:var(--warn);">Os projetos marcados nao tem Ingreso no Pre Cierre deste mes -- nao da para distribuir as horas.</div>';
   tbl.innerHTML = `${aviso}<table class="rp-table">
     <thead><tr><th></th><th>Codigo</th><th>Projeto</th><th class="num" title="Editavel. Deixe vazio para voltar ao valor do Pre Cierre.">Ingreso (${mkey}) &#9998;</th><th class="num">% rateio</th><th class="num">Horas</th><th class="num">Horas/dia</th><th class="num">Custo</th></tr></thead>
     <tbody>${rows}</tbody>
-    <tfoot><tr><td></td><td colspan="2">Total marcado</td><td class="num">${brl(c.totalIngreso)}</td><td class="num">${Object.keys(c.linhas).length ? pctf(c.totalIngreso > 0 ? 100 : 0, 2) : '-'}</td><td class="num">${rpNum(c.totalIngreso > 0 ? c.horas : 0, 2)}</td><td class="num">${porDia(c.totalIngreso > 0 ? c.horas : 0)}</td><td class="num">${brl(c.totalIngreso > 0 ? c.custo : 0)}</td></tr></tfoot>
+    <tfoot><tr><td></td><td colspan="2">Total marcado</td><td class="num">${brl(c.totalIngreso)}</td><td class="num">${Object.keys(c.linhas).length ? pctf(c.totalIngreso > 0 ? 100 : 0, 2) : '-'}</td><td class="num"><input type="text" inputmode="decimal" class="rp-input" style="width:90px; text-align:right; font-weight:700;" value="${rpNum(c.horas, 2)}" onfocus="this.select()" onchange="rpSetHorasTotal('${id}',this.value)" onkeydown="if(event.key==='Enter') this.blur()" title="Horas do mes desta pessoa (redistribui entre os projetos nao fixados)"></td><td class="num">${porDia(c.horasDist)}</td><td class="num">${brl(c.custo)}</td></tr></tfoot>
   </table>`;
 }
 
@@ -10693,10 +10785,28 @@ function rpSetHoras(id, value) {
   rpScheduleSave();
 }
 
+function rpSetHorasProjeto(id, code, valor) {
+  const mkey = rpCurrentMonth();
+  const entry = rpGetMes(mkey, id, true);
+  if (!entry.horasFixas) entry.horasFixas = {};
+  if (String(valor || '').trim() === '') delete entry.horasFixas[code];
+  else entry.horasFixas[code] = parseBRNum(valor);
+  rpRenderPessoaCalc(id, mkey);
+  rpRenderResumo(mkey);
+  rpScheduleSave();
+}
+
+function rpSetHorasTotal(id, valor) {
+  rpSetHoras(id, valor);
+  const el = document.getElementById('rp-horas-' + id);
+  if (el) el.value = parseBRNum(valor) ? rpNum(parseBRNum(valor), 2) : '';
+}
+
 function rpToggleProjeto(id, code, on) {
   const mkey = rpCurrentMonth();
   const entry = rpGetMes(mkey, id, true);
   entry.projetos = entry.projetos.filter(function(c) { return c !== code; });
+  if (!on && entry.horasFixas) delete entry.horasFixas[code];
   if (on) entry.projetos.push(code);
   rpRenderPessoaCalc(id, mkey);
   rpRenderResumo(mkey);
@@ -10715,7 +10825,7 @@ async function rpCopiarMesAnterior() {
   Object.keys(prev).forEach(function(id) {
     const pe = RP.pessoas.find(function(x) { return x.id === id; });
     if (!pe || !rpVisivelNoMes(pe, mkey)) return;
-    RP.meses[mkey][id] = { horas: prev[id].horas, projetos: prev[id].projetos.slice() };
+    RP.meses[mkey][id] = { horas: prev[id].horas, projetos: prev[id].projetos.slice(), horasFixas: Object.assign({}, prev[id].horasFixas || {}) };
   });
   renderRateioTab(mkey);
   rpScheduleSave();
@@ -10811,6 +10921,7 @@ loadParamsFromSupabase();
 seedCachesFromData();
 loadPrPcCacheFromSupabase();
 loadOutrosItemsFromSupabase();
+hcSharedCarregar();
 </script>
 
 </body>
