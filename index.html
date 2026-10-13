@@ -5419,7 +5419,7 @@
         <input type="file" id="tr-folha-file" accept=".xlsx,.xls,.xlsb" style="display:none;" onchange="trUploadFolha(this)">
         <button type="button" class="secondary" onclick="trAbrirResumo()">Resumo das transferencias</button>
         <button type="button" class="secondary" onclick="loadTransfMonth(document.getElementById('month-select').value)">Atualizar lista</button>
-        <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
+        <button type="button" class="secondary" onclick="atualizarDados(this)" title="Busca as informacoes mais recentes (o que outras pessoas subiram/salvaram) sem recarregar a pagina">&#8635; Atualizar</button>
         <input type="file" id="tr-file" accept=".xlsx,.xlsm" style="display:none;" onchange="trExportarArquivo(this)">
         <span class="email-status" id="tr-status"></span>
       </div>
@@ -5475,7 +5475,7 @@
       <div class="report-bar" style="align-items:center;">
         <button type="button" onclick="rpAddPessoa()">+ Adicionar pessoa</button>
         <button type="button" class="secondary" onclick="rpCopiarMesAnterior()">Copiar do mes anterior</button>
-        <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
+        <button type="button" class="secondary" onclick="atualizarDados(this)" title="Busca as informacoes mais recentes (o que outras pessoas subiram/salvaram) sem recarregar a pagina">&#8635; Atualizar</button>
         <span class="email-status" id="rp-save-status"></span>
       </div>
       <div class="report-bar" style="align-items:center; gap:8px;">
@@ -5508,7 +5508,7 @@
       <div class="report-bar" style="align-items:center;">
         <button type="button" onclick="document.getElementById('rev-pessoas-file').click()">Subir planilha de pessoas</button>
         <button type="button" onclick="document.getElementById('rev-pr-file').click()">Subir PRs</button>
-        <button type="button" class="secondary" onclick="rpLock()">Bloquear</button>
+        <button type="button" class="secondary" onclick="atualizarDados(this)" title="Busca as informacoes mais recentes (o que outras pessoas subiram/salvaram) sem recarregar a pagina">&#8635; Atualizar</button>
         <input type="file" id="rev-pessoas-file" accept=".xls,.xlsx,.xml,.csv" style="display:none;" onchange="revUploadPessoas(this)">
         <input type="file" id="rev-pr-file" accept=".xlsb,.xlsx" multiple style="display:none;" onchange="revUploadPRs(this)">
         <button type="button" onclick="document.getElementById('rev-ferias-file').click()">Subir ferias</button>
@@ -9530,6 +9530,16 @@ function revMesclar(a, b) {
   out.pessoasData = bMaisNova ? b.pessoasData : a.pessoasData;
   out.ferias = !a.ferias ? b.ferias : (!b.ferias ? a.ferias : (t(b.ferias.data) >= t(a.ferias.data) ? b.ferias : a.ferias));
   out.feriasSenha = b.feriasSenha || a.feriasSenha;
+  out.justificativas = {};
+  [a.justificativas || {}, b.justificativas || {}].forEach(function(js) {
+    Object.keys(js).forEach(function(m) {
+      if (!out.justificativas[m]) out.justificativas[m] = {};
+      Object.keys(js[m]).forEach(function(mat) {
+        const atual = out.justificativas[m][mat], novo = js[m][mat];
+        if (!atual || t(novo.t) >= t(atual.t)) out.justificativas[m][mat] = novo;
+      });
+    });
+  });
   if (a.folha || b.folha) {
     const fa = a.folha || { valores: {}, meses: [] }, fb = b.folha || { valores: {}, meses: [] };
     const dataMes = function(f, m) { return t((f.mesData || {})[m] || f.data); };
@@ -9565,8 +9575,9 @@ async function revLerGravado(g) {
 // msg: resultado da acao (ex.: "67 pessoas lidas"), mostrado junto com o status do salvamento.
 // Antes de gravar, busca a versao mais recente e mescla (revMesclar): se outra pessoa salvou no mesmo gestor
 // enquanto esta tela estava aberta, o que ela fez e mantido em vez de ser sobrescrito.
-async function revPersist(msg, cls) {
+async function revPersist(msg, cls, opts) {
   if (!REV || !RP_KEY) return;
+  opts = opts || {};
   const pre = msg ? msg + ' ' : '';
   const g = RP_GESTOR;
   let gravado = null;
@@ -9583,7 +9594,7 @@ async function revPersist(msg, cls) {
   const { error } = await sb.from('notes').upsert({ code: revComposite(g), month: RP_MONTH, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
   if (error) rpSetStatus('rev-status', pre + 'Salvo neste navegador, mas FALHOU ao sincronizar. Tente novamente.', 'bad');
   else rpSetStatus('rev-status', pre + 'Salvo.', cls || 'ok');
-  if (gravado) renderRevisaoTab(document.getElementById('month-select').value);
+  if (gravado && !opts.semRender) renderRevisaoTab(document.getElementById('month-select').value);
 }
 
 // HC lido pelo "Atualizar PRs" do topo: entra na Revisao do gestor dono do projeto.
@@ -10201,13 +10212,38 @@ function revRenderHorasMes(hm, mkey) {
     (hm.temFerias ? ' ' + hm.comFerias.length + ' pessoa(s) com ferias em ' + mes + '.' : ' <b>Nenhum arquivo de ferias enviado</b> -- suba o relatorio de ferias programadas para descontar as ferias.') + '</div>';
   const el = document.getElementById('rev-horas');
   if (!hm.desvios.length) { el.innerHTML = nota + '<div class="small-note">Horas da PR + ferias fecham com as horas do mes para todas as pessoas.</div>'; return; }
-  el.innerHTML = nota + '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>PR(s)</th><th class="num">Dias uteis</th><th class="num">Base</th><th class="num">Horas do mes</th><th class="num">Ferias</th><th class="num">% atrib.</th><th class="num">Esperado na PR</th><th class="num">Horas na PR</th><th class="num">Diferenca</th></tr></thead><tbody>' +
+  el.innerHTML = nota + '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>PR(s)</th><th class="num">Dias uteis</th><th class="num">Base</th><th class="num">Horas do mes</th><th class="num">Ferias</th><th class="num">% atrib.</th><th class="num">Esperado na PR</th><th class="num">Horas na PR</th><th class="num">Diferenca</th><th>Justificativa</th></tr></thead><tbody>' +
     hm.desvios.map(function(l) {
       return '<tr><td>' + l.matricula + '</td><td>' + rpEsc(l.nome) + '</td><td>' + (l.codes.join(', ') || '-') + '</td><td class="num" title="' + rpEsc(l.diasLocal || '') + '">' + rpNum(l.dias, 0) + (l.diasFonte === 'PR' ? '' : '*') +
         '</td><td class="num"' + (l.chPadrao ? ' title="CH_DIA nao informado na PR; usado 8,8h"' : '') + '>' + rpNum(l.ch, l.ch % 1 ? 1 : 0) + 'h' + (l.chPadrao ? '*' : '') + '</td><td class="num">' + rpNum(l.horasMes, 1) + '</td><td class="num">' +
         (l.diasFerias ? l.diasFerias + 'd / ' + rpNum(l.horasFerias, 1) + 'h' : '-') + '</td><td class="num">' + rpNum(l.pct, 0) + '%</td><td class="num">' + rpNum(l.esperado, 1) + '</td><td class="num">' + rpNum(l.horasPR, 1) +
-        '</td><td class="num ' + (l.dif < 0 ? 'bad' : 'warn') + '">' + (l.dif > 0 ? '+' : '') + rpNum(l.dif, 1) + 'h</td></tr>';
+        '</td><td class="num ' + (l.dif < 0 ? 'bad' : 'warn') + '">' + (l.dif > 0 ? '+' : '') + rpNum(l.dif, 1) + 'h</td>' +
+        '<td>' + revJustificativaCampo(mkey, l.matricula) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
+}
+
+// ---- Justificativa da divergencia de horas (por pessoa e mes) ----
+// Fica no cofre da Revisao do gestor (REV.justificativas[mkey][matricula] = {texto, t}) e entra na mescla.
+function revJustificativa(mkey, mat) {
+  const j = REV && REV.justificativas && REV.justificativas[mkey] && REV.justificativas[mkey][mat];
+  return j ? j.texto || '' : '';
+}
+
+function revJustificativaCampo(mkey, mat) {
+  const txt = revJustificativa(mkey, mat);
+  return '<input type="text" class="rp-input" style="width:240px;' + (txt ? '' : ' border-color:var(--warn);') + '" value="' + rpEsc(txt) + '" placeholder="Por que esta divergente?" maxlength="300"' +
+    ' onchange="revSalvarJustificativa(\'' + mkey + '\',\'' + mat + '\',this)" onkeydown="if(event.key===\'Enter\') this.blur()" title="' + rpEsc(txt || 'Escreva a justificativa e aperte Enter (ou saia do campo) para salvar') + '">';
+}
+
+async function revSalvarJustificativa(mkey, mat, el) {
+  if (!REV) return;
+  const texto = String(el.value || '').trim();
+  if (!REV.justificativas) REV.justificativas = {};
+  if (!REV.justificativas[mkey]) REV.justificativas[mkey] = {};
+  REV.justificativas[mkey][mat] = { texto: texto, t: new Date().toISOString() };
+  el.style.borderColor = texto ? '' : 'var(--warn)';
+  el.title = texto || 'Escreva a justificativa e aperte Enter (ou saia do campo) para salvar';
+  await revPersist('Justificativa de ' + mat + ' salva.', 'ok', { semRender: true });
 }
 
 function renderRevisaoTab(mkey) {
@@ -10442,6 +10478,49 @@ async function rpUnlock() {
   renderRateioTab(document.getElementById('month-select').value);
   renderTransfTab(document.getElementById('month-select').value);
   revLoad();
+}
+
+// Recarrega o rateio gravado do gestor (com a mesma chave), descartando o que esta so em memoria.
+async function rpRecarregar() {
+  if (RP_MODE !== 'unlocked' || !RP_KEY) return;
+  const g = RP_GESTOR;
+  const blob = await rpLoadBlob(g);
+  if (!blob || g !== RP_GESTOR || RP_MODE !== 'unlocked') return;
+  const b = JSON.parse(blob);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, RP_KEY, rpUnB64(b.ct));
+  RP = JSON.parse(new TextDecoder().decode(plain));
+  if (!RP.pessoas) RP.pessoas = [];
+  if (!RP.meses) RP.meses = {};
+  RP_BLOB = blob;
+}
+
+// Botao "Atualizar" (Rateio / Transferencias / Revisao): traz o que outras pessoas subiram ou salvaram, sem F5.
+// Antes salva o que estiver pendente nesta tela; rascunhos nao aplicados da Parametrizacao sao preservados.
+async function atualizarDados(btn) {
+  const texto = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Atualizando...'; }
+  try {
+    if (RP_SAVE_TIMER) { clearTimeout(RP_SAVE_TIMER); RP_SAVE_TIMER = null; await rpPersist(); }
+    await new Promise(function(r) { setTimeout(r, 700); });  // deixa terminar os auto-saves de campos (Fechamento etc.)
+    const mkey = document.getElementById('month-select').value;
+    loadFichaOverridesFromSupabase();
+    loadExtraFromSupabase();
+    if (!PARAM_PENDING.size) loadParamsFromSupabase();
+    loadPrPcCacheFromSupabase();
+    loadOutrosItemsFromSupabase();
+    await hcSharedCarregar();
+    await loadTransfMonth(mkey);
+    if (RP_MODE === 'unlocked') {
+      await rpRecarregar();
+      await revLoad();
+    }
+    renderAllTabs(mkey);
+    if (btn) { btn.innerHTML = 'Atualizado &#10003;'; setTimeout(function() { btn.innerHTML = texto; btn.disabled = false; }, 1800); }
+  } catch (e) {
+    console.error(e);
+    if (btn) { btn.innerHTML = texto; btn.disabled = false; }
+    uiAlert('Nao foi possivel atualizar agora: ' + e.message, { titulo: 'Atualizar', aviso: true });
+  }
 }
 
 function rpLock() {
