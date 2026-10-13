@@ -8945,6 +8945,8 @@ async function trUploadFolha(inp) {
     Object.assign(atual.valores, valores);
     atual.meses = Array.from(new Set(atual.meses.filter(function(m) { return !meses.has(m); }).concat(Array.from(meses))));
     atual.arquivo = file.name; atual.data = new Date().toISOString();
+    atual.mesData = atual.mesData || {};
+    meses.forEach(function(m) { atual.mesData[m] = atual.data; });
     REV.folha = atual;
     await revPersist();
     const recalc = await trRecalcularCustos(Array.from(meses));
@@ -9502,17 +9504,86 @@ async function revLoad() {
   renderRateioTab(document.getElementById('month-select').value);
 }
 
+// Mescla duas versoes do cofre da Revisao do mesmo gestor (ex.: duas pessoas trabalhando ao mesmo tempo).
+// Nada e apagado: em cada item vale o mais recente.
+//  - PRs (hc): por projeto, a de data mais nova.
+//  - Pessoas da planilha: por matricula, a atualizada por ultimo (_t); quem so existe de um lado continua.
+//  - Ferias: o arquivo mais novo.  Folha variavel: por mes, o envio mais novo.  Senha do zip: a que existir.
+function revMesclar(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const t = function(x) { return x || ''; };
+  const out = Object.assign({}, a, b);
+  out.hc = Object.assign({}, a.hc || {});
+  Object.keys(b.hc || {}).forEach(function(c) {
+    if (!out.hc[c] || t(b.hc[c].data) >= t(out.hc[c].data)) out.hc[c] = b.hc[c];
+  });
+  const pm = {};
+  (a.pessoas || []).forEach(function(pe) { pm[pe.matricula] = Object.assign({ _t: a.pessoasData }, pe); });
+  (b.pessoas || []).forEach(function(pe) {
+    const novo = Object.assign({ _t: b.pessoasData }, pe), velho = pm[pe.matricula];
+    if (!velho || t(novo._t) >= t(velho._t)) pm[pe.matricula] = novo;
+  });
+  out.pessoas = Object.values(pm);
+  const bMaisNova = t(b.pessoasData) >= t(a.pessoasData);
+  out.pessoasArquivo = bMaisNova ? b.pessoasArquivo : a.pessoasArquivo;
+  out.pessoasData = bMaisNova ? b.pessoasData : a.pessoasData;
+  out.ferias = !a.ferias ? b.ferias : (!b.ferias ? a.ferias : (t(b.ferias.data) >= t(a.ferias.data) ? b.ferias : a.ferias));
+  out.feriasSenha = b.feriasSenha || a.feriasSenha;
+  if (a.folha || b.folha) {
+    const fa = a.folha || { valores: {}, meses: [] }, fb = b.folha || { valores: {}, meses: [] };
+    const dataMes = function(f, m) { return t((f.mesData || {})[m] || f.data); };
+    const valores = {}, mesData = {}, meses = Array.from(new Set((fa.meses || []).concat(fb.meses || [])));
+    meses.forEach(function(m) {
+      const usaB = (fb.meses || []).indexOf(m) !== -1 && ((fa.meses || []).indexOf(m) === -1 || dataMes(fb, m) >= dataMes(fa, m));
+      const f = usaB ? fb : fa;
+      Object.keys(f.valores || {}).forEach(function(k) { if (k.split('|')[2] === m) valores[k] = f.valores[k]; });
+      mesData[m] = dataMes(f, m);
+    });
+    const fbMaisNova = t(fb.data) >= t(fa.data);
+    out.folha = { valores: valores, meses: meses, mesData: mesData, arquivo: fbMaisNova ? fb.arquivo : fa.arquivo, data: fbMaisNova ? fb.data : fa.data };
+  }
+  return out;
+}
+
+// Le a versao mais recente gravada do cofre (Supabase ou, no preview local, o navegador) ja decifrada.
+async function revLerGravado(g) {
+  let blob = null;
+  if (REV_REMOTE) {
+    const { data, error } = await sb.from('notes').select('text').eq('code', revComposite(g)).eq('month', RP_MONTH).maybeSingle();
+    if (error) throw new Error('nao foi possivel ler a versao mais recente');
+    blob = data && data.text;
+  } else {
+    try { blob = localStorage.getItem(revLocalKey(g)); } catch (e) {}
+  }
+  if (!blob) return null;
+  const b = JSON.parse(blob);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, RP_KEY, rpUnB64(b.ct));
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
 // msg: resultado da acao (ex.: "67 pessoas lidas"), mostrado junto com o status do salvamento.
+// Antes de gravar, busca a versao mais recente e mescla (revMesclar): se outra pessoa salvou no mesmo gestor
+// enquanto esta tela estava aberta, o que ela fez e mantido em vez de ser sobrescrito.
 async function revPersist(msg, cls) {
   if (!REV || !RP_KEY) return;
   const pre = msg ? msg + ' ' : '';
   const g = RP_GESTOR;
+  let gravado = null;
+  try { gravado = await revLerGravado(g); }
+  catch (e) { rpSetStatus('rev-status', pre + 'NAO salvo: ' + e.message + ' (para nao apagar o que outra pessoa salvou). Tente de novo.', 'bad'); return; }
+  if (g !== RP_GESTOR || !REV) return;
+  if (gravado) {
+    REV = revMesclar(gravado, REV);
+    REV_HC_VER++;
+  }
   const text = await rpEncrypt(REV, RP_KEY, RP_SALT);
   try { localStorage.setItem(revLocalKey(g), text); } catch (e) {}
   if (!REV_REMOTE) { rpSetStatus('rev-status', pre + 'Salvo neste navegador (preview local: nao sincroniza com o Supabase).', cls || 'warn'); return; }
   const { error } = await sb.from('notes').upsert({ code: revComposite(g), month: RP_MONTH, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
   if (error) rpSetStatus('rev-status', pre + 'Salvo neste navegador, mas FALHOU ao sincronizar. Tente novamente.', 'bad');
   else rpSetStatus('rev-status', pre + 'Salvo.', cls || 'ok');
+  if (gravado) renderRevisaoTab(document.getElementById('month-select').value);
 }
 
 // HC lido pelo "Atualizar PRs" do topo: entra na Revisao do gestor dono do projeto.
@@ -9761,11 +9832,17 @@ async function revUploadPessoas(inp) {
   try {
     const pessoas = revParsePessoas(revPlanilhaRows(new Uint8Array(await file.arrayBuffer())));
     if (!pessoas.length) throw new Error('nenhuma pessoa com matricula encontrada.');
-    REV.pessoas = pessoas;
+    // Nao substitui a planilha inteira: atualiza quem veio no arquivo e mantem as demais pessoas ja enviadas.
+    const agora = new Date().toISOString();
+    const antes = {};
+    (REV.pessoas || []).forEach(function(pe) { antes[pe.matricula] = pe; });
+    let novas = 0;
+    pessoas.forEach(function(pe) { if (!antes[pe.matricula]) novas++; pe._t = agora; antes[pe.matricula] = pe; });
+    REV.pessoas = Object.values(antes);
     REV.pessoasArquivo = file.name;
-    REV.pessoasData = new Date().toISOString();
+    REV.pessoasData = agora;
     renderRevisaoTab(document.getElementById('month-select').value);
-    await revPersist(pessoas.length + ' pessoa(s) lida(s) de ' + file.name + '.', 'ok');
+    await revPersist(pessoas.length + ' pessoa(s) lida(s) de ' + file.name + ' (' + (pessoas.length - novas) + ' atualizada(s), ' + novas + ' nova(s); total ' + REV.pessoas.length + ').', 'ok');
   } catch (e) {
     rpSetStatus('rev-status', 'Nao foi possivel ler a planilha: ' + e.message, 'bad');
   }
@@ -10139,7 +10216,7 @@ function renderRevisaoTab(mkey) {
   const prsOutros = prs.filter(function(c) { return !REV.hc[c]; });
   const dt = function(iso) { return iso ? new Date(iso).toLocaleDateString('pt-BR') : ''; };
   document.getElementById('rev-fontes').innerHTML =
-    '<b>Planilha:</b> ' + (REV.pessoasArquivo ? rpEsc(REV.pessoasArquivo) + ' (' + REV.pessoas.length + ' pessoas, enviada em ' + dt(REV.pessoasData) + ')' : 'nenhuma enviada') +
+    '<b>Planilha:</b> ' + (REV.pessoasArquivo ? rpEsc(REV.pessoasArquivo) + ' (ultimo envio em ' + dt(REV.pessoasData) + '; ' + REV.pessoas.length + ' pessoas na base)' : 'nenhuma enviada') +
     ' &middot; <b>PRs com HC:</b> ' + (prs.length ? prs.map(function(c) { const h = revHC()[c]; return '<span title="' + rpEsc(h.arquivo) + ' - ' + dt(h.data) + (REV.hc[c] ? '' : ' (horas compartilhadas, sem taxa)') + '">' + c + (REV.hc[c] ? '' : '*') + '</span>'; }).join(', ') +
       (prsOutros.length ? ' <span title="Horas de PRs enviadas por outros gestores: entram na soma de horas da pessoa, sem taxa.">(* de outros gestores, so horas)</span>' : '') : 'nenhuma enviada') +
     ' &middot; <b>Ferias:</b> ' + (REV.ferias ? rpEsc(REV.ferias.arquivo) + ' (' + REV.ferias.linhas.length + ' periodos, enviada em ' + dt(REV.ferias.data) + ')' : 'nenhuma enviada');
