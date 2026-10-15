@@ -6563,10 +6563,62 @@ function fechComputedRow(code, mkey, field, label, value, note) {
           </div>`;
 }
 
-function resolveIngreso(p, mkey) {
+// Ingreso usado no Fechamento/Parametrizacao: 1) ficha economica do mes; 2) ingresso ajustado a mao no card do
+// Fechamento (EXTRA fech.ingajuste, para quando a PR mudou e a ficha ainda nao saiu); 3) ingreso da PR.
+function ingresoFonte(p, mkey) {
   const fichaMonth = (FICHA[p.code] && FICHA[p.code][mkey]) ? FICHA[p.code][mkey] : null;
   const ingFicha = fichaMonth ? (fichaMonth.ing || 0) : 0;
-  return ingFicha !== 0 ? ingFicha : p.months[mkey].ingreso.pr;
+  if (ingFicha !== 0) return { valor: ingFicha, fonte: 'ficha' };
+  const aj = getExtra(p.code, mkey, 'fech').ingajuste || 0;
+  if (aj !== 0) return { valor: aj, fonte: 'ajuste' };
+  return { valor: p.months[mkey].ingreso.pr, fonte: 'pr' };
+}
+
+function resolveIngreso(p, mkey) { return ingresoFonte(p, mkey).valor; }
+
+// Celula "Ingresso do mes" no topo do card do Fechamento.
+function fechIngressoCelula(p, mkey) {
+  const f = ingresoFonte(p, mkey);
+  const aj = getExtra(p.code, mkey, 'fech').ingajuste || 0;
+  const pr = p.months[mkey].ingreso.pr;
+  const rotulo = '<span class="mini-label">Ingresso do mes</span>';
+  if (f.fonte === 'ficha') {
+    return rotulo + '<span class="mini-value" title="Ingresso da ficha economica (tem prioridade)' + (aj ? '; o ajuste de ' + brl(aj) + ' nao esta sendo usado' : '') + '">' + brl(f.valor) + '</span>' +
+      '<span class="small-note">Ficha' + (aj ? ' &middot; ajuste ignorado' : '') + '</span>';
+  }
+  const ajustado = f.fonte === 'ajuste';
+  return rotulo + '<input type="text" inputmode="decimal" class="rp-input" id="ingajuste-fech-' + p.code + '" style="width:140px; text-align:right; font-weight:700; padding:5px 8px;' + (ajustado ? ' background:var(--warn-bg); border-color:var(--warn);' : '') + '"' +
+    ' value="' + rpNum(f.valor, 2) + '" title="PR: ' + brl(pr) + '. Digite outro valor se a PR mudou e a ficha ainda nao saiu."' +
+    ' onclick="event.preventDefault(); event.stopPropagation();" onfocus="this.select()" onkeydown="event.stopPropagation(); if(event.key===\'Enter\') this.blur()" onkeyup="event.preventDefault()"' +
+    ' onchange="fechSalvarIngresso(\'' + p.code + '\')">' +
+    '<span class="small-note">' + (ajustado ? 'Ajustado &middot; <a href="#" onclick="event.preventDefault(); event.stopPropagation(); fechVoltarIngressoPR(\'' + p.code + '\');">voltar ao PR</a>' : 'PR') + '</span>';
+}
+
+function fechVoltarIngressoPR(code) {
+  const el = document.getElementById('ingajuste-fech-' + code);
+  if (el) el.value = '';
+  fechSalvarIngresso(code);
+}
+
+// Salva o ingresso ajustado (vazio ou igual ao da PR = sem ajuste) e recalcula o card.
+function fechSalvarIngresso(code) {
+  const mkey = document.getElementById('month-select').value;
+  const p = DATA.find(function(x) { return x.code === code; });
+  const el = document.getElementById('ingajuste-fech-' + code);
+  if (!p || !el) return;
+  const pr = p.months[mkey].ingreso.pr;
+  const txt = String(el.value || '').trim();
+  const v = parseBRNum(txt);
+  const aj = !txt || Math.abs(v - pr) < 0.005 ? 0 : v;
+  getExtra(code, mkey, 'fech').ingajuste = aj;
+  try { localStorage.setItem(extraLocalKey(code, 'ingajuste', 'fech', mkey), String(aj)); } catch (e) {}
+  const cel = document.getElementById('fech-ing-cel-' + code);
+  if (cel) cel.innerHTML = fechIngressoCelula(p, mkey);
+  updateFechRowDisplay(code, mkey);
+  if (typeof updateFechKpis === 'function') updateFechKpis(mkey);
+  if (!SUPABASE_CONFIGURED) return;
+  sb.from('notes').upsert({ code: extraComposite(code, 'ingajuste', 'fech'), month: mkey, text: String(aj), updated_at: new Date().toISOString() }, { onConflict: 'code,month' })
+    .then(function(res) { if (res.error) uiAlert('Ingresso de ' + code + ' salvo neste navegador, mas falhou ao sincronizar.', { titulo: 'Ingresso do mes', aviso: true }); });
 }
 
 // ---------- Parametrizacao (rateio/imposto fixos como % do ingresso) ----------
@@ -6751,6 +6803,7 @@ function renderFechTab(mkey) {
             <span class="proj-name" title="${r.name}">${r.name}</span>
           </div>
           <div class="summary-right">
+            <div class="mini-metric" id="fech-ing-cel-${r.code}" style="min-width:150px;">${fechIngressoCelula(DATA.find(function(x) { return x.code === r.code; }), mkey)}</div>
             <div class="mini-metric">
               <span class="mini-label">Meta Margem % (PR)</span>
               <span class="mini-value">${r.metaPct !== null && r.metaPct !== undefined ? pctf(r.metaPct) : '-'}</span>
@@ -6767,10 +6820,7 @@ function renderFechTab(mkey) {
               <span class="mini-label">Custo Total (Ficha)</span>
               <span class="mini-value" id="fech-custo-ficha-val-${r.code}">${brl(r.custoFicha)}</span>
             </div>
-            <div class="mini-metric">
-              <span class="mini-label">Dif. Custo vs Pre Cierre (R$)</span>
-              <span class="mini-value ${r.clsCustoRS}" id="fech-diff-rs-val-${r.code}">${brl(r.diffCustoRS)}</span>
-            </div>
+
             <span class="chevron">&#9660;</span>
           </div>
         </summary>
@@ -7295,7 +7345,7 @@ function loadStatusForMonth(kind, mkey) {
 const EXTRA_FIELDS = {
   fat: ['solicitado', 'previsao'],
   cob: ['solicitado', 'previsao'],
-  fech: ['existencia', 'outros', 'miops', 'entreempresas', 'provisao'],
+  fech: ['existencia', 'outros', 'miops', 'entreempresas', 'provisao', 'ingajuste'],
 };
 let EXTRA = {};
 
