@@ -6347,6 +6347,8 @@ function showTab(name) {
     var btn = document.querySelector('.tab-btn[data-tab="' + t + '"]');
     if (btn) btn.classList.toggle('active', t === name);
   });
+  // A Revisao confere as horas com o Rateio: redesenha ao abrir, para refletir edicoes feitas no Rateio.
+  if (name === 'revisao' && typeof renderRevisaoTab === 'function') renderRevisaoTab(document.getElementById('month-select').value);
 }
 
 function computeProgressRow(p, mkey, prefix, metaField, fichaField) {
@@ -10172,6 +10174,13 @@ function revHorasMes(mkey, proj) {
       if (a.code === proj) x.noProj = true;
     });
   });
+  const rateio = revRateioDoMes(mkey);
+  Object.keys(rateio).forEach(function(mat) {
+    const x = add(mat);
+    x.considerado = true;
+    if (proj && rateio[mat].horas[proj] !== undefined) x.noProj = true;
+    if (!x.nome) x.nome = rateio[mat].nome;
+  });
   const linhas = [];
   Object.values(pessoas).forEach(function(x) {
     if (!x.noProj || !x.considerado) return;
@@ -10198,11 +10207,62 @@ function revHorasMes(mkey, proj) {
     const horasMes = du.dias * ch;
     const horasFerias = diasFerias * ch;
     const esperado = Math.max(0, horasMes - horasFerias) * pctAtr / 100;
-    linhas.push({ matricula: x.matricula, nome: x.nome, codes: x.codes, horasCode: x.horasCode, ch: ch, chPadrao: !x.ch, dias: du.dias, diasFonte: du.fonte, diasLocal: du.local, horasMes: horasMes, diasFerias: diasFerias, horasFerias: horasFerias, pct: pctAtr, esperado: esperado, horasPR: x.horasPR, dif: x.horasPR - esperado });
+    linhas.push({ matricula: x.matricula, nome: x.nome, codes: x.codes, horasCode: x.horasCode, ch: ch, chPadrao: !x.ch, dias: du.dias, diasFonte: du.fonte, diasLocal: du.local, horasMes: horasMes, diasFerias: diasFerias, horasFerias: horasFerias, pct: pctAtr, esperado: esperado, horasPR: x.horasPR, dif: x.horasPR - esperado, rateio: revConferirRateio(x, rateio[x.matricula]) });
   });
   linhas.sort(function(a, b) { return Math.abs(b.dif) - Math.abs(a.dif); });
   const comFerias = linhas.filter(function(l) { return l.diasFerias > 0; });
-  return { linhas: linhas, semCalendario: Object.keys(REV.hc).filter(function(c) { return !(REV.hc[c].calendarios && REV.hc[c].calendarios.length); }), desvios: linhas.filter(function(l) { return Math.abs(l.dif) > 0.5; }), comFerias: comFerias, temFerias: !!(REV.ferias && REV.ferias.linhas && REV.ferias.linhas.length) };
+  return { linhas: linhas, semCalendario: Object.keys(REV.hc).filter(function(c) { return !(REV.hc[c].calendarios && REV.hc[c].calendarios.length); }), desvios: linhas.filter(function(l) { return Math.abs(l.dif) > 0.5 || (l.rateio && l.rateio.erros); }), comRateio: linhas.filter(function(l) { return l.rateio; }).length, comFerias: comFerias, temFerias: !!(REV.ferias && REV.ferias.linhas && REV.ferias.linhas.length) };
+}
+
+// ---- Conferencia com o Rateio (mesma senha do gestor) ----
+// Para cada pessoa do Rateio com matricula no mes: horas por projeto que o Rateio calcula (rpCalcPessoa).
+var REV_TOL_RATEIO = 0.1;  // horas; diferencas menores sao arredondamento
+function revRateioDoMes(mkey) {
+  const out = {};
+  if (typeof RP === 'undefined' || !RP || RP_MODE !== 'unlocked') return out;
+  rpPessoasDoMes(mkey).forEach(function(pe) {
+    const mat = revMat(pe.matricula);
+    if (!mat) return;
+    const c = rpCalcPessoa(pe, mkey);
+    const horas = {};
+    Object.keys(c.linhas).forEach(function(code) { horas[code] = (horas[code] || 0) + c.linhas[code].horas; });
+    if (!Object.keys(horas).length) return;
+    out[mat] = { nome: pe.nome, horas: horas };
+  });
+  return out;
+}
+
+// Compara as horas da PR (por projeto) com as do Rateio. Projetos da PR fora do Rateio nao sao avaliados.
+function revConferirRateio(x, rt) {
+  if (!rt) return null;
+  const itens = {};
+  let erros = 0;
+  Object.keys(rt.horas).forEach(function(code) {
+    const pr = x.horasCode[code] || 0, r = rt.horas[code];
+    const ok = Math.abs(pr - r) < REV_TOL_RATEIO;
+    if (!ok) erros++;
+    itens[code] = { pr: pr, rt: r, ok: ok };
+  });
+  return { itens: itens, erros: erros };
+}
+
+function revHorasFmt(h) { return rpNum(h, Math.abs(h - Math.round(h)) < 0.05 ? 0 : 1) + 'h'; }
+
+function revPRsCelula(l) {
+  const conf = l.rateio;
+  const codes = l.codes.slice();
+  if (conf) Object.keys(conf.itens).forEach(function(c) { if (codes.indexOf(c) === -1) codes.push(c); });
+  return codes.map(function(c) {
+    const h = (l.horasCode || {})[c] || 0;
+    let marca = '';
+    const it = conf && conf.itens[c];
+    if (it && it.ok) marca = ' <span style="color:var(--ok); font-weight:700;" title="Bate com o Rateio (' + revHorasFmt(it.rt) + ')">&#10003;</span>';
+    else if (it) {
+      const d = it.rt - it.pr;
+      marca = ' <span style="color:var(--bad); font-size:11.5px; white-space:nowrap;">&#10007; rateio ' + revHorasFmt(it.rt) + ' &middot; ' + (d > 0 ? 'faltam ' : 'sobram ') + revHorasFmt(Math.abs(d)) + '</span>';
+    } else if (conf) marca = ' <span class="small-note" title="Projeto fora do Rateio desta pessoa">(fora do rateio)</span>';
+    return c + ' (' + revHorasFmt(h) + ')' + marca;
+  }).join(',<br>') || '-';
 }
 
 function revRenderHorasMes(hm, mkey) {
@@ -10210,16 +10270,16 @@ function revRenderHorasMes(hm, mkey) {
   document.getElementById('rev-horas-count').textContent = hm.desvios.length;
   const nota = '<div class="small-note" style="margin-bottom:8px;">Horas do mes = dias uteis da cidade da pessoa na aba CALENDARIO da PR (estado/cidade da aba HC) x carga diaria da pessoa (coluna CH_DIA: 8h ou 8,8h). Esperado na PR = (horas do mes - ferias) x % atribuido nos projetos com PR enviada.' +
     (hm.semCalendario.length ? ' <b>PR(s) sem aba CALENDARIO lida: ' + hm.semCalendario.join(', ') + '</b> -- suba de novo para usar o calendario da PR (dias marcados com * sao calculados).' : '') +
-    (hm.temFerias ? ' ' + hm.comFerias.length + ' pessoa(s) com ferias em ' + mes + '.' : ' <b>Nenhum arquivo de ferias enviado</b> -- suba o relatorio de ferias programadas para descontar as ferias.') + '</div>';
+    (hm.temFerias ? ' ' + hm.comFerias.length + ' pessoa(s) com ferias em ' + mes + '.' : ' <b>Nenhum arquivo de ferias enviado</b> -- suba o relatorio de ferias programadas para descontar as ferias.') +
+    (hm.comRateio ? ' Na coluna PR(s), quem esta no Rateio mostra <span style="color:var(--ok); font-weight:700;">&#10003;</span> quando as horas da PR batem com as do Rateio e <span style="color:var(--bad);">&#10007;</span> com o que falta/sobra quando nao batem.' : '') + '</div>';
   const el = document.getElementById('rev-horas');
-  if (!hm.desvios.length) { el.innerHTML = nota + '<div class="small-note">Horas da PR + ferias fecham com as horas do mes para todas as pessoas.</div>'; return; }
+  if (!hm.desvios.length) { el.innerHTML = nota + '<div class="small-note">Horas da PR + ferias fecham com as horas do mes para todas as pessoas' + (hm.comRateio ? ', e as horas por projeto batem com o Rateio' : '') + '.</div>'; return; }
   el.innerHTML = nota + '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Matricula</th><th>Nome</th><th>PR(s)</th><th class="num">Dias uteis</th><th class="num">Base</th><th class="num">Horas do mes</th><th class="num">Ferias</th><th class="num">% atrib.</th><th class="num">Esperado na PR</th><th class="num">Horas na PR</th><th class="num">Diferenca</th><th>Justificativa</th></tr></thead><tbody>' +
     hm.desvios.map(function(l) {
-      const prs = l.codes.map(function(c) { const h = (l.horasCode || {})[c] || 0; return c + ' (' + rpNum(h, Math.abs(h - Math.round(h)) < 0.05 ? 0 : 1) + 'h)'; }).join(', ');
-      return '<tr><td>' + l.matricula + '</td><td>' + rpEsc(l.nome) + '</td><td style="white-space:nowrap;">' + (prs.replace(/, /g, ',<br>') || '-') + '</td><td class="num" title="' + rpEsc(l.diasLocal || '') + '">' + rpNum(l.dias, 0) + (l.diasFonte === 'PR' ? '' : '*') +
+      return '<tr><td>' + l.matricula + '</td><td>' + rpEsc(l.nome) + '</td><td style="white-space:nowrap;">' + revPRsCelula(l) + '</td><td class="num" title="' + rpEsc(l.diasLocal || '') + '">' + rpNum(l.dias, 0) + (l.diasFonte === 'PR' ? '' : '*') +
         '</td><td class="num"' + (l.chPadrao ? ' title="CH_DIA nao informado na PR; usado 8,8h"' : '') + '>' + rpNum(l.ch, l.ch % 1 ? 1 : 0) + 'h' + (l.chPadrao ? '*' : '') + '</td><td class="num">' + rpNum(l.horasMes, 1) + '</td><td class="num">' +
         (l.diasFerias ? l.diasFerias + 'd / ' + rpNum(l.horasFerias, 1) + 'h' : '-') + '</td><td class="num">' + rpNum(l.pct, 0) + '%</td><td class="num">' + rpNum(l.esperado, 1) + '</td><td class="num">' + rpNum(l.horasPR, 1) +
-        '</td><td class="num ' + (l.dif < 0 ? 'bad' : 'warn') + '">' + (l.dif > 0 ? '+' : '') + rpNum(l.dif, 1) + 'h</td>' +
+        '</td>' + (Math.abs(l.dif) <= 0.5 ? '<td class="num neutral" title="Total do mes fecha; divergencia so na distribuicao por projeto (ver Rateio)">0h</td>' : '<td class="num ' + (l.dif < 0 ? 'bad' : 'warn') + '">' + (l.dif > 0 ? '+' : '') + rpNum(l.dif, 1) + 'h</td>') +
         '<td>' + revJustificativaCampo(mkey, l.matricula) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
 }
