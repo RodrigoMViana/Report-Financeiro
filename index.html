@@ -5,8 +5,6 @@
 <title>Comparativo PR vs Pre Cierre</title>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
   :root {
     --navy: #0b2545; --navy-2: #13315c; --ice: #eaf1fb; --slate: #5c6b7a;
@@ -5822,17 +5820,20 @@ function loadNotesForMonth(mkey) {
     ta.value = val;
   });
 
-  if (!SUPABASE_CONFIGURED) return;
+  if (!SUPABASE_CONFIGURED || redeRecente('obs:' + mkey)) return;
 
-  sb.from('notes').select('code,text').eq('month', mkey).then(({ data, error }) => {
+  sb.from('notes').select('code,text').eq('month', mkey).in('code', DATA.map(p => p.code)).then(({ data, error }) => {
     if (error || !data) return;
     const map = {};
     data.forEach(row => { map[row.code] = row.text; });
+    // resposta de um mes que ja saiu da tela: so guarda no navegador, sem mexer nos campos
+    const naTela = document.getElementById('month-select').value === mkey;
+    if (!naTela) delete REDE_RECENTE['obs:' + mkey];
     DATA.forEach(p => {
       const ta = document.getElementById('obs-' + p.code);
       if (!ta) return;
       if (Object.prototype.hasOwnProperty.call(map, p.code)) {
-        ta.value = map[p.code];
+        if (naTela) ta.value = map[p.code];
         try { localStorage.setItem(noteKey(p.code, mkey), map[p.code]); } catch (e) {}
       }
     });
@@ -7202,7 +7203,7 @@ function loadParamsFromSupabase() {
 
   if (!SUPABASE_CONFIGURED) return;
 
-  Promise.all([
+  return Promise.all([
     fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::param_rateiotipo').eq('month', 'PARAM')),
     fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::param_impostopct').eq('month', 'PARAM')),
     fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::zerado_rateio')),
@@ -7260,7 +7261,7 @@ function loadParamsFromSupabase() {
       if (!isNaN(num)) { RATEIO_PCT.vertical = num; touched = true; }
     }
     refreshRateioPctInputs();
-    if (touched) renderAllTabs(document.getElementById('month-select').value);
+    if (touched) agendarRenderAll();
   });
 }
 
@@ -7317,19 +7318,22 @@ function loadStatusForMonth(kind, mkey) {
     ta.value = val;
   });
 
-  if (!SUPABASE_CONFIGURED) return;
+  if (!SUPABASE_CONFIGURED || redeRecente('status:' + kind + ':' + mkey)) return;
 
   const composites = DATA.map(p => statusComposite(p.code, kind));
   sb.from('notes').select('code,text').eq('month', mkey).in('code', composites).then(({ data, error }) => {
     if (error || !data) return;
     const map = {};
     data.forEach(row => { map[row.code] = row.text; });
+    // resposta de um mes que ja saiu da tela: so guarda no navegador, sem mexer nos campos
+    const naTela = document.getElementById('month-select').value === mkey;
+    if (!naTela) delete REDE_RECENTE['status:' + kind + ':' + mkey];
     DATA.forEach(p => {
       const composite = statusComposite(p.code, kind);
       const ta = document.getElementById('status-' + kind + '-' + p.code);
       if (!ta) return;
       if (Object.prototype.hasOwnProperty.call(map, composite)) {
-        ta.value = map[composite];
+        if (naTela) ta.value = map[composite];
         try { localStorage.setItem(statusLocalKey(p.code, kind, mkey), map[composite]); } catch (e) {}
       }
     });
@@ -7630,7 +7634,7 @@ function loadOutrosItemsFromSupabase() {
   });
 
   if (!SUPABASE_CONFIGURED) return;
-  fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::outros_items')).then(function(rows) {
+  return fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%::outros_items')).then(function(rows) {
     if (!rows || !rows.length) return;
     let touched = false;
     rows.forEach(function(row) {
@@ -7646,7 +7650,7 @@ function loadOutrosItemsFromSupabase() {
         touched = true;
       } catch (e) {}
     });
-    if (touched) renderAllTabs(document.getElementById('month-select').value);
+    if (touched) agendarRenderAll();
   });
 }
 
@@ -7668,7 +7672,7 @@ function loadExtraFromSupabase() {
 
   // Uma query por "kind" (sufixo _fat / _cob / _fech) basta -- pega todos os campos daquele kind de uma vez.
   const kinds = Object.keys(EXTRA_FIELDS);
-  Promise.all(kinds.map(function(kind) {
+  return Promise.all(kinds.map(function(kind) {
     return fetchAllNotes(() => sb.from('notes').select('code,month,text').like('code', '%_' + kind));
   })).then(function(results) {
     let touched = false;
@@ -7692,7 +7696,7 @@ function loadExtraFromSupabase() {
         touched = true;
       });
     });
-    if (touched) renderAllTabs(document.getElementById('month-select').value);
+    if (touched) agendarRenderAll();
   });
 }
 
@@ -8041,7 +8045,7 @@ async function loadFichaOverridesFromSupabase() {
     FICHA[code][row.month][kind] = isNaN(parsedNum) ? 0 : parsedNum;
     touched = true;
   });
-  if (touched) renderAllTabs(document.getElementById('month-select').value);
+  if (touched) agendarRenderAll();
 }
 
 // ---------- Upload de Pre Cierre e PRs (parser client-side via SheetJS) ----------
@@ -8394,6 +8398,7 @@ async function handlePreCierreFile(event){
   statusEl.className = 'email-status';
   statusEl.textContent = 'Lendo Pre Cierre...';
   try {
+    await garantirXLSX();
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(new Uint8Array(buf), {type:'array'});
     const ws = wb.Sheets['FC'];
@@ -8450,6 +8455,8 @@ async function handlePreCierreFile(event){
 async function processarPRs(files, opts) {
   opts = opts || {};
   const touched = [], hcLidos = [], erros = [];
+  try { await garantirXLSX(); }
+  catch (e) { return { touched: touched, hcLidos: hcLidos, erros: [e.message], rc: { updated: [], newCodes: [] }, syncErro: null }; }
   const codeRe = /(\d{2}AP\d{1,3})/;
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
@@ -8530,7 +8537,7 @@ async function handlePrFiles(event){
 
 function loadPrPcCacheFromSupabase(){
   if (!SUPABASE_CONFIGURED) return;
-  Promise.all([
+  return Promise.all([
     fetchAllNotes(() => sb.from('notes').select('code,text').like('code', '%::pc_cache')),
     fetchAllNotes(() => sb.from('notes').select('code,text').like('code', '%::pr_cache')),
   ]).then(function(results){
@@ -8551,7 +8558,7 @@ function loadPrPcCacheFromSupabase(){
     if (touched.size){
       const rc = recomputeCodes(Array.from(touched));
       rc.updated.forEach(updateCardStaticFields);
-      renderAllTabs(document.getElementById('month-select').value);
+      agendarRenderAll();
     }
   });
 }
@@ -8565,6 +8572,55 @@ gestorPadraoRender();
 // Mes de referencia padrao: a partir do dia 10 de cada mes, o mes atual passa a
 // ser o default automaticamente (antes do dia 10, mantem o mes anterior, pois
 // os dados do mes atual normalmente ainda nao estao fechados).
+// ---------- Desempenho: bibliotecas sob demanda, redesenho unico na carga e consultas repetidas ----------
+// SheetJS (leitor de Excel) e JSZip so sao usados ao subir/exportar arquivos: nao entram no carregamento
+// inicial. Sao baixados em segundo plano logo depois que a pagina abre e, por garantia, cada rotina de
+// upload/exportacao espera a biblioteca antes de usar.
+var LIBS_CARREGANDO = {};
+function carregarBiblioteca(url, global) {
+  if (window[global]) return Promise.resolve();
+  if (!LIBS_CARREGANDO[url]) {
+    LIBS_CARREGANDO[url] = new Promise(function(resolve, reject) {
+      const sc = document.createElement('script');
+      sc.src = url;
+      sc.onload = function() { resolve(); };
+      sc.onerror = function() { delete LIBS_CARREGANDO[url]; sc.remove(); reject(new Error('nao foi possivel carregar a biblioteca ' + global + ' (verifique a internet e tente de novo)')); };
+      document.head.appendChild(sc);
+    });
+  }
+  return LIBS_CARREGANDO[url];
+}
+function garantirXLSX() { return carregarBiblioteca('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js', 'XLSX'); }
+function garantirJSZip() { return carregarBiblioteca('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js', 'JSZip'); }
+
+// Na carga da pagina, cada rotina de dados redesenhava a tela inteira ao terminar (e cada redesenho buscava
+// de novo status/observacoes/transferencias). Agora, enquanto as cargas estao em andamento, os pedidos de
+// redesenho sao acumulados e a tela e redesenhada uma unica vez no fim -- o resultado final e o mesmo.
+var RENDER_SEGURO = 0, RENDER_PENDENTE = false, RENDER_TIMER = null;
+function agendarRenderAll() {
+  if (RENDER_SEGURO > 0) { RENDER_PENDENTE = true; return; }
+  clearTimeout(RENDER_TIMER);
+  RENDER_TIMER = setTimeout(function() { renderAllTabs(document.getElementById('month-select').value); }, 30);
+}
+async function comRenderUnico(promessas) {
+  RENDER_SEGURO++;
+  try { await Promise.allSettled(promessas); }
+  finally {
+    RENDER_SEGURO--;
+    if (RENDER_SEGURO === 0 && RENDER_PENDENTE) { RENDER_PENDENTE = false; renderAllTabs(document.getElementById('month-select').value); }
+  }
+}
+
+// Consultas identicas disparadas em sequencia (varios redesenhos seguidos) sao feitas uma vez so: se a mesma
+// consulta saiu ha menos de 5 s, reaproveita o que ja veio (que fica no navegador). "Atualizar" zera isso.
+var REDE_RECENTE = {};
+function redeRecente(chave) {
+  const agora = Date.now();
+  if (REDE_RECENTE[chave] && agora - REDE_RECENTE[chave] < 5000) return true;
+  REDE_RECENTE[chave] = agora;
+  return false;
+}
+
 // ---------- Janela de confirmacao / aviso do site ----------
 // uiConfirm / uiAlert / uiCopiar substituem confirm/alert/prompt do navegador por uma janela centralizada no
 // visual do site. Retornam Promise (use await). Enter confirma, Esc ou clique fora cancela.
@@ -8661,6 +8717,8 @@ function trUpdateLockUi(g) {
 
 async function loadTransfMonth(mkey) {
   if (typeof TR_ROWS === 'undefined') return;
+  // Ja buscado ha menos de 5 s (varios redesenhos seguidos): mantem o que esta em memoria.
+  if (redeRecente('transf:' + mkey) && TR_ROWS[mkey]) { renderTransfTab(mkey); return; }
   const rows = {};
   try {
     const pref = NOTES_PREFIX + TR_PREFIX;
@@ -8971,6 +9029,7 @@ async function trUploadFolha(inp) {
   if (typeof REV === 'undefined' || !REV) { rpSetStatus('tr-status', 'Aguarde carregar os dados da Revisao e tente de novo.', 'bad'); return; }
   rpSetStatus('tr-status', 'Lendo ' + file.name + '...', null);
   try {
+    await garantirXLSX();
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
     const rows = xlsxSheetRows(wb.Sheets[wb.SheetNames[0]]);
     const h = rows.findIndex(function(r) { return (r || []).some(function(v) { return revNorm(v) === 'CODIGO_FUNCIONARIO'; }); });
@@ -9276,6 +9335,7 @@ function trColNum(letters) { let n = 0; for (let i = 0; i < letters.length; i++)
 function trRef(cell) { const m = /^([A-Z]+)(\d+)$/.exec(cell.getAttribute('r') || ''); return m ? { col: m[1], row: +m[2] } : null; }
 
 async function trPreencherPlanilha(file, linhas) {
+  await garantirJSZip();
   const zip = await JSZip.loadAsync(file);
   const parse = function(txt) { return new DOMParser().parseFromString(txt, 'application/xml'); };
   const wbFile = zip.file('xl/workbook.xml');
@@ -9431,6 +9491,7 @@ function revComposite(g) { return '__REVISAO__::' + g; }
 // matricula, nome, status, horas, carga diaria, estado/cidade e calendario -- SEM taxa. As taxas continuam
 // so no JSON cifrado da Revisao de quem subiu (REV.hc). revHC() junta as duas fontes numa visao unica.
 var HC_SHARED = {};
+var HC_SHARED_CARREGADO = false;  // baixado so quando alguem destrava Rateio/Transferencias/Revisao
 var REV_HC_VER = 0;
 var REV_HC_MEMO = null;
 function hcSharedKey(code) { return '__HC__::' + code; }
@@ -9464,6 +9525,7 @@ async function hcSharedCarregar() {
     (rows || []).forEach(function(r) { try { const o = JSON.parse(r.text); if (o && o.code) HC_SHARED[o.code] = o; } catch (e) {} });
   }
   REV_HC_VER++;
+  HC_SHARED_CARREGADO = true;
   if (typeof REV !== 'undefined' && REV && RP_MODE === 'unlocked') {
     const mkey = document.getElementById('month-select').value;
     renderRevisaoTab(mkey); renderRateioTab(mkey);
@@ -9893,6 +9955,7 @@ async function revUploadPessoas(inp) {
   if (!file || !REV) return;
   rpSetStatus('rev-status', 'Lendo ' + file.name + '...', null);
   try {
+    await garantirXLSX();
     const pessoas = revParsePessoas(revPlanilhaRows(new Uint8Array(await file.arrayBuffer())));
     if (!pessoas.length) throw new Error('nenhuma pessoa com matricula encontrada.');
     // Nao substitui a planilha inteira: atualiza quem veio no arquivo e mantem as demais pessoas ja enviadas.
@@ -10133,6 +10196,7 @@ async function revUploadFerias(inp) {
   const senha = senhaEl.value || REV.feriasSenha || '';
   rpSetStatus('rev-status', 'Lendo ' + file.name + '...', null);
   try {
+    await garantirXLSX();
     let bytes = new Uint8Array(await file.arrayBuffer());
     let nome = file.name;
     if (bytes[0] === 0x50 && bytes[1] === 0x4B && /\.zip$/i.test(file.name)) {
@@ -10590,6 +10654,7 @@ async function rpUnlock() {
   renderRateioTab(document.getElementById('month-select').value);
   renderTransfTab(document.getElementById('month-select').value);
   revLoad();
+  if (!HC_SHARED_CARREGADO) hcSharedCarregar();
 }
 
 // Recarrega o rateio gravado do gestor (com a mesma chave), descartando o que esta so em memoria.
@@ -10615,12 +10680,12 @@ async function atualizarDados(btn) {
     if (RP_SAVE_TIMER) { clearTimeout(RP_SAVE_TIMER); RP_SAVE_TIMER = null; await rpPersist(); }
     await new Promise(function(r) { setTimeout(r, 700); });  // deixa terminar os auto-saves de campos (Fechamento etc.)
     const mkey = document.getElementById('month-select').value;
-    loadFichaOverridesFromSupabase();
-    loadExtraFromSupabase();
-    if (!PARAM_PENDING.size) loadParamsFromSupabase();
-    loadPrPcCacheFromSupabase();
-    loadOutrosItemsFromSupabase();
-    await hcSharedCarregar();
+    REDE_RECENTE = {};
+    const cargas = [loadFichaOverridesFromSupabase(), loadExtraFromSupabase()];
+    if (!PARAM_PENDING.size) cargas.push(loadParamsFromSupabase());
+    cargas.push(loadPrPcCacheFromSupabase(), loadOutrosItemsFromSupabase());
+    if (RP_MODE === 'unlocked') cargas.push(hcSharedCarregar());
+    await comRenderUnico(cargas);
     await loadTransfMonth(mkey);
     if (RP_MODE === 'unlocked') {
       await rpRecarregar();
@@ -11183,13 +11248,15 @@ function mesPadraoDesfazer() {
 })();
 
 renderAllTabs(document.getElementById('month-select').value);
-loadFichaOverridesFromSupabase();
-loadExtraFromSupabase();
-loadParamsFromSupabase();
-seedCachesFromData();
-loadPrPcCacheFromSupabase();
-loadOutrosItemsFromSupabase();
-hcSharedCarregar();
+// Cargas iniciais em paralelo; a tela e redesenhada uma vez quando todas terminam (comRenderUnico).
+(function() {
+  const cargas = [loadFichaOverridesFromSupabase(), loadExtraFromSupabase(), loadParamsFromSupabase()];
+  seedCachesFromData();
+  cargas.push(loadPrPcCacheFromSupabase(), loadOutrosItemsFromSupabase());
+  comRenderUnico(cargas);
+  // Bibliotecas de planilha em segundo plano, depois que a pagina ja esta pronta.
+  setTimeout(function() { garantirXLSX().catch(function() {}); garantirJSZip().catch(function() {}); }, 4000);
+})();
 </script>
 
 </body>
