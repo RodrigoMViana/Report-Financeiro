@@ -5690,7 +5690,7 @@ function buildMonthRows(m) {
     <tr><td>Cobro</td><td>${brl(m.cobro.pr)}</td><td>${brl(m.cobro.fc)}</td><td class="${clsPct(m.cobro.diff_fc_pct)}">${pctf(m.cobro.diff_fc_pct)}</td><td colspan="2">-</td></tr>
     <tr><td>Margem Bruta (R$)</td><td>${brl(m.margem.pr)}</td><td>${brl(m.margem.fc)}</td><td class="${clsPct(m.margem.diff_fc_pct)}">${pctf(m.margem.diff_fc_pct)}</td><td>${brl(m.margem.poa)}</td><td>-</td></tr>
     <tr><td>Margem Bruta (%)</td><td>${pctf(m.margem_pct.pr)}</td><td>${pctf(m.margem_pct.fc)}</td><td class="${clsPP(m.margem_pct.diff_fc_pp)}">${ppf(m.margem_pct.diff_fc_pp)}</td><td>${pctf(m.margem_pct.poa)}</td><td class="${clsPP(m.margem_pct.diff_poa_pp)}">${ppf(m.margem_pct.diff_poa_pp)}</td></tr>
-    <tr><td>DPF</td><td>${brl(m.dpf.pr)} <span class="small-note">(mes ant.: ${brl(m.dpf.pr_prev)})</span></td><td>${brl(m.dpf.fc)}</td><td colspan="3">-</td></tr>
+    <tr><td>DPF</td><td>${brl(m.dpf.pr)}${m.dpf.trend === 'excl' ? '' : ' <span class="small-note" title="DPF total menos o ingresso do mes">(total acima do corrente: ' + brl(m.dpf.pr - m.ingreso.pr) + ')</span>'}</td><td>${brl(m.dpf.fc)}</td><td colspan="3">-</td></tr>
     <tr><td>DPF acima do corrente</td><td>${dpfValor(m.dpf.acima)}</td><td>${dpfValor(m.dpf.acima_fc)}</td><td colspan="3">${dpfBadge(m.dpf.trend)}${m.dpf.trend === 'excl' ? '' : ' <span class="small-note">ingresso do mes anterior &minus; faturamento do mes</span>'}</td></tr>
     <tr><td>ALO</td><td colspan="5">${brl(m.alo.pr)}</td></tr>
   `;
