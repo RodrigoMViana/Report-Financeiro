@@ -362,7 +362,7 @@
       <div class="kpi-sub" id="kpi-ing-ano-sub">-</div>
     </div>
     <div class="kpi-card">
-      <div class="kpi-label">DPF — tendencia no mes</div>
+      <div class="kpi-label">DPF acima do corrente</div>
       <div class="kpi-value" id="kpi-dpf">-</div>
       <div class="kpi-sub" id="kpi-dpf-sub">-</div>
     </div>
@@ -5657,8 +5657,31 @@ function dpfBadge(trend) {
   if (trend === 'up') return '<span class="dpf-badge dpf-up">&#9650; Subindo</span>';
   if (trend === 'down') return '<span class="dpf-badge dpf-down">&#9660; Caindo</span>';
   if (trend === 'na') return '<span class="dpf-badge dpf-na">&#8212; N/D</span>';
+  if (trend === 'excl') return '<span class="dpf-badge dpf-na" title="Ingresso por faturamento: so ha ingresso quando ha faturamento, entao o DPF nao se aplica">&#8212; Ingresso por faturamento</span>';
   return '<span class="dpf-badge dpf-flat">&#9679; Estavel</span>';
 }
+
+// DPF acima do corrente = ingresso do mes anterior - faturamento do mes (PR; e o mesmo no Pre Cierre).
+// > 0: faturou menos do que o ingresso anterior, DPF crescendo; < 0: DPF caindo; 0: estavel.
+// Em JAN nao ha mes anterior no arquivo (N/D). Define m.dpf.acima / acima_fc / trend de todos os meses.
+var DPF_TOL = 1;  // R$; diferencas menores sao arredondamento
+// Projetos com ingresso por faturamento (so ha ingresso se houver faturamento): fora do DPF acima do corrente.
+var DPF_INGRESSO_POR_FATURAMENTO = ['26AP01', '26AP02', '26AP03', '26AP04', '26AP08'];
+function dpfTrend(v) { if (v === null) return 'na'; if (Math.abs(v) < DPF_TOL) return 'flat'; return v > 0 ? 'up' : 'down'; }
+function dpfAcimaAtualizar() {
+  DATA.forEach(function(p) {
+    MESES.forEach(function(mk, i) {
+      const m = p.months && p.months[mk];
+      if (!m || !m.dpf) return;
+      const ant = i > 0 ? p.months[MESES[i - 1]] : null;
+      if (DPF_INGRESSO_POR_FATURAMENTO.indexOf(p.code) !== -1) { m.dpf.acima = null; m.dpf.acima_fc = null; m.dpf.trend = 'excl'; return; }
+      m.dpf.acima = ant ? (ant.ingreso.pr || 0) - (m.faturamento.pr || 0) : null;
+      m.dpf.acima_fc = ant ? (ant.ingreso.fc || 0) - (m.faturamento.fc || 0) : null;
+      m.dpf.trend = dpfTrend(m.dpf.acima);
+    });
+  });
+}
+function dpfValor(v) { return v === null || v === undefined ? '-' : (v > 0 ? '+' : '') + brl(v); }
 
 function buildMonthRows(m) {
   return `
@@ -5667,14 +5690,16 @@ function buildMonthRows(m) {
     <tr><td>Cobro</td><td>${brl(m.cobro.pr)}</td><td>${brl(m.cobro.fc)}</td><td class="${clsPct(m.cobro.diff_fc_pct)}">${pctf(m.cobro.diff_fc_pct)}</td><td colspan="2">-</td></tr>
     <tr><td>Margem Bruta (R$)</td><td>${brl(m.margem.pr)}</td><td>${brl(m.margem.fc)}</td><td class="${clsPct(m.margem.diff_fc_pct)}">${pctf(m.margem.diff_fc_pct)}</td><td>${brl(m.margem.poa)}</td><td>-</td></tr>
     <tr><td>Margem Bruta (%)</td><td>${pctf(m.margem_pct.pr)}</td><td>${pctf(m.margem_pct.fc)}</td><td class="${clsPP(m.margem_pct.diff_fc_pp)}">${ppf(m.margem_pct.diff_fc_pp)}</td><td>${pctf(m.margem_pct.poa)}</td><td class="${clsPP(m.margem_pct.diff_poa_pp)}">${ppf(m.margem_pct.diff_poa_pp)}</td></tr>
-    <tr><td>DPF</td><td>${brl(m.dpf.pr)} <span class="small-note">(mes ant.: ${brl(m.dpf.pr_prev)})</span></td><td>${brl(m.dpf.fc)}</td><td colspan="3">${dpfBadge(m.dpf.trend)}</td></tr>
+    <tr><td>DPF</td><td>${brl(m.dpf.pr)} <span class="small-note">(mes ant.: ${brl(m.dpf.pr_prev)})</span></td><td>${brl(m.dpf.fc)}</td><td colspan="3">-</td></tr>
+    <tr><td>DPF acima do corrente</td><td>${dpfValor(m.dpf.acima)}</td><td>${dpfValor(m.dpf.acima_fc)}</td><td colspan="3">${dpfBadge(m.dpf.trend)}${m.dpf.trend === 'excl' ? '' : ' <span class="small-note">ingresso do mes anterior &minus; faturamento do mes</span>'}</td></tr>
     <tr><td>ALO</td><td colspan="5">${brl(m.alo.pr)}</td></tr>
   `;
 }
 
 function renderMonth(mkey) {
+  dpfAcimaAtualizar();
   const projs = currentProjects();
-  let tot = {ing_pr:0, ing_fc:0, ing_poa:0, mb_pr:0, mb_fc:0, dpf_up:0, dpf_down:0, dpf_flat:0};
+  let tot = {ing_pr:0, ing_fc:0, ing_poa:0, mb_pr:0, mb_fc:0, dpf_up:0, dpf_down:0, dpf_flat:0, dpf_acima:0};
   let ing_ano_pr=0, ing_ano_fc=0;
   projs.forEach(p => {
     const m = p.months[mkey];
@@ -5682,7 +5707,8 @@ function renderMonth(mkey) {
     tot.mb_pr += m.margem.pr; tot.mb_fc += m.margem.fc;
     if (m.dpf.trend === 'up') tot.dpf_up++;
     else if (m.dpf.trend === 'down') tot.dpf_down++;
-    else tot.dpf_flat++;
+    else if (m.dpf.trend !== 'excl') tot.dpf_flat++;
+    tot.dpf_acima += m.dpf.acima || 0;
     ing_ano_pr += p.year.ingreso.pr; ing_ano_fc += p.year.ingreso.fc;
   });
   const mbp_pr = tot.ing_pr ? tot.mb_pr/tot.ing_pr*100 : 0;
@@ -5706,7 +5732,7 @@ function renderMonth(mkey) {
   ingAnoSub.className = 'kpi-sub ' + clsPct(ing_ano_delta_pct);
 
   document.getElementById('kpi-dpf').textContent = tot.dpf_up + ' subindo';
-  document.getElementById('kpi-dpf-sub').textContent = tot.dpf_down + ' caindo · ' + tot.dpf_flat + ' estaveis';
+  document.getElementById('kpi-dpf-sub').textContent = tot.dpf_down + ' caindo · ' + tot.dpf_flat + ' estaveis · saldo ' + dpfValor(tot.dpf_acima);
 
   const sorted = [...projs].sort((a,b) => {
     const da = Math.abs(a.months[mkey].ingreso.pr - a.months[mkey].ingreso.fc);
@@ -5737,7 +5763,8 @@ function renderMonth(mkey) {
     diffEl.textContent = pctf(m.ingreso.diff_fc_pct);
     diffEl.className = 'mini-value ' + clsPct(m.ingreso.diff_fc_pct);
     document.getElementById('mini-mb-'+p.code).textContent = pctf(m.margem_pct.pr);
-    document.getElementById('mini-dpf-'+p.code).innerHTML = dpfBadge(m.dpf.trend);
+    document.getElementById('mini-dpf-'+p.code).innerHTML = '<span class="mini-label">DPF acima do corrente</span>' + dpfBadge(m.dpf.trend) +
+      (m.dpf.acima !== null && m.dpf.trend !== 'flat' ? ' <span class="small-note" style="white-space:nowrap;">' + dpfValor(m.dpf.acima) + '</span>' : '');
     document.getElementById('flag-'+p.code).style.display = topCodes.has(p.code) ? 'inline-block' : 'none';
     document.getElementById('mes-header-'+p.code).textContent = 'Conceito (' + m.nome + '/2026)';
     document.getElementById('month-table-'+p.code).innerHTML = buildMonthRows(m);
@@ -5965,7 +5992,7 @@ function buildSummaryText(mkey) {
     tot.mb_pr += m.margem.pr; tot.mb_fc += m.margem.fc;
     if (m.dpf.trend === 'up') tot.dpf_up++;
     else if (m.dpf.trend === 'down') tot.dpf_down++;
-    else tot.dpf_flat++;
+    else if (m.dpf.trend !== 'excl') tot.dpf_flat++;
   });
   const mbp_pr = tot.ing_pr ? tot.mb_pr/tot.ing_pr*100 : 0;
   const mbp_fc = tot.ing_fc ? tot.mb_fc/tot.ing_fc*100 : 0;
@@ -5983,7 +6010,7 @@ function buildSummaryText(mkey) {
   txt += 'Ingreso do mes (PR): ' + brl(tot.ing_pr) + '\n';
   txt += 'Ingreso do mes (Pre Cierre FC): ' + brl(tot.ing_fc) + '\n';
   txt += 'Margem % do mes (PR): ' + pctf(mbp_pr) + ' | Pre Cierre: ' + pctf(mbp_fc) + '\n';
-  txt += 'DPF: ' + tot.dpf_up + ' subindo, ' + tot.dpf_down + ' caindo, ' + tot.dpf_flat + ' estaveis\n\n';
+  txt += 'DPF acima do corrente: ' + tot.dpf_up + ' subindo, ' + tot.dpf_down + ' caindo, ' + tot.dpf_flat + ' estaveis\n\n';
   txt += 'Maiores divergencias de Ingreso (PR vs Pre Cierre):\n';
   top5.forEach(p => {
     const m = p.months[mkey];
@@ -6008,7 +6035,7 @@ function buildSummaryHTML(mkey) {
     tot.mb_pr += m.margem.pr; tot.mb_fc += m.margem.fc;
     if (m.dpf.trend === 'up') tot.dpf_up++;
     else if (m.dpf.trend === 'down') tot.dpf_down++;
-    else tot.dpf_flat++;
+    else if (m.dpf.trend !== 'excl') tot.dpf_flat++;
   });
   const mbp_pr = tot.ing_pr ? tot.mb_pr/tot.ing_pr*100 : 0;
   const mbp_fc = tot.ing_fc ? tot.mb_fc/tot.ing_fc*100 : 0;
@@ -6081,7 +6108,8 @@ function buildSummaryHTML(mkey) {
       + detailRow('Cobro', brl(m.cobro.pr), brl(m.cobro.fc), pctf(m.cobro.diff_fc_pct), cobCls)
       + detailRow('Margem Bruta (R$)', brl(m.margem.pr), brl(m.margem.fc), pctf(m.margem.diff_fc_pct), mbvCls)
       + detailRow('Margem Bruta (%)', pctf(m.margem_pct.pr), pctf(m.margem_pct.fc), ppf(m.margem_pct.diff_fc_pp), mbCls)
-      + detailRow('DPF', brl(m.dpf.pr), brl(m.dpf.fc), (m.dpf.trend==='up'?'Subindo':m.dpf.trend==='down'?'Caindo':'Estavel'), 'neutral')
+      + detailRow('DPF', brl(m.dpf.pr), brl(m.dpf.fc), '-', 'neutral')
+      + detailRow('DPF acima do corrente', dpfValor(m.dpf.acima), dpfValor(m.dpf.acima_fc), (m.dpf.trend==='up'?'Subindo':m.dpf.trend==='down'?'Caindo':m.dpf.trend==='na'?'N/D':m.dpf.trend==='excl'?'Ingresso por faturamento':'Estavel'), 'neutral')
       + detailRow('ALO', brl(m.alo.pr), '-', '-', 'neutral');
 
     const noteBlock = note ? `
@@ -6152,7 +6180,7 @@ function buildSummaryHTML(mkey) {
               </tr>
               <tr>
                 ${kpiCell('Ingreso Pre Cierre (FC)', brl(tot.ing_fc), 'previsto para o mes', slate)}
-                ${kpiCell('DPF no mes', tot.dpf_up + ' subindo', tot.dpf_down + ' caindo &middot; ' + tot.dpf_flat + ' estaveis', slate)}
+                ${kpiCell('DPF acima do corrente', tot.dpf_up + ' subindo', tot.dpf_down + ' caindo &middot; ' + tot.dpf_flat + ' estaveis', slate)}
               </tr>
             </table>
           </td>
