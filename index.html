@@ -9602,9 +9602,7 @@ async function revLoad() {
   let data = { pessoas: [], hc: {} };
   if (blob && RP_KEY) {
     try {
-      const b = JSON.parse(blob);
-      const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, RP_KEY, rpUnB64(b.ct));
-      data = JSON.parse(new TextDecoder().decode(plain));
+      data = await rpAbrir(JSON.parse(blob), RP_KEY);
     } catch (e) {
       rpSetStatus('rev-status', 'Nao foi possivel abrir os dados salvos da Revisao. Suba o People+ e as PRs novamente.', 'bad');
     }
@@ -9681,9 +9679,7 @@ async function revLerGravado(g) {
     try { blob = localStorage.getItem(revLocalKey(g)); } catch (e) {}
   }
   if (!blob) return null;
-  const b = JSON.parse(blob);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, RP_KEY, rpUnB64(b.ct));
-  return JSON.parse(new TextDecoder().decode(plain));
+  return await rpAbrir(JSON.parse(blob), RP_KEY);
 }
 
 // msg: resultado da acao (ex.: "67 pessoas lidas"), mostrado junto com o status do salvamento.
@@ -9702,7 +9698,7 @@ async function revPersist(msg, cls, opts) {
     REV = revMesclar(gravado, REV);
     REV_HC_VER++;
   }
-  const text = await rpEncrypt(REV, RP_KEY, RP_SALT);
+  const text = await rpEncrypt(REV, RP_KEY, RP_SALT, true);
   try { localStorage.setItem(revLocalKey(g), text); } catch (e) {}
   if (!REV_REMOTE) { rpSetStatus('rev-status', pre + 'Salvo neste navegador (preview local: nao sincroniza com o Supabase).', cls || 'warn'); return; }
   const { error } = await sb.from('notes').upsert({ code: revComposite(g), month: RP_MONTH, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
@@ -10545,18 +10541,35 @@ async function rpDeriveKey(pass, salt) {
     base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
 
-async function rpEncrypt(obj, key, salt) {
+// comprimir: gzip antes de cifrar (cofre da Revisao, que e grande). Marcado com z:1 no envelope;
+// a leitura (rpAbrir) aceita os dois formatos.
+async function rpEncrypt(obj, key, salt, comprimir) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(JSON.stringify(obj)));
-  return JSON.stringify({ v: 1, salt: rpB64(salt), iv: rpB64(iv), ct: rpB64(ct) });
+  let bytes = new TextEncoder().encode(JSON.stringify(obj));
+  if (comprimir) bytes = await rpGzip(bytes, 'CompressionStream');
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, bytes);
+  const env = { v: 1, salt: rpB64(salt), iv: rpB64(iv), ct: rpB64(ct) };
+  if (comprimir) env.z = 1;
+  return JSON.stringify(env);
+}
+
+async function rpGzip(bytes, tipo) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new window[tipo]('gzip'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// Decifra um envelope (objeto ja lido do JSON) e devolve o conteudo.
+async function rpAbrir(b, key) {
+  let plain = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, key, rpUnB64(b.ct)));
+  if (b.z) plain = await rpGzip(plain, 'DecompressionStream');
+  return JSON.parse(new TextDecoder().decode(plain));
 }
 
 async function rpDecrypt(blobText, pass) {
   const b = JSON.parse(blobText);
   const salt = rpUnB64(b.salt);
   const key = await rpDeriveKey(pass, salt);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, key, rpUnB64(b.ct));
-  return { key: key, salt: salt, data: JSON.parse(new TextDecoder().decode(plain)) };
+  return { key: key, salt: salt, data: await rpAbrir(b, key) };
 }
 
 async function rpLoadBlob(g) {
@@ -10663,9 +10676,7 @@ async function rpRecarregar() {
   const g = RP_GESTOR;
   const blob = await rpLoadBlob(g);
   if (!blob || g !== RP_GESTOR || RP_MODE !== 'unlocked') return;
-  const b = JSON.parse(blob);
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: rpUnB64(b.iv) }, RP_KEY, rpUnB64(b.ct));
-  RP = JSON.parse(new TextDecoder().decode(plain));
+  RP = await rpAbrir(JSON.parse(blob), RP_KEY);
   if (!RP.pessoas) RP.pessoas = [];
   if (!RP.meses) RP.meses = {};
   RP_BLOB = blob;

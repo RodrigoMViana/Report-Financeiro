@@ -21,3 +21,6 @@ CLAUDE.md
 
 # token de acesso ao GitHub (nunca commitar)
 .git-token
+
+# Backups do banco (dados financeiros)
+Backups/
