@@ -5418,11 +5418,8 @@
   </div>
 
   <div id="tab-dedicacao" class="tab-panel">
-    <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:12px;">
-      <button type="button" onclick="document.getElementById('dedi-file').click()">Enviar relatorio de dedicacao</button>
-      <input type="file" id="dedi-file" accept=".xls,.htm,.html,.mht,.mhtml" multiple style="display:none" onchange="dediUpload(event)">
-    </div>
-    <div class="small-note" style="margin-bottom:16px;">Confere as horas aplicadas no relatorio de imputacao com as horas do HC das PRs no mes selecionado, por pessoa e projeto. <b style="color:var(--ok);">Verde</b> = horas iguais; <b style="color:var(--bad);">vermelho</b> = divergente (diferenca = dedicacao &minus; HC). O mes do relatorio vem do campo "Fecho"; cada envio substitui a dedicacao do projeto naquele mes.</div>
+    <input type="file" id="dedi-file" accept=".xls,.htm,.html,.mht,.mhtml" multiple style="display:none" onchange="dediUpload(event)">
+    <div class="small-note" style="margin-bottom:16px;">Confere as horas aplicadas nos relatorios de imputacao com as horas do HC das PRs no mes selecionado, por pessoa. Em cada projeto, use <b>"Enviar planilha(s) de dedicacao"</b> e envie quantas planilhas precisar: as horas de <b>todos os projetos dentro delas</b> sao somadas para aquele projeto (ex.: pessoas do projeto imputadas em outro codigo). <b style="color:var(--ok);">Verde</b> = horas iguais; <b style="color:var(--bad);">vermelho</b> = divergente (diferenca = dedicacao &minus; HC). O mes vem do campo "Fecho" da planilha.</div>
     <div class="kpi-grid rev-kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Projetos conferidos</div><div class="kpi-value" id="dedi-kpi-proj">-</div><div class="kpi-sub" id="dedi-kpi-proj-sub"></div></div>
       <div class="kpi-card"><div class="kpi-label">Pessoas batendo</div><div class="kpi-value ok" id="dedi-kpi-ok">-</div></div>
@@ -10089,7 +10086,7 @@ function revHC() {
 // funcionario (matricula, nome, unidade, categoria, horas aplicadas). Mes = campo "Fecho" (ex.: 26OC).
 // Gravado por projeto/mes em '__DEDI__::<projeto>' (month = mes), sem taxa -- como o '__HC__'. Em localhost
 // fica so no navegador (REV_REMOTE). A conferencia usa revHC() (horas de todas as PRs enviadas).
-var DEDI = {};               // DEDI[mkey][code] = { code, nome, fecho, data, estado, arquivo, pessoas: [{matricula, nome, horas}], total, t }
+var DEDI = {};               // DEDI[mkey][code] = { code, t, arquivos: [{ id, arquivo, fecho, data, enviadoEm, projetos: [{code, nome, estado, total}], pessoas: [{matricula, nome, horas: {projeto: h}}] }] }
 var DEDI_CARREGADO = {};     // mkey -> true | Promise
 var DEDI_HC_PROMISE = null;
 var DEDI_TOL = 0.05;         // horas; diferencas menores sao arredondamento
@@ -10160,8 +10157,21 @@ function dediParse(html, arquivo) {
   return res;
 }
 
+// Cada projeto do site tem a SUA lista de planilhas vinculadas (enviadas no card dele): o batimento soma, por
+// matricula, as horas de todos os projetos de todas essas planilhas -- ex.: pessoas do 22AP14 imputadas no
+// 23AP17 entram no 22AP14 se a planilha do 23AP17 for enviada no card do 22AP14 (decisao do usuario).
+// Formato antigo (uma planilha por projeto, gravada pelo botao do topo) vira um arquivo vinculado.
+function dediNormalizar(o) {
+  if (!o || !o.code) return null;
+  if (Array.isArray(o.arquivos)) return o;
+  return { code: o.code, t: o.t || 0, arquivos: [{ id: 'a' + (o.t || 0), arquivo: o.arquivo || '', fecho: o.fecho || '', data: o.data || '', enviadoEm: o.t || 0,
+    projetos: [{ code: o.code, nome: o.nome || '', estado: o.estado || '', total: o.total || 0 }],
+    pessoas: (o.pessoas || []).map(function(pe) { const h = {}; h[o.code] = pe.horas || 0; return { matricula: pe.matricula, nome: pe.nome, horas: h }; }) }] };
+}
+
 async function dediSalvar(mkey, obj) {
   if (!DEDI[mkey]) DEDI[mkey] = {};
+  obj.t = Date.now();
   DEDI[mkey][obj.code] = obj;
   const text = JSON.stringify(obj);
   try { localStorage.setItem(dediLocalKey(obj.code, mkey), text); } catch (e) {}
@@ -10174,7 +10184,7 @@ function dediCarregar(mkey) {
   if (DEDI_CARREGADO[mkey]) return Promise.resolve(DEDI_CARREGADO[mkey]);
   const p = (async function() {
     const m = DEDI[mkey] || (DEDI[mkey] = {});
-    const usar = function(o) { if (o && o.code && (!m[o.code] || (o.t || 0) >= (m[o.code].t || 0))) m[o.code] = o; };
+    const usar = function(o) { o = dediNormalizar(o); if (o && (!m[o.code] || (o.t || 0) >= (m[o.code].t || 0))) m[o.code] = o; };
     try {
       const pref = NOTES_PREFIX + '__DEDI__::', suf = '::' + mkey;
       Object.keys(localStorage).forEach(function(k) {
@@ -10193,48 +10203,93 @@ function dediCarregar(mkey) {
   return p;
 }
 
+// Um input de arquivo so para a aba: o botao do card diz para qual projeto vai (DEDI_ALVO).
+var DEDI_ALVO = null;
+function dediEscolherArquivos(code) {
+  DEDI_ALVO = code;
+  document.getElementById('dedi-file').click();
+}
+
 async function dediUpload(event) {
   const files = Array.prototype.slice.call(event.target.files || []);
   event.target.value = '';
-  if (!files.length) return;
+  const alvo = DEDI_ALVO;
+  DEDI_ALVO = null;
+  if (!files.length || !alvo) return;
   const linhas = [], avisos = [];
   const mesTela = document.getElementById('month-select').value;
+  const mexidos = {};
   for (const file of files) {
     try {
       const html = dediHtmlDoArquivo(await file.arrayBuffer());
       if (!html) { avisos.push(file.name + ': nao parece um relatorio de dedicacao.'); continue; }
       const r = dediParse(html, file.name);
-      const codes = Object.keys(r.projetos);
+      const codes = Object.keys(r.projetos).sort();
       if (!r.mkey) { avisos.push(file.name + ': nao achei o mes ("Fecho") no relatorio.'); continue; }
       if (!codes.length) { avisos.push(file.name + ': nenhum projeto com horas no relatorio.'); continue; }
       if (r.ano && r.ano !== rpAnoRef(r.mkey)) avisos.push(file.name + ': o relatorio e de ' + r.ano + ' (o site trabalha com ' + rpAnoRef(r.mkey) + ').');
+      if (r.mkey !== mesTela) avisos.push(file.name + ' e de ' + revMesNome(r.mkey) + ' -- foi vinculado ao ' + alvo + ' em ' + revMesNome(r.mkey) + ', nao no mes selecionado (' + revMesNome(mesTela) + ').');
       await dediCarregar(r.mkey);
-      for (const code of codes) {
-        const pr = r.projetos[code];
-        const obj = { code: code, nome: pr.nome, fecho: r.fecho, data: r.data, estado: pr.estado, responsavel: pr.responsavel, arquivo: file.name, total: pr.total,
-          pessoas: Object.values(pr.pessoas).map(function(pe) { return { matricula: pe.matricula, nome: pe.nome, horas: Math.round(pe.horas * 100) / 100 }; }), t: Date.now() };
-        const s = await dediSalvar(r.mkey, obj);
-        const noSite = DATA.some(function(p) { return p.code === code; });
-        linhas.push(code + ' (' + revMesNome(r.mkey) + '): ' + obj.pessoas.length + ' pessoa(s), ' + rpNum(pr.total, 2) + 'h' +
-          (pr.totalInformado !== null && Math.abs(pr.totalInformado - pr.total) > DEDI_TOL ? ' -- atencao: total do relatorio ' + rpNum(pr.totalInformado, 2) + 'h' : '') +
-          (noSite ? '' : ' -- projeto fora do site') + (s.ok ? '' : ' -- falhou ao sincronizar'));
+      if (!DEDI[r.mkey]) DEDI[r.mkey] = {};
+      const obj = DEDI[r.mkey][alvo] || { code: alvo, arquivos: [] };
+      // pessoas do arquivo inteiro, com as horas separadas por projeto
+      const pessoas = {};
+      codes.forEach(function(c) {
+        Object.values(r.projetos[c].pessoas).forEach(function(pe) {
+          const x = pessoas[pe.matricula] || (pessoas[pe.matricula] = { matricula: pe.matricula, nome: pe.nome, horas: {} });
+          x.horas[c] = Math.round(((x.horas[c] || 0) + pe.horas) * 100) / 100;
+        });
+      });
+      const ent = { id: 'a' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), arquivo: file.name, fecho: r.fecho, data: r.data, enviadoEm: Date.now(),
+        projetos: codes.map(function(c) { const pr = r.projetos[c]; return { code: c, nome: pr.nome, estado: pr.estado, total: Math.round(pr.total * 100) / 100 }; }),
+        pessoas: Object.values(pessoas) };
+      // a mesma planilha enviada de novo substitui a anterior (mesmo nome e mesmos projetos)
+      const assinatura = function(a) { return a.arquivo + '|' + a.projetos.map(function(p) { return p.code; }).join(','); };
+      const iIgual = obj.arquivos.findIndex(function(a) { return assinatura(a) === assinatura(ent); });
+      if (iIgual !== -1) { obj.arquivos[iIgual] = ent; avisos.push(file.name + ': ja estava vinculado ao ' + alvo + ' -- substituido.'); }
+      else {
+        const repetidos = codes.filter(function(c) { return obj.arquivos.some(function(a) { return a.projetos.some(function(p) { return p.code === c; }); }); });
+        if (repetidos.length) avisos.push(file.name + ': ' + repetidos.join(', ') + ' ja aparece em outra planilha vinculada ao ' + alvo + ' -- as horas desse projeto vao somar duas vezes. Remova a planilha antiga se for a mesma informacao.');
+        obj.arquivos.push(ent);
       }
-      if (r.mkey !== mesTela) avisos.push('O relatorio ' + file.name + ' e de ' + revMesNome(r.mkey) + '; o mes selecionado e ' + revMesNome(mesTela) + '.');
+      DEDI[r.mkey][alvo] = obj;
+      mexidos[r.mkey] = true;
+      const total = ent.projetos.reduce(function(s, p) { return s + p.total; }, 0);
+      linhas.push(file.name + ' (' + revMesNome(r.mkey) + '): ' + codes.join(', ') + ' -- ' + ent.pessoas.length + ' pessoa(s), ' + rpNum(total, 2) + 'h' +
+        codes.map(function(c) { const pr = r.projetos[c]; return pr.totalInformado !== null && Math.abs(pr.totalInformado - pr.total) > DEDI_TOL ? ' (atencao: total do ' + c + ' no relatorio = ' + rpNum(pr.totalInformado, 2) + 'h)' : ''; }).join(''));
     } catch (e) {
       console.error('dedicacao', e);
       avisos.push(file.name + ': erro ao ler (' + (e && e.message ? e.message : e) + ').');
     }
   }
+  for (const mk of Object.keys(mexidos)) {
+    const s = await dediSalvar(mk, DEDI[mk][alvo]);
+    if (!s.ok) avisos.push('Falhou ao sincronizar ' + revMesNome(mk) + ' com o banco (ficou so neste navegador).');
+  }
   renderDedicacaoTab(mesTela);
-  uiAlert((linhas.length ? 'Dedicacao gravada:\n' + linhas.join('\n') : 'Nada foi gravado.') + (avisos.length ? '\n\n' + avisos.join('\n') : ''), { titulo: 'Relatorio de dedicacao' });
+  uiAlert((linhas.length ? 'Planilha(s) vinculada(s) ao ' + alvo + ':\n' + linhas.join('\n') : 'Nada foi gravado.') + (avisos.length ? '\n\n' + avisos.join('\n') : ''), { titulo: 'Dedicacao - ' + alvo });
 }
 
-// Batimento de um projeto no mes: une as pessoas da dedicacao e do HC (horas > 0 no mes).
+async function dediRemoverArquivo(code, id) {
+  const mkey = document.getElementById('month-select').value;
+  const obj = DEDI[mkey] && DEDI[mkey][code];
+  const a = obj && obj.arquivos.find(function(x) { return x.id === id; });
+  if (!a) return;
+  if (!(await uiConfirm('Desvincular a planilha "' + a.arquivo + '" (' + a.projetos.map(function(p) { return p.code; }).join(', ') + ') do ' + code + ' em ' + revMesNome(mkey) + '?', { titulo: 'Remover planilha', okTexto: 'Remover', perigo: true }))) return;
+  obj.arquivos = obj.arquivos.filter(function(x) { return x.id !== id; });
+  const s = await dediSalvar(mkey, obj);
+  renderDedicacaoTab(mkey);
+  if (!s.ok) uiAlert('Removido neste navegador, mas falhou ao sincronizar com o banco.', { titulo: 'Remover planilha', aviso: true });
+}
+
+// Batimento de um projeto no mes: pessoas do HC do projeto (horas > 0) x soma das horas de todas as planilhas
+// vinculadas a ele (todos os projetos de cada planilha).
 function dediConferir(code, mkey) {
   const hc = revHC()[code];
   const d = DEDI[mkey] && DEDI[mkey][code];
+  const arquivos = (d && d.arquivos) || [];
   const pessoas = {};
-  const add = function(mat, nome) { return pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: nome || '', hc: null, dedi: null }); };
+  const add = function(mat, nome) { return pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: nome || '', hc: null, dedi: null, porProjeto: {} }); };
   ((hc && hc.pessoas) || []).forEach(function(pe) {
     const h = (pe.horas && pe.horas[mkey]) || 0;
     if (h <= 0) return;
@@ -10242,16 +10297,21 @@ function dediConferir(code, mkey) {
     x.hc = (x.hc || 0) + h;
     if (pe.nome) x.nome = pe.nome;
   });
-  ((d && d.pessoas) || []).forEach(function(pe) {
-    const x = add(dediMat(pe.matricula), pe.nome);
-    x.dedi = (x.dedi || 0) + (pe.horas || 0);
+  arquivos.forEach(function(a) {
+    (a.pessoas || []).forEach(function(pe) {
+      const x = add(dediMat(pe.matricula), pe.nome);
+      Object.keys(pe.horas || {}).forEach(function(c) {
+        x.dedi = (x.dedi || 0) + pe.horas[c];
+        x.porProjeto[c] = (x.porProjeto[c] || 0) + pe.horas[c];
+      });
+    });
   });
   const linhas = Object.values(pessoas).map(function(x) {
     const dif = (x.dedi || 0) - (x.hc || 0);
     return Object.assign(x, { dif: dif, ok: Math.abs(dif) < DEDI_TOL });
   }).sort(function(a, b) { return (a.ok - b.ok) || Math.abs(b.dif) - Math.abs(a.dif) || String(a.nome).localeCompare(String(b.nome)); });
   const tot = linhas.reduce(function(s, l) { s.hc += l.hc || 0; s.dedi += l.dedi || 0; s.abs += l.ok ? 0 : Math.abs(l.dif); if (l.ok) s.ok++; else s.bad++; return s; }, { hc: 0, dedi: 0, abs: 0, ok: 0, bad: 0 });
-  return { code: code, temHC: !!(hc && linhas.some(function(l) { return l.hc !== null; })), temDedi: !!d, dedi: d, hcData: hc ? hc.data : '', linhas: linhas, tot: tot };
+  return { code: code, temHC: !!(hc && linhas.some(function(l) { return l.hc !== null; })), temDedi: arquivos.length > 0, arquivos: arquivos, hcData: hc ? hc.data : '', linhas: linhas, tot: tot };
 }
 
 function renderDedicacaoTab(mkey) {
@@ -10266,17 +10326,16 @@ function renderDedicacaoTab(mkey) {
     }).catch(function(e) { list.innerHTML = '<div class="small-note" style="color:var(--bad);">Nao foi possivel carregar: ' + escHtml(e && e.message ? e.message : e) + '</div>'; });
     return;
   }
-  const projs = currentProjects().slice().sort(function(a, b) { return a.code.localeCompare(b.code); });
-  // conferidos (dedicacao + HC) primeiro; depois so dedicacao (PR nao enviada); por ultimo so HC (falta o relatorio)
-  const grupo = function(c) { return c.temDedi && c.temHC ? 0 : c.temDedi ? 1 : 2; };
-  const confs = projs.map(function(p) { return Object.assign(dediConferir(p.code, mkey), { nome: p.name }); })
-    .filter(function(c) { return c.temDedi || c.temHC; })
+  // todos os projetos do gestor (para poder vincular planilha mesmo sem PR): conferidos primeiro, depois so
+  // dedicacao (PR nao enviada), so HC (falta planilha) e sem nada
+  const grupo = function(c) { return c.temDedi && c.temHC ? 0 : c.temDedi ? 1 : c.temHC ? 2 : 3; };
+  const confs = currentProjects().map(function(p) { return Object.assign(dediConferir(p.code, mkey), { nome: p.name }); })
     .sort(function(a, b) { return grupo(a) - grupo(b) || a.code.localeCompare(b.code); });
 
   const sel = document.getElementById('dedi-filtro');
   const atual = sel.value;
   sel.innerHTML = '<option value="">Todos os projetos (' + confs.length + ')</option>' + confs.map(function(c) {
-    const st = !c.temDedi ? ' -- sem dedicacao' : !c.temHC ? ' -- sem HC' : c.tot.bad ? ' -- ' + c.tot.bad + ' divergente(s)' : ' -- ok';
+    const st = !c.temDedi && !c.temHC ? ' -- sem dados' : !c.temDedi ? ' -- sem planilha' : !c.temHC ? ' -- sem HC' : c.tot.bad ? ' -- ' + c.tot.bad + ' divergente(s)' : ' -- ok';
     return '<option value="' + c.code + '">' + c.code + ' - ' + escHtml(c.nome) + st + '</option>';
   }).join('');
   sel.value = confs.some(function(c) { return c.code === atual; }) ? atual : '';
@@ -10284,37 +10343,53 @@ function renderDedicacaoTab(mkey) {
   let vis = sel.value ? confs.filter(function(c) { return c.code === sel.value; }) : confs;
 
   const conferidos = confs.filter(function(c) { return c.temDedi && c.temHC; });
+  const semDados = confs.length - conferidos.length;
   const k = conferidos.reduce(function(s, c) { s.ok += c.tot.ok; s.bad += c.tot.bad; s.abs += c.tot.abs; if (!c.tot.bad) s.projOk++; return s; }, { ok: 0, bad: 0, abs: 0, projOk: 0 });
   document.getElementById('dedi-kpi-proj').textContent = conferidos.length;
-  document.getElementById('dedi-kpi-proj-sub').textContent = conferidos.length ? k.projOk + ' batendo · ' + (conferidos.length - k.projOk) + ' com divergencia' + (confs.length > conferidos.length ? ' · ' + (confs.length - conferidos.length) + ' sem dados dos dois lados' : '') : (confs.length ? confs.length + ' projeto(s) sem dados dos dois lados' : '');
+  document.getElementById('dedi-kpi-proj-sub').textContent = (conferidos.length ? k.projOk + ' batendo · ' + (conferidos.length - k.projOk) + ' com divergencia' : '') +
+    (semDados ? (conferidos.length ? ' · ' : '') + semDados + ' sem planilha ou sem HC' : '');
   document.getElementById('dedi-kpi-ok').textContent = k.ok;
   document.getElementById('dedi-kpi-bad').textContent = k.bad;
   document.getElementById('dedi-kpi-horas').textContent = rpNum(k.abs, 2) + 'h';
-  if (soDiv) vis = vis.filter(function(c) { return !c.temDedi || !c.temHC || c.tot.bad; });
+  if (soDiv) vis = vis.filter(function(c) { return c.temDedi && c.temHC && c.tot.bad; });
   document.getElementById('dedi-count').textContent = vis.length;
 
   if (!vis.length) {
-    list.innerHTML = '<div class="no-results" style="display:block;">' + (confs.length ? 'Nenhum projeto com divergencia.' : 'Nenhum projeto de ' + CURRENT_GESTOR + ' com dedicacao ou HC em ' + revMesNome(mkey) + '. Envie o relatorio de dedicacao do mes.') + '</div>';
+    list.innerHTML = '<div class="no-results" style="display:block;">' + (confs.length ? 'Nenhum projeto com divergencia.' : 'Nenhum projeto de ' + CURRENT_GESTOR + '.') + '</div>';
     return;
   }
   const n2 = function(v) { return v === null ? '-' : rpNum(v, 2); };
   list.innerHTML = vis.map(function(c) {
-    const badge = !c.temDedi ? '<span class="dedi-badge neutral">Sem dedicacao</span>' : !c.temHC ? '<span class="dedi-badge neutral">Sem HC (PR nao enviada)</span>'
-      : c.tot.bad ? '<span class="dedi-badge bad">&#10007; ' + c.tot.bad + ' divergente(s) &middot; ' + rpNum(c.tot.abs, 2) + 'h</span>' : '<span class="dedi-badge ok">&#10003; Batendo</span>';
     const conferido = c.temDedi && c.temHC;
+    const badge = !c.temDedi && !c.temHC ? '<span class="dedi-badge neutral">Sem dados</span>' : !c.temDedi ? '<span class="dedi-badge neutral">Sem planilha</span>'
+      : !c.temHC ? '<span class="dedi-badge neutral">Sem HC (PR nao enviada)</span>'
+      : c.tot.bad ? '<span class="dedi-badge bad">&#10007; ' + c.tot.bad + ' divergente(s) &middot; ' + rpNum(c.tot.abs, 2) + 'h</span>' : '<span class="dedi-badge ok">&#10003; Batendo</span>';
     let linhas = c.linhas;
     if (soDiv && conferido) linhas = linhas.filter(function(l) { return !l.ok; });
     const rows = linhas.map(function(l) {
-      // so pinta de verde/vermelho quando ha os dois lados; senao a falta e do relatorio/PR inteiro, nao da pessoa
-      const sit = !conferido ? (c.temDedi ? 'PR nao enviada' : 'aguardando relatorio') : l.ok ? '&#10003; ok' : l.hc === null ? '&#10007; nao esta no HC' : l.dedi === null ? '&#10007; sem horas na dedicacao' : '&#10007; ' + (l.dif > 0 ? 'sobram ' : 'faltam ') + rpNum(Math.abs(l.dif), 2) + 'h na dedicacao';
-      return '<tr class="' + (!conferido ? '' : l.ok ? 'dedi-ok' : 'dedi-bad') + '"><td>' + escHtml(l.matricula) + '</td><td>' + escHtml(l.nome) + '</td><td class="num">' + n2(l.hc) + '</td><td class="num">' + n2(l.dedi) +
+      // so pinta de verde/vermelho quando ha os dois lados; senao a falta e da planilha/PR inteira, nao da pessoa
+      const sit = !conferido ? (c.temDedi ? 'PR nao enviada' : 'aguardando planilha') : l.ok ? '&#10003; ok' : l.hc === null ? '&#10007; nao esta no HC' : l.dedi === null ? '&#10007; sem horas na dedicacao' : '&#10007; ' + (l.dif > 0 ? 'sobram ' : 'faltam ') + rpNum(Math.abs(l.dif), 2) + 'h na dedicacao';
+      const projs = Object.keys(l.porProjeto).sort();
+      const detalhe = projs.length > 1 || (projs.length === 1 && projs[0] !== c.code)
+        ? '<div class="small-note" style="white-space:nowrap;">' + projs.map(function(p) { return p + ': ' + rpNum(l.porProjeto[p], 2); }).join(' + ') + '</div>' : '';
+      return '<tr class="' + (!conferido ? '' : l.ok ? 'dedi-ok' : 'dedi-bad') + '"><td>' + escHtml(l.matricula) + '</td><td>' + escHtml(l.nome) + '</td><td class="num">' + n2(l.hc) + '</td><td class="num">' + n2(l.dedi) + detalhe +
         '</td><td class="num dedi-dif">' + (l.ok ? '0,00' : (l.dif > 0 ? '+' : '') + rpNum(l.dif, 2)) + '</td><td>' + sit + '</td></tr>';
     }).join('');
-    const info = [];
-    if (c.dedi) info.push('Dedicacao: ' + escHtml(c.dedi.arquivo || '') + (c.dedi.data ? ' de ' + escHtml(c.dedi.data) : '') + (c.dedi.estado ? ' (' + escHtml(c.dedi.estado) + ')' : '') + ' &middot; fecho ' + escHtml(c.dedi.fecho || ''));
-    if (c.hcData) info.push('HC: PR de ' + escHtml(String(c.hcData).slice(0, 10)));
-    if (!c.temDedi) info.unshift('Sem relatorio de dedicacao deste projeto em ' + revMesNome(mkey) + ' (envie o relatorio de dedicacao).');
-    if (!c.temHC) info.unshift('A PR deste projeto (aba HC) nao foi enviada -- nao ha horas para comparar.');
+    const arqs = c.arquivos.map(function(a) {
+      const tot = a.projetos.reduce(function(s, p) { return s + (p.total || 0); }, 0);
+      return '<div class="small-note" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:2px 0;">&#128196; <b>' + escHtml(a.arquivo) + '</b>' +
+        '<span>' + a.projetos.map(function(p) { return '<span class="proj-code" style="font-size:11px; padding:1px 6px;" title="' + escHtml(p.nome) + '">' + p.code + '</span> ' + rpNum(p.total || 0, 2) + 'h'; }).join(' &middot; ') + '</span>' +
+        '<span>' + (a.pessoas || []).length + ' pessoa(s), ' + rpNum(tot, 2) + 'h &middot; fecho ' + escHtml(a.fecho || '') + (a.data ? ' &middot; emitido ' + escHtml(a.data) : '') + '</span>' +
+        '<a href="#" style="color:var(--bad);" onclick="dediRemoverArquivo(\'' + c.code + '\',\'' + a.id + '\'); return false;">remover</a></div>';
+    }).join('');
+    const avisos = [];
+    if (!c.temHC) avisos.push('A PR deste projeto (aba HC) nao foi enviada -- nao ha horas para comparar.');
+    if (!c.temDedi) avisos.push('Nenhuma planilha de dedicacao vinculada em ' + revMesNome(mkey) + '. Envie uma ou mais: as horas de todos os projetos dentro delas sao somadas para este projeto.');
+    if (c.hcData) avisos.push('HC: PR de ' + escHtml(String(c.hcData).slice(0, 10)) + '.');
+    const repet = {};
+    c.arquivos.forEach(function(a) { a.projetos.forEach(function(p) { repet[p.code] = (repet[p.code] || 0) + 1; }); });
+    const dup = Object.keys(repet).filter(function(p) { return repet[p] > 1; });
+    if (dup.length) avisos.push('<span style="color:var(--warn);">Atencao: ' + dup.join(', ') + ' aparece em mais de uma planilha -- as horas somam duas vezes.</span>');
     return `
       <details class="project-card" ${conferido || sel.value ? 'open' : ''}>
         <summary>
@@ -10327,12 +10402,16 @@ function renderDedicacaoTab(mkey) {
           </div>
         </summary>
         <div class="card-body">
-          <div class="small-note" style="margin-bottom:8px;">${info.join(' &middot; ') || ''}</div>
+          <div class="obs-toolbar" style="justify-content:space-between; align-items:flex-start; margin-bottom:10px; gap:12px;">
+            <div style="flex:1; min-width:0;">${arqs || ''}</div>
+            <button type="button" onclick="dediEscolherArquivos('${c.code}')">Enviar planilha(s) de dedicacao</button>
+          </div>
+          <div class="small-note" style="margin-bottom:8px;">${avisos.join(' ')}</div>
           ${rows ? `<div class="table-wrap"><table class="rp-table">
             <thead><tr><th>Matricula</th><th>Nome</th><th class="num">Horas HC</th><th class="num">Horas dedicacao</th><th class="num">Diferenca</th><th>Situacao</th></tr></thead>
             <tbody>${rows}</tbody>
             <tfoot><tr><td></td><td>Total (${linhas.length} pessoa(s))</td><td class="num">${rpNum(linhas.reduce(function(s, l) { return s + (l.hc || 0); }, 0), 2)}</td><td class="num">${rpNum(linhas.reduce(function(s, l) { return s + (l.dedi || 0); }, 0), 2)}</td><td class="num">${rpNum(linhas.reduce(function(s, l) { return s + l.dif; }, 0), 2)}</td><td></td></tr></tfoot>
-          </table></div>` : '<div class="small-note">Nenhuma pessoa divergente.</div>'}
+          </table></div>` : (c.temDedi || c.temHC ? '<div class="small-note">Nenhuma pessoa divergente.</div>' : '')}
         </div>
       </details>`;
   }).join('');
