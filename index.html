@@ -5487,7 +5487,7 @@
         <input type="text" inputmode="numeric" class="rp-input" id="rp-dias" style="width:80px;" oninput="rpSetDiasUteis(this.value)">
         <span class="small-note" id="rp-dias-note"></span>
       </div>
-      <div class="small-note" style="margin-bottom:20px;">Custo da pessoa no mes = horas informadas &times; taxa. As horas sao distribuidas entre os projetos marcados proporcionalmente ao <b>Ingreso do Pre Cierre</b> do mes selecionado (ingreso do projeto &divide; soma dos ingresos dos projetos marcados). <b>Horas/dia</b> = horas do projeto no mes &divide; dias uteis -- e o que o time dedica por dia em cada projeto. Os dados desta aba sao salvos criptografados com a senha.</div>
+      <div class="small-note" style="margin-bottom:20px;">Custo da pessoa no mes = horas informadas &times; taxa. As horas sao distribuidas entre os projetos marcados proporcionalmente ao <b>Ingreso do Pre Cierre</b> do mes selecionado (ingreso do projeto &divide; soma dos ingresos dos projetos marcados). <b>Horas/dia</b> = jornada do colaborador (dia inteiro: CH_DIA da PR ou digitada) &times; % do rateio -- o que lancar por dia em cada projeto; <b>Dias</b> = horas do mes &divide; jornada (quem divide o mes entre gestores lanca dias inteiros, em menos dias). Os dados desta aba sao salvos criptografados com a senha.</div>
       <div class="kpi-grid kpi-grid-3">
         <div class="kpi-card"><div class="kpi-label">Pessoas no rateio</div><div class="kpi-value" id="rp-kpi-pessoas">-</div></div>
         <div class="kpi-card"><div class="kpi-label">Horas rateadas no mes</div><div class="kpi-value" id="rp-kpi-horas">-</div></div>
@@ -11567,6 +11567,47 @@ function rpTaxaNota(pe, mkey) {
   return 'Taxa nao encontrada no People+ nem nas PRs da Revisao' + (pe.taxa ? ' (usando a ultima digitada)' : ' -- digite a taxa') + '.';
 }
 
+// Jornada (horas/dia) do colaborador: digitada no card > CH_DIA da PR (aba HC, coluna M) pela matricula > 8,8h.
+// Nao depende das horas do mes: quem divide o mes entre gestores lanca dias inteiros, so que em menos dias
+// (ex.: 88h com jornada de 8,8h = 10 dias inteiros). Horas/dia do projeto = % do rateio x jornada.
+const RP_JORNADA_PADRAO = 8.8;
+function rpJornadaAuto(pe) {
+  if (!pe.matricula || typeof REV === 'undefined' || !REV) return null;
+  let ch = null;
+  try {
+    const HCV = revHC();
+    Object.keys(HCV).some(function(c) {
+      const o = (HCV[c].pessoas || []).find(function(x) { return String(x.matricula) === String(pe.matricula) && x.ch; });
+      if (o) ch = o.ch;
+      return !!o;
+    });
+  } catch (e) {}
+  return ch;
+}
+function rpJornada(pe) {
+  if (pe.horasDia > 0) return { valor: pe.horasDia, fonte: 'manual' };
+  const a = rpJornadaAuto(pe);
+  return a ? { valor: a, fonte: 'PR' } : { valor: RP_JORNADA_PADRAO, fonte: 'padrao' };
+}
+function rpJornadaNota(pe) {
+  const j = rpJornada(pe);
+  if (j.fonte === 'manual') return 'Digitada manualmente. <a href="#" onclick="rpSetJornada(\'' + pe.id + '\',\'\'); return false;">Usar automatica</a>';
+  if (j.fonte === 'PR') return 'Automatica: CH_DIA da PR.';
+  return 'Padrao ' + rpNum(RP_JORNADA_PADRAO, 1) + 'h' + (pe.matricula ? ' (CH_DIA nao encontrado nas PRs)' : '') + '. Digite se for outra jornada.';
+}
+function rpSetJornada(id, value) {
+  const pe = RP.pessoas.find(function(x) { return x.id === id; });
+  if (!pe) return;
+  const v = parseBRNum(value);
+  if (v > 0 && v <= 24) pe.horasDia = v; else delete pe.horasDia;
+  const mkey = rpCurrentMonth();
+  const nota = document.getElementById('rp-jornada-nota-' + id);
+  if (nota) nota.innerHTML = rpJornadaNota(pe);
+  if (!(v > 0)) { const el = document.getElementById('rp-jornada-' + id); if (el) { el.value = ''; el.placeholder = rpNum(rpJornada(pe).valor, 1); } }
+  rpRenderPessoaCalc(id, mkey);
+  rpScheduleSave();
+}
+
 function rpCalcPessoa(pessoa, mkey) {
   const entry = rpGetMes(mkey, pessoa.id, false);
   const taxa = rpTaxaEfetiva(pessoa, mkey);
@@ -11599,7 +11640,7 @@ function rpProjetosVisiveis(extraCodes) {
       if (p) list.push(p);
     }
   });
-  return list;
+  return list.sort(function(a, b) { return a.code.localeCompare(b.code); });
 }
 
 function renderRateioTab(mkey) {
@@ -11641,9 +11682,14 @@ function renderRateioTab(mkey) {
               <div class="small-note" id="rp-taxa-nota-${pe.id}">${rpTaxaNota(pe, mkey)}</div>
             </div>
             <div class="obs-block extra-block">
+              <div class="obs-header"><label>Horas/dia (jornada)</label></div>
+              <input type="text" inputmode="decimal" class="rp-input" style="width:100%;${pe.horasDia > 0 ? ' background:var(--warn-bg); border-color:var(--warn);' : ''}" id="rp-jornada-${pe.id}" value="${pe.horasDia > 0 ? rpNum(pe.horasDia, 1) : ''}" placeholder="${rpNum(rpJornada(pe).valor, 1)}" onchange="rpSetJornada('${pe.id}',this.value)" onkeydown="if(event.key==='Enter') this.blur()">
+              <div class="small-note" id="rp-jornada-nota-${pe.id}">${rpJornadaNota(pe)}</div>
+            </div>
+            <div class="obs-block extra-block">
               <div class="obs-header"><label>Horas no mes (${mkey})</label></div>
               <input type="text" inputmode="decimal" class="rp-input" style="width:100%;" id="rp-horas-${pe.id}" value="${entry.horas ? rpNum(entry.horas, 2) : ''}" placeholder="Ex: 80" oninput="rpSetHoras('${pe.id}',this.value)">
-              <div class="small-note">Horas desta pessoa no mes que sao devidas aos seus projetos.</div>
+              <div class="small-note">Horas desta pessoa no mes que sao devidas aos seus projetos (nao muda a jornada).</div>
             </div>
           </div>
           <div class="table-wrap" style="margin-top:16px;" id="rp-tbl-${pe.id}"></div>
@@ -11726,18 +11772,21 @@ function rpRenderPessoaCalc(id, mkey) {
   const pe = RP.pessoas.find(function(x) { return x.id === id; });
   if (!pe) return;
   const c = rpCalcPessoa(pe, mkey);
+  const jornada = rpJornada(pe).valor;
+  const diasLanc = c.horas > 0 ? c.horas / jornada : 0;
   const summary = document.getElementById('rp-summary-' + id);
   if (summary) summary.innerHTML = `
     <div class="mini-metric"><span class="mini-label">Taxa</span><span class="mini-value">${brl(c.taxa)}</span></div>
     <div class="mini-metric"><span class="mini-label">Horas</span><span class="mini-value">${rpNum(c.horas, 2)}</span></div>
-    <div class="mini-metric"><span class="mini-label">Horas/dia</span><span class="mini-value">${rpDiasUteis(mkey) > 0 ? rpNum(c.horas / rpDiasUteis(mkey), 2) : '-'}</span></div>
+    <div class="mini-metric"><span class="mini-label">Horas/dia</span><span class="mini-value">${rpNum(jornada, jornada % 1 ? 1 : 0)}</span></div>
+    <div class="mini-metric"><span class="mini-label">Dias</span><span class="mini-value" title="Horas do mes / jornada: dias inteiros a lancar">${c.horas > 0 ? rpNum(diasLanc, diasLanc % 1 ? 1 : 0) : '-'}</span></div>
     <div class="mini-metric"><span class="mini-label">Projetos</span><span class="mini-value">${Object.keys(c.linhas).length}</span></div>
     <div class="mini-metric"><span class="mini-label">Custo</span><span class="mini-value">${brl(c.custo)}</span></div>
     <span class="chevron">&#9660;</span>`;
   const tbl = document.getElementById('rp-tbl-' + id);
   if (!tbl) return;
-  const dias = rpDiasUteis(mkey);
-  const porDia = function(h) { return dias > 0 ? rpNum(h / dias, 2) : '-'; };
+  // horas/dia do projeto num dia inteiro de trabalho: fatia das horas do mes x jornada
+  const porDia = function(h) { return c.horas > 0 ? rpNum(h / c.horas * jornada, 2) : '-'; };
   const projetos = rpProjetosVisiveis(c.entry.projetos);
   const rows = projetos.map(function(p) {
     const l = c.linhas[p.code];
@@ -11851,6 +11900,10 @@ function rpSetMatricula(id, value) {
   }
   const nota = document.getElementById('rp-taxa-nota-' + id);
   if (nota) nota.innerHTML = rpTaxaNota(pe, mkey);
+  const jNota = document.getElementById('rp-jornada-nota-' + id);
+  if (jNota) jNota.innerHTML = rpJornadaNota(pe);
+  const jEl = document.getElementById('rp-jornada-' + id);
+  if (jEl) jEl.placeholder = rpNum(rpJornada(pe).valor, 1);
   rpRenderPessoaCalc(id, mkey);
   rpRenderResumo(mkey);
   rpScheduleSave();
