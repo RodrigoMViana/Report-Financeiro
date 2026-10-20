@@ -5807,7 +5807,22 @@ function renderMonth(mkey) {
   });
 
   document.getElementById('header-sub').textContent = projs.length + ' projetos analisados (' + CURRENT_GESTOR + ') · mes de referencia: ' + DATA[0].months[mkey].nome + '/2026';
+  ordenarCardsComparativo();
   loadNotesForMonth(mkey);
+}
+
+// Cards do Comparativo em ordem crescente de codigo. Os cards sao fixos no HTML e os de projeto novo entram no
+// fim da aba (createProjectCardIfMissing), entao a ordem e refeita no DOM -- so mexe quando esta fora de ordem.
+function ordenarCardsComparativo() {
+  const container = document.getElementById('tab-geral');
+  if (!container) return;
+  const cards = Array.prototype.slice.call(container.querySelectorAll(':scope > .project-card'));
+  const ord = cards.slice().sort(function(a, b) { return a.getAttribute('data-code').localeCompare(b.getAttribute('data-code')); });
+  if (ord.every(function(c, i) { return c === cards[i]; })) return;
+  const marca = document.createComment('cards');
+  container.insertBefore(marca, cards[0]);
+  ord.forEach(function(c) { container.insertBefore(c, marca); });
+  marca.remove();
 }
 
 const NOTES_PREFIX = 'pr_notes::';
@@ -7434,7 +7449,7 @@ function restaurarRateioPadrao(code) {
 }
 
 function renderParamTab(mkey) {
-  const rows = currentProjects();
+  const rows = currentProjects().slice().sort(function(a, b) { return a.code.localeCompare(b.code); });
   const countEl = document.getElementById('param-count');
   if (countEl) countEl.textContent = rows.length;
   const listEl = document.getElementById('param-projects-list');
