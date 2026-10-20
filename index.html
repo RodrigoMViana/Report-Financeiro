@@ -38,7 +38,7 @@
   .tab-btn.active { color:var(--navy); border-bottom-color:var(--navy); }
   .main-tabs { flex-wrap:wrap; }
   .tab-btn { white-space:nowrap; }
-  @media (max-width: 1150px) { .tab-btn { padding:12px 13px; } }
+  @media (max-width: 1200px) { .tab-btn { padding:12px 13px; } }   /* 9 abas numa linha a partir de ~1000px */
   .tab-panel { display:none; }
   .tab-panel.active { display:block; }
   .progress-row { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:10px; }
@@ -337,7 +337,7 @@
   </div>
 
   <div class="main-tabs">
-    <button type="button" class="tab-btn active" data-tab="geral" onclick="showTab('geral')">Comparativo Geral</button>
+    <button type="button" class="tab-btn active" data-tab="geral" onclick="showTab('geral')">Comparativo</button>
     <button type="button" class="tab-btn" data-tab="faturamento" onclick="showTab('faturamento')">Faturamento</button>
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
     <button type="button" class="tab-btn" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
@@ -5419,10 +5419,10 @@
 
   <div id="tab-dedicacao" class="tab-panel">
     <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:12px;">
-      <button type="button" onclick="document.getElementById('dedi-file').click()">Enviar relatorio de dedicacao (DEDI011E)</button>
+      <button type="button" onclick="document.getElementById('dedi-file').click()">Enviar relatorio de dedicacao</button>
       <input type="file" id="dedi-file" accept=".xls,.htm,.html,.mht,.mhtml" multiple style="display:none" onchange="dediUpload(event)">
     </div>
-    <div class="small-note" style="margin-bottom:16px;">Confere as horas aplicadas no relatorio de imputacao (DEDI011E) com as horas do HC das PRs no mes selecionado, por pessoa e projeto. <b style="color:var(--ok);">Verde</b> = horas iguais; <b style="color:var(--bad);">vermelho</b> = divergente (diferenca = dedicacao &minus; HC). O mes do relatorio vem do campo "Fecho"; cada envio substitui a dedicacao do projeto naquele mes.</div>
+    <div class="small-note" style="margin-bottom:16px;">Confere as horas aplicadas no relatorio de imputacao com as horas do HC das PRs no mes selecionado, por pessoa e projeto. <b style="color:var(--ok);">Verde</b> = horas iguais; <b style="color:var(--bad);">vermelho</b> = divergente (diferenca = dedicacao &minus; HC). O mes do relatorio vem do campo "Fecho"; cada envio substitui a dedicacao do projeto naquele mes.</div>
     <div class="kpi-grid rev-kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Projetos conferidos</div><div class="kpi-value" id="dedi-kpi-proj">-</div><div class="kpi-sub" id="dedi-kpi-proj-sub"></div></div>
       <div class="kpi-card"><div class="kpi-label">Pessoas batendo</div><div class="kpi-value ok" id="dedi-kpi-ok">-</div></div>
@@ -10202,7 +10202,7 @@ async function dediUpload(event) {
   for (const file of files) {
     try {
       const html = dediHtmlDoArquivo(await file.arrayBuffer());
-      if (!html) { avisos.push(file.name + ': nao parece um relatorio DEDI011E.'); continue; }
+      if (!html) { avisos.push(file.name + ': nao parece um relatorio de dedicacao.'); continue; }
       const r = dediParse(html, file.name);
       const codes = Object.keys(r.projetos);
       if (!r.mkey) { avisos.push(file.name + ': nao achei o mes ("Fecho") no relatorio.'); continue; }
@@ -10294,7 +10294,7 @@ function renderDedicacaoTab(mkey) {
   document.getElementById('dedi-count').textContent = vis.length;
 
   if (!vis.length) {
-    list.innerHTML = '<div class="no-results" style="display:block;">' + (confs.length ? 'Nenhum projeto com divergencia.' : 'Nenhum projeto de ' + CURRENT_GESTOR + ' com dedicacao ou HC em ' + revMesNome(mkey) + '. Envie o relatorio DEDI011E do mes.') + '</div>';
+    list.innerHTML = '<div class="no-results" style="display:block;">' + (confs.length ? 'Nenhum projeto com divergencia.' : 'Nenhum projeto de ' + CURRENT_GESTOR + ' com dedicacao ou HC em ' + revMesNome(mkey) + '. Envie o relatorio de dedicacao do mes.') + '</div>';
     return;
   }
   const n2 = function(v) { return v === null ? '-' : rpNum(v, 2); };
@@ -10313,7 +10313,7 @@ function renderDedicacaoTab(mkey) {
     const info = [];
     if (c.dedi) info.push('Dedicacao: ' + escHtml(c.dedi.arquivo || '') + (c.dedi.data ? ' de ' + escHtml(c.dedi.data) : '') + (c.dedi.estado ? ' (' + escHtml(c.dedi.estado) + ')' : '') + ' &middot; fecho ' + escHtml(c.dedi.fecho || ''));
     if (c.hcData) info.push('HC: PR de ' + escHtml(String(c.hcData).slice(0, 10)));
-    if (!c.temDedi) info.unshift('Sem relatorio de dedicacao deste projeto em ' + revMesNome(mkey) + ' (envie o DEDI011E).');
+    if (!c.temDedi) info.unshift('Sem relatorio de dedicacao deste projeto em ' + revMesNome(mkey) + ' (envie o relatorio de dedicacao).');
     if (!c.temHC) info.unshift('A PR deste projeto (aba HC) nao foi enviada -- nao ha horas para comparar.');
     return `
       <details class="project-card" ${conferido || sel.value ? 'open' : ''}>
