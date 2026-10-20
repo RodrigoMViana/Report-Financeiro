@@ -5279,6 +5279,9 @@
   </div>
 
   <div id="tab-faturamento" class="tab-panel">
+    <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:12px;">
+      <button type="button" id="btn-excel-fat" onclick="exportProgressExcel('fat')">Exportar Excel</button>
+    </div>
     <div class="small-note" id="fat-consolidado-note" style="margin-bottom:10px;"></div>
     <div class="kpi-grid kpi-grid-3">
       <div class="kpi-card">
@@ -5308,6 +5311,9 @@
   </div>
 
   <div id="tab-cobro" class="tab-panel">
+    <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:12px;">
+      <button type="button" id="btn-excel-cob" onclick="exportProgressExcel('cob')">Exportar Excel</button>
+    </div>
     <div class="small-note" id="cob-consolidado-note" style="margin-bottom:10px;"></div>
     <div class="kpi-grid kpi-grid-3">
       <div class="kpi-card">
@@ -6930,6 +6936,79 @@ function renderProgressTab(kind, mkey) {
         </div>
       </details>`;
   }).join('');
+}
+
+// ---------- Exportar Faturamento/Cobro para Excel ----------
+// Uma tabela do Excel (com filtro e linha de total): Codigo, Projeto, Meta (PR), Realizado (Ficha, sem o
+// solicitado), Solicitado na ferramenta / Confirmado recebimento, Previsao e Status do mes.
+// Respeita o gestor e o filtro da aba, na mesma ordem da tela. ExcelJS sob demanda.
+function garantirExcelJS() { return carregarBiblioteca('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js', 'ExcelJS'); }
+
+async function exportProgressExcel(prefix) {
+  const mkey = document.getElementById('month-select').value;
+  const metaField = prefix === 'fat' ? 'faturamento' : 'cobro';
+  const titulo = prefix === 'fat' ? 'Faturamento' : 'Cobro';
+  const projs = getConsolidadoProjects(prefix);
+  if (!projs.length) { uiAlert('Nenhum projeto para exportar.', { titulo: 'Exportar ' + titulo }); return; }
+  const btn = document.getElementById('btn-excel-' + prefix);
+  const rotulo = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando Excel...'; }
+  try {
+    await garantirExcelJS();
+    const notas = await relCarregarNotas(projs, mkey);
+    const rows = projs.map(p => computeProgressRow(p, mkey, prefix, metaField, prefix));
+    rows.sort((a, b) => (a.pct === null ? 999 : a.pct) - (b.pct === null ? 999 : b.pct));
+    // texto digitado e ainda nao salvo (o auto-save espera 800 ms) vale mais que o gravado
+    const statusDe = code => { const ta = document.getElementById('status-' + prefix + '-' + code); return ta && ta.value ? ta.value : (notas[code] || {})[prefix] || ''; };
+    const mnome = DATA[0].months[mkey].nome;
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Comparativo PR vs Pre Cierre';
+    const ws = wb.addWorksheet(titulo, { views: [{ state: 'frozen', ySplit: 4 }] });
+    ws.getCell('A1').value = titulo + ' - ' + mnome + '/2026';
+    ws.getCell('A1').font = { bold: true, size: 14, color: { argb: 'FF0B2545' } };
+    const sel = FILTER_SELECTED[prefix];
+    ws.getCell('A2').value = 'Gestor: ' + CURRENT_GESTOR + ' · ' + rows.length + ' projeto(s)' + ((sel && sel.size) || document.getElementById(FILTER_SEARCH_ID[prefix]).value.trim() ? ' (filtro aplicado)' : '') +
+      ' · gerado em ' + new Date().toLocaleString('pt-BR');
+    ws.getCell('A2').font = { size: 10, color: { argb: 'FF5C6B7A' } };
+
+    const colunas = [
+      { name: 'Código', totalsRowLabel: 'Total', width: 11 },
+      { name: 'Projeto', width: 48 },
+      { name: 'Meta (PR)', totalsRowFunction: 'sum', width: 17, money: true },
+      { name: 'Realizado (Ficha)', totalsRowFunction: 'sum', width: 17, money: true },
+      { name: prefix === 'cob' ? 'Confirmado Recebimento' : 'Solicitado na ferramenta', totalsRowFunction: 'sum', width: 19, money: true },
+      { name: 'Previsão', totalsRowFunction: 'sum', width: 17, money: true },
+      { name: 'Status', width: 80 },
+    ];
+    ws.addTable({
+      name: 'tb' + titulo, ref: 'A4', headerRow: true, totalsRow: true,
+      style: { theme: 'TableStyleMedium2', showRowStripes: true },
+      columns: colunas.map(c => { const o = { name: c.name, filterButton: true }; if (c.totalsRowLabel) o.totalsRowLabel = c.totalsRowLabel; if (c.totalsRowFunction) o.totalsRowFunction = c.totalsRowFunction; return o; }),
+      rows: rows.map(r => [r.code, r.name, r.meta || 0, r.fichaBase || 0, r.solicitado || 0, r.previsao || 0, statusDe(r.code).trim()]),
+    });
+    colunas.forEach((c, i) => {
+      const col = ws.getColumn(i + 1);
+      col.width = c.width;
+      if (c.money) col.numFmt = '"R$" #,##0.00;[Red]-"R$" #,##0.00';
+    });
+    for (let r = 5; r <= 5 + rows.length; r++) {
+      ws.getRow(r).eachCell({ includeEmpty: true }, cell => { cell.alignment = Object.assign({}, cell.alignment, { vertical: 'top', wrapText: cell.col === 2 || cell.col === 7 }); });
+    }
+
+    const buf = await wb.xlsx.writeBuffer();
+    const g = CURRENT_GESTOR.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = titulo.toLowerCase() + '_' + mkey + '_2026_' + g + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (e) {
+    console.error('exportar excel', e);
+    uiAlert('Nao foi possivel gerar o Excel: ' + (e && e.message ? e.message : e), { titulo: 'Exportar ' + titulo, aviso: true });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = rotulo; }
+  }
 }
 
 // ---------- Fechamento (margem % com custo/ingresso da Ficha Economica + previsoes manuais) ----------
