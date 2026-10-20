@@ -36,6 +36,9 @@
   .tab-btn { padding:12px 22px; background:none; border:none; font-size:14px; font-weight:600; color:var(--slate); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; font-family:inherit; }
   .tab-btn:hover { color:var(--navy); }
   .tab-btn.active { color:var(--navy); border-bottom-color:var(--navy); }
+  .main-tabs { flex-wrap:wrap; }
+  .tab-btn { white-space:nowrap; }
+  @media (max-width: 1150px) { .tab-btn { padding:12px 13px; } }
   .tab-panel { display:none; }
   .tab-panel.active { display:block; }
   .progress-row { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:10px; }
@@ -187,6 +190,13 @@
   table.rp-table td.num, table.rp-table th.num { text-align:right; white-space:nowrap; }
   table.rp-table tr.rp-off td { color:var(--neutral); }
   table.rp-table tfoot td { font-weight:700; color:var(--navy); border-top:2px solid var(--border); }
+  table.rp-table tr.dedi-ok td { background:var(--ok-bg); }
+  table.rp-table tr.dedi-bad td { background:var(--bad-bg); }
+  table.rp-table tr.dedi-bad td.dedi-dif { color:var(--bad); font-weight:700; }
+  .dedi-badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; white-space:nowrap; }
+  .dedi-badge.ok { background:var(--ok-bg); color:var(--ok); }
+  .dedi-badge.bad { background:var(--bad-bg); color:var(--bad); }
+  .dedi-badge.neutral { background:var(--bg); color:var(--slate); }
 
   @media print {
     #tab-rateio, .tab-btn[data-tab="rateio"], #tab-transferencias, .tab-btn[data-tab="transferencias"], #tab-revisao, .tab-btn[data-tab="revisao"] { display:none !important; }
@@ -332,6 +342,7 @@
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
     <button type="button" class="tab-btn" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
     <button type="button" class="tab-btn" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
+    <button type="button" class="tab-btn" data-tab="dedicacao" onclick="showTab('dedicacao')">Dedicacao</button>
     <button type="button" class="tab-btn" data-tab="transferencias" onclick="showTab('transferencias')">&#128274; Transferencias</button>
     <button type="button" class="tab-btn" data-tab="rateio" onclick="showTab('rateio')">&#128274; Rateio</button>
     <button type="button" class="tab-btn" data-tab="revisao" onclick="showTab('revisao')">&#128274; Revisao</button>
@@ -5406,6 +5417,26 @@
     <div id="param-projects-list"></div>
   </div>
 
+  <div id="tab-dedicacao" class="tab-panel">
+    <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:12px;">
+      <button type="button" onclick="document.getElementById('dedi-file').click()">Enviar relatorio de dedicacao (DEDI011E)</button>
+      <input type="file" id="dedi-file" accept=".xls,.htm,.html,.mht,.mhtml" multiple style="display:none" onchange="dediUpload(event)">
+    </div>
+    <div class="small-note" style="margin-bottom:16px;">Confere as horas aplicadas no relatorio de imputacao (DEDI011E) com as horas do HC das PRs no mes selecionado, por pessoa e projeto. <b style="color:var(--ok);">Verde</b> = horas iguais; <b style="color:var(--bad);">vermelho</b> = divergente (diferenca = dedicacao &minus; HC). O mes do relatorio vem do campo "Fecho"; cada envio substitui a dedicacao do projeto naquele mes.</div>
+    <div class="kpi-grid rev-kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">Projetos conferidos</div><div class="kpi-value" id="dedi-kpi-proj">-</div><div class="kpi-sub" id="dedi-kpi-proj-sub"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Pessoas batendo</div><div class="kpi-value ok" id="dedi-kpi-ok">-</div></div>
+      <div class="kpi-card"><div class="kpi-label">Pessoas divergentes</div><div class="kpi-value bad" id="dedi-kpi-bad">-</div></div>
+      <div class="kpi-card"><div class="kpi-label">Horas divergentes</div><div class="kpi-value" id="dedi-kpi-horas">-</div><div class="kpi-sub">soma das diferencas (em modulo)</div></div>
+    </div>
+    <div class="section-title">Conferencia por projeto <span class="count" id="dedi-count">0</span></div>
+    <div class="project-filter" style="align-items:center; gap:16px;">
+      <select id="dedi-filtro" class="rp-input" style="min-width:320px;" onchange="renderDedicacaoTab(document.getElementById('month-select').value)"></select>
+      <label class="small-note" style="display:flex; align-items:center; gap:6px; margin:0;"><input type="checkbox" id="dedi-so-div" onchange="renderDedicacaoTab(document.getElementById('month-select').value)"> So divergentes</label>
+    </div>
+    <div id="dedi-list"></div>
+  </div>
+
   <div id="tab-transferencias" class="tab-panel">
     <div id="tr-locked">
       <div class="rp-lock">
@@ -6757,7 +6788,7 @@ function clearProjectFilter() {
 }
 
 function showTab(name) {
-  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'transferencias', 'rateio', 'revisao'].forEach(function(t) {
+  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'dedicacao', 'transferencias', 'rateio', 'revisao'].forEach(function(t) {
     var panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
     var btn = document.querySelector('.tab-btn[data-tab="' + t + '"]');
@@ -6765,6 +6796,7 @@ function showTab(name) {
   });
   // A Revisao confere as horas com o Rateio: redesenha ao abrir, para refletir edicoes feitas no Rateio.
   if (name === 'revisao' && typeof renderRevisaoTab === 'function') renderRevisaoTab(document.getElementById('month-select').value);
+  if (name === 'dedicacao') renderDedicacaoTab(document.getElementById('month-select').value);
 }
 
 function computeProgressRow(p, mkey, prefix, metaField, fichaField) {
@@ -7338,6 +7370,7 @@ function renderAllTabs(mkey) {
   renderRateioTab(mkey);
   loadTransfMonth(mkey);
   renderRevisaoTab(mkey);
+  renderDedicacaoTab(mkey);
   loadStatusForMonth('fat', mkey);
   loadStatusForMonth('cob', mkey);
   loadStatusForMonth('fech', mkey);
@@ -10049,6 +10082,262 @@ function revHC() {
   REV_HC_MEMO = { ver: REV_HC_VER, own: own, map: map };
   return map;
 }
+
+// ---------- Dedicacao: relatorio de imputacao (DEDI011E) x HC das PRs ----------
+// O DEDI011E do Oracle BI Publisher vem como .xls, mas e um e-mail MIME com HTML em quoted-printable
+// (ISO-8859-15). Por projeto: cabecalho (estado, codigo, nome, responsavel), "Elemento:" e uma linha por
+// funcionario (matricula, nome, unidade, categoria, horas aplicadas). Mes = campo "Fecho" (ex.: 26OC).
+// Gravado por projeto/mes em '__DEDI__::<projeto>' (month = mes), sem taxa -- como o '__HC__'. Em localhost
+// fica so no navegador (REV_REMOTE). A conferencia usa revHC() (horas de todas as PRs enviadas).
+var DEDI = {};               // DEDI[mkey][code] = { code, nome, fecho, data, estado, arquivo, pessoas: [{matricula, nome, horas}], total, t }
+var DEDI_CARREGADO = {};     // mkey -> true | Promise
+var DEDI_HC_PROMISE = null;
+var DEDI_TOL = 0.05;         // horas; diferencas menores sao arredondamento
+const DEDI_MES = { EN: 'JAN', FE: 'FEV', MR: 'MAR', MA: 'MAR', AB: 'ABR', AP: 'ABR', MY: 'MAI', JN: 'JUN', JL: 'JUL', AG: 'AGO', SE: 'SET', SP: 'SET', OC: 'OUT', OU: 'OUT', NO: 'NOV', NV: 'NOV', DI: 'DEZ', DE: 'DEZ' };
+function dediKey(code) { return '__DEDI__::' + code; }
+function dediLocalKey(code, mkey) { return NOTES_PREFIX + dediKey(code) + '::' + mkey; }
+function dediMat(m) { return String(m == null ? '' : m).replace(/\D/g, '').replace(/^0+/, ''); }
+
+// Texto HTML do arquivo: parte text/html do MIME (decodifica quoted-printable/base64) ou o proprio HTML.
+function dediHtmlDoArquivo(buf) {
+  const bytes = new Uint8Array(buf);
+  const raw = new TextDecoder('latin1').decode(bytes);
+  const i = raw.search(/Content-Type:\s*text\/html/i);
+  if (i === -1) return /<table/i.test(raw) ? new TextDecoder(/charset=["']?utf-8/i.test(raw) ? 'utf-8' : 'iso-8859-15').decode(bytes) : null;
+  const ini = raw.slice(i).search(/\r?\n\r?\n/);   // fim dos cabecalhos da parte
+  if (ini === -1) return null;
+  const cab = raw.slice(i, i + ini);
+  let corpo = raw.slice(i + ini).replace(/^\r?\n\r?\n/, '');
+  const bounds = []; raw.replace(/boundary="?([^"\r\n;]+)"?/gi, function(_, b) { bounds.push(b); });
+  let fim = corpo.length;
+  bounds.forEach(function(b) { const k = corpo.indexOf('--' + b); if (k !== -1 && k < fim) fim = k; });
+  corpo = corpo.slice(0, fim);
+  const charset = ((/charset=["']?([\w-]+)/i.exec(cab) || [])[1] || 'iso-8859-15').toLowerCase().replace(/^iso8859/, 'iso-8859');
+  let out;
+  if (/Content-Transfer-Encoding:\s*quoted-printable/i.test(cab)) {
+    const s = corpo.replace(/=\r?\n/g, '');
+    out = new Uint8Array(s.length); let n = 0;
+    for (let k = 0; k < s.length; k++) {
+      if (s[k] === '=' && /^[0-9A-F]{2}$/i.test(s.substr(k + 1, 2))) { out[n++] = parseInt(s.substr(k + 1, 2), 16); k += 2; }
+      else out[n++] = s.charCodeAt(k) & 255;
+    }
+    out = out.subarray(0, n);
+  } else if (/Content-Transfer-Encoding:\s*base64/i.test(cab)) {
+    out = Uint8Array.from(atob(corpo.replace(/\s+/g, '')), function(c) { return c.charCodeAt(0); });
+  } else out = Uint8Array.from(corpo, function(c) { return c.charCodeAt(0) & 255; });
+  try { return new TextDecoder(charset).decode(out); } catch (e) { return new TextDecoder('iso-8859-15').decode(out); }
+}
+
+function dediParse(html, arquivo) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const res = { arquivo: arquivo, fecho: '', mkey: null, ano: null, data: '', projetos: {} };
+  let proj = null, esperaProjeto = false, elemento = '';
+  doc.querySelectorAll('tr').forEach(function(tr) {
+    const cells = Array.prototype.map.call(tr.cells, function(td) { return td.textContent.replace(/\s+/g, ' ').trim(); });
+    const linha = cells.join(' | ');
+    const f = /Fecho:\s*(\d{2})\s*([A-Z]{2})/i.exec(linha);
+    if (f && !res.fecho) { res.fecho = f[1] + f[2].toUpperCase(); res.ano = 2000 + (+f[1]); res.mkey = DEDI_MES[f[2].toUpperCase()] || null; }
+    const d = /Data:\s*(\d{4})\/(\d{2})\/(\d{2})/.exec(linha);
+    if (d && !res.data) res.data = d[3] + '/' + d[2] + '/' + d[1];
+    if (cells.some(function(c) { return /^Estado de Valida/i.test(c); }) && cells.indexOf('Projeto') !== -1) { esperaProjeto = true; return; }
+    if (esperaProjeto && cells.length >= 2) {
+      esperaProjeto = false;
+      const code = cells[1].toUpperCase();
+      proj = res.projetos[code] || (res.projetos[code] = { code: code, nome: cells[2] || '', estado: cells[0] || '', responsavel: cells[4] || cells[3] || '', pessoas: {}, total: 0, totalInformado: null });
+      return;
+    }
+    if (/^Elemento:?$/i.test(cells[0] || '')) { elemento = cells.slice(1).join(' '); return; }
+    if (!proj) return;
+    if (cells.some(function(c) { return /^Total Projeto/i.test(c); })) { proj.totalInformado = parseBRNum(cells[cells.length - 1]); return; }
+    if (cells.length >= 3 && /^\d{4,}$/.test(cells[0]) && /^-?[\d.]+(,\d+)?$/.test(cells[cells.length - 1])) {
+      const mat = dediMat(cells[0]);
+      const h = parseBRNum(cells[cells.length - 1]);
+      const pe = proj.pessoas[mat] || (proj.pessoas[mat] = { matricula: mat, nome: cells[1], horas: 0, elementos: {} });
+      pe.horas += h; proj.total += h;
+      if (elemento) pe.elementos[elemento] = (pe.elementos[elemento] || 0) + h;
+    }
+  });
+  return res;
+}
+
+async function dediSalvar(mkey, obj) {
+  if (!DEDI[mkey]) DEDI[mkey] = {};
+  DEDI[mkey][obj.code] = obj;
+  const text = JSON.stringify(obj);
+  try { localStorage.setItem(dediLocalKey(obj.code, mkey), text); } catch (e) {}
+  if (!REV_REMOTE) return { ok: true, local: true };
+  const { error } = await sb.from('notes').upsert({ code: dediKey(obj.code), month: mkey, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+  return { ok: !error };
+}
+
+function dediCarregar(mkey) {
+  if (DEDI_CARREGADO[mkey]) return Promise.resolve(DEDI_CARREGADO[mkey]);
+  const p = (async function() {
+    const m = DEDI[mkey] || (DEDI[mkey] = {});
+    const usar = function(o) { if (o && o.code && (!m[o.code] || (o.t || 0) >= (m[o.code].t || 0))) m[o.code] = o; };
+    try {
+      const pref = NOTES_PREFIX + '__DEDI__::', suf = '::' + mkey;
+      Object.keys(localStorage).forEach(function(k) {
+        if (k.indexOf(pref) === 0 && k.slice(-suf.length) === suf) { try { usar(JSON.parse(localStorage.getItem(k))); } catch (e) {} }
+      });
+    } catch (e) {}
+    if (SUPABASE_CONFIGURED) {
+      const rows = await fetchAllNotes(() => sb.from('notes').select('code,text').like('code', '__DEDI__::%').eq('month', mkey));
+      (rows || []).forEach(function(r) { try { usar(JSON.parse(r.text)); } catch (e) {} });
+    }
+    DEDI_CARREGADO[mkey] = true;
+    return true;
+  })();
+  DEDI_CARREGADO[mkey] = p;
+  p.catch(function() { delete DEDI_CARREGADO[mkey]; });
+  return p;
+}
+
+async function dediUpload(event) {
+  const files = Array.prototype.slice.call(event.target.files || []);
+  event.target.value = '';
+  if (!files.length) return;
+  const linhas = [], avisos = [];
+  const mesTela = document.getElementById('month-select').value;
+  for (const file of files) {
+    try {
+      const html = dediHtmlDoArquivo(await file.arrayBuffer());
+      if (!html) { avisos.push(file.name + ': nao parece um relatorio DEDI011E.'); continue; }
+      const r = dediParse(html, file.name);
+      const codes = Object.keys(r.projetos);
+      if (!r.mkey) { avisos.push(file.name + ': nao achei o mes ("Fecho") no relatorio.'); continue; }
+      if (!codes.length) { avisos.push(file.name + ': nenhum projeto com horas no relatorio.'); continue; }
+      if (r.ano && r.ano !== rpAnoRef(r.mkey)) avisos.push(file.name + ': o relatorio e de ' + r.ano + ' (o site trabalha com ' + rpAnoRef(r.mkey) + ').');
+      await dediCarregar(r.mkey);
+      for (const code of codes) {
+        const pr = r.projetos[code];
+        const obj = { code: code, nome: pr.nome, fecho: r.fecho, data: r.data, estado: pr.estado, responsavel: pr.responsavel, arquivo: file.name, total: pr.total,
+          pessoas: Object.values(pr.pessoas).map(function(pe) { return { matricula: pe.matricula, nome: pe.nome, horas: Math.round(pe.horas * 100) / 100 }; }), t: Date.now() };
+        const s = await dediSalvar(r.mkey, obj);
+        const noSite = DATA.some(function(p) { return p.code === code; });
+        linhas.push(code + ' (' + revMesNome(r.mkey) + '): ' + obj.pessoas.length + ' pessoa(s), ' + rpNum(pr.total, 2) + 'h' +
+          (pr.totalInformado !== null && Math.abs(pr.totalInformado - pr.total) > DEDI_TOL ? ' -- atencao: total do relatorio ' + rpNum(pr.totalInformado, 2) + 'h' : '') +
+          (noSite ? '' : ' -- projeto fora do site') + (s.ok ? '' : ' -- falhou ao sincronizar'));
+      }
+      if (r.mkey !== mesTela) avisos.push('O relatorio ' + file.name + ' e de ' + revMesNome(r.mkey) + '; o mes selecionado e ' + revMesNome(mesTela) + '.');
+    } catch (e) {
+      console.error('dedicacao', e);
+      avisos.push(file.name + ': erro ao ler (' + (e && e.message ? e.message : e) + ').');
+    }
+  }
+  renderDedicacaoTab(mesTela);
+  uiAlert((linhas.length ? 'Dedicacao gravada:\n' + linhas.join('\n') : 'Nada foi gravado.') + (avisos.length ? '\n\n' + avisos.join('\n') : ''), { titulo: 'Relatorio de dedicacao' });
+}
+
+// Batimento de um projeto no mes: une as pessoas da dedicacao e do HC (horas > 0 no mes).
+function dediConferir(code, mkey) {
+  const hc = revHC()[code];
+  const d = DEDI[mkey] && DEDI[mkey][code];
+  const pessoas = {};
+  const add = function(mat, nome) { return pessoas[mat] || (pessoas[mat] = { matricula: mat, nome: nome || '', hc: null, dedi: null }); };
+  ((hc && hc.pessoas) || []).forEach(function(pe) {
+    const h = (pe.horas && pe.horas[mkey]) || 0;
+    if (h <= 0) return;
+    const x = add(dediMat(pe.matricula), pe.nome);
+    x.hc = (x.hc || 0) + h;
+    if (pe.nome) x.nome = pe.nome;
+  });
+  ((d && d.pessoas) || []).forEach(function(pe) {
+    const x = add(dediMat(pe.matricula), pe.nome);
+    x.dedi = (x.dedi || 0) + (pe.horas || 0);
+  });
+  const linhas = Object.values(pessoas).map(function(x) {
+    const dif = (x.dedi || 0) - (x.hc || 0);
+    return Object.assign(x, { dif: dif, ok: Math.abs(dif) < DEDI_TOL });
+  }).sort(function(a, b) { return (a.ok - b.ok) || Math.abs(b.dif) - Math.abs(a.dif) || String(a.nome).localeCompare(String(b.nome)); });
+  const tot = linhas.reduce(function(s, l) { s.hc += l.hc || 0; s.dedi += l.dedi || 0; s.abs += l.ok ? 0 : Math.abs(l.dif); if (l.ok) s.ok++; else s.bad++; return s; }, { hc: 0, dedi: 0, abs: 0, ok: 0, bad: 0 });
+  return { code: code, temHC: !!(hc && linhas.some(function(l) { return l.hc !== null; })), temDedi: !!d, dedi: d, hcData: hc ? hc.data : '', linhas: linhas, tot: tot };
+}
+
+function renderDedicacaoTab(mkey) {
+  const panel = document.getElementById('tab-dedicacao');
+  if (!panel || !panel.classList.contains('active')) return;
+  const list = document.getElementById('dedi-list');
+  if (DEDI_CARREGADO[mkey] !== true || !HC_SHARED_CARREGADO) {
+    list.innerHTML = '<div class="small-note">Carregando dedicacao e horas das PRs...</div>';
+    if (!HC_SHARED_CARREGADO && !DEDI_HC_PROMISE) DEDI_HC_PROMISE = hcSharedCarregar().finally(function() { DEDI_HC_PROMISE = null; });
+    Promise.all([dediCarregar(mkey), DEDI_HC_PROMISE || Promise.resolve()]).then(function() {
+      if (document.getElementById('month-select').value === mkey && DEDI_CARREGADO[mkey] === true && HC_SHARED_CARREGADO) renderDedicacaoTab(mkey);
+    }).catch(function(e) { list.innerHTML = '<div class="small-note" style="color:var(--bad);">Nao foi possivel carregar: ' + escHtml(e && e.message ? e.message : e) + '</div>'; });
+    return;
+  }
+  const projs = currentProjects().slice().sort(function(a, b) { return a.code.localeCompare(b.code); });
+  // conferidos (dedicacao + HC) primeiro; depois so dedicacao (PR nao enviada); por ultimo so HC (falta o relatorio)
+  const grupo = function(c) { return c.temDedi && c.temHC ? 0 : c.temDedi ? 1 : 2; };
+  const confs = projs.map(function(p) { return Object.assign(dediConferir(p.code, mkey), { nome: p.name }); })
+    .filter(function(c) { return c.temDedi || c.temHC; })
+    .sort(function(a, b) { return grupo(a) - grupo(b) || a.code.localeCompare(b.code); });
+
+  const sel = document.getElementById('dedi-filtro');
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">Todos os projetos (' + confs.length + ')</option>' + confs.map(function(c) {
+    const st = !c.temDedi ? ' -- sem dedicacao' : !c.temHC ? ' -- sem HC' : c.tot.bad ? ' -- ' + c.tot.bad + ' divergente(s)' : ' -- ok';
+    return '<option value="' + c.code + '">' + c.code + ' - ' + escHtml(c.nome) + st + '</option>';
+  }).join('');
+  sel.value = confs.some(function(c) { return c.code === atual; }) ? atual : '';
+  const soDiv = document.getElementById('dedi-so-div').checked;
+  let vis = sel.value ? confs.filter(function(c) { return c.code === sel.value; }) : confs;
+
+  const conferidos = confs.filter(function(c) { return c.temDedi && c.temHC; });
+  const k = conferidos.reduce(function(s, c) { s.ok += c.tot.ok; s.bad += c.tot.bad; s.abs += c.tot.abs; if (!c.tot.bad) s.projOk++; return s; }, { ok: 0, bad: 0, abs: 0, projOk: 0 });
+  document.getElementById('dedi-kpi-proj').textContent = conferidos.length;
+  document.getElementById('dedi-kpi-proj-sub').textContent = conferidos.length ? k.projOk + ' batendo · ' + (conferidos.length - k.projOk) + ' com divergencia' + (confs.length > conferidos.length ? ' · ' + (confs.length - conferidos.length) + ' sem dados dos dois lados' : '') : (confs.length ? confs.length + ' projeto(s) sem dados dos dois lados' : '');
+  document.getElementById('dedi-kpi-ok').textContent = k.ok;
+  document.getElementById('dedi-kpi-bad').textContent = k.bad;
+  document.getElementById('dedi-kpi-horas').textContent = rpNum(k.abs, 2) + 'h';
+  if (soDiv) vis = vis.filter(function(c) { return !c.temDedi || !c.temHC || c.tot.bad; });
+  document.getElementById('dedi-count').textContent = vis.length;
+
+  if (!vis.length) {
+    list.innerHTML = '<div class="no-results" style="display:block;">' + (confs.length ? 'Nenhum projeto com divergencia.' : 'Nenhum projeto de ' + CURRENT_GESTOR + ' com dedicacao ou HC em ' + revMesNome(mkey) + '. Envie o relatorio DEDI011E do mes.') + '</div>';
+    return;
+  }
+  const n2 = function(v) { return v === null ? '-' : rpNum(v, 2); };
+  list.innerHTML = vis.map(function(c) {
+    const badge = !c.temDedi ? '<span class="dedi-badge neutral">Sem dedicacao</span>' : !c.temHC ? '<span class="dedi-badge neutral">Sem HC (PR nao enviada)</span>'
+      : c.tot.bad ? '<span class="dedi-badge bad">&#10007; ' + c.tot.bad + ' divergente(s) &middot; ' + rpNum(c.tot.abs, 2) + 'h</span>' : '<span class="dedi-badge ok">&#10003; Batendo</span>';
+    const conferido = c.temDedi && c.temHC;
+    let linhas = c.linhas;
+    if (soDiv && conferido) linhas = linhas.filter(function(l) { return !l.ok; });
+    const rows = linhas.map(function(l) {
+      // so pinta de verde/vermelho quando ha os dois lados; senao a falta e do relatorio/PR inteiro, nao da pessoa
+      const sit = !conferido ? (c.temDedi ? 'PR nao enviada' : 'aguardando relatorio') : l.ok ? '&#10003; ok' : l.hc === null ? '&#10007; nao esta no HC' : l.dedi === null ? '&#10007; sem horas na dedicacao' : '&#10007; ' + (l.dif > 0 ? 'sobram ' : 'faltam ') + rpNum(Math.abs(l.dif), 2) + 'h na dedicacao';
+      return '<tr class="' + (!conferido ? '' : l.ok ? 'dedi-ok' : 'dedi-bad') + '"><td>' + escHtml(l.matricula) + '</td><td>' + escHtml(l.nome) + '</td><td class="num">' + n2(l.hc) + '</td><td class="num">' + n2(l.dedi) +
+        '</td><td class="num dedi-dif">' + (l.ok ? '0,00' : (l.dif > 0 ? '+' : '') + rpNum(l.dif, 2)) + '</td><td>' + sit + '</td></tr>';
+    }).join('');
+    const info = [];
+    if (c.dedi) info.push('Dedicacao: ' + escHtml(c.dedi.arquivo || '') + (c.dedi.data ? ' de ' + escHtml(c.dedi.data) : '') + (c.dedi.estado ? ' (' + escHtml(c.dedi.estado) + ')' : '') + ' &middot; fecho ' + escHtml(c.dedi.fecho || ''));
+    if (c.hcData) info.push('HC: PR de ' + escHtml(String(c.hcData).slice(0, 10)));
+    if (!c.temDedi) info.unshift('Sem relatorio de dedicacao deste projeto em ' + revMesNome(mkey) + ' (envie o DEDI011E).');
+    if (!c.temHC) info.unshift('A PR deste projeto (aba HC) nao foi enviada -- nao ha horas para comparar.');
+    return `
+      <details class="project-card" ${conferido || sel.value ? 'open' : ''}>
+        <summary>
+          <div class="summary-left"><span class="proj-code">${c.code}</span><span class="proj-name" title="${escHtml(c.nome)}">${escHtml(c.nome)}</span></div>
+          <div class="summary-right">
+            <div class="mini-metric"><span class="mini-label">Horas HC</span><span class="mini-value">${rpNum(c.tot.hc, 2)}</span></div>
+            <div class="mini-metric"><span class="mini-label">Horas dedicacao</span><span class="mini-value">${rpNum(c.tot.dedi, 2)}</span></div>
+            <div class="mini-metric"><span class="mini-label">Situacao</span>${badge}</div>
+            <span class="chevron">&#9660;</span>
+          </div>
+        </summary>
+        <div class="card-body">
+          <div class="small-note" style="margin-bottom:8px;">${info.join(' &middot; ') || ''}</div>
+          ${rows ? `<div class="table-wrap"><table class="rp-table">
+            <thead><tr><th>Matricula</th><th>Nome</th><th class="num">Horas HC</th><th class="num">Horas dedicacao</th><th class="num">Diferenca</th><th>Situacao</th></tr></thead>
+            <tbody>${rows}</tbody>
+            <tfoot><tr><td></td><td>Total (${linhas.length} pessoa(s))</td><td class="num">${rpNum(linhas.reduce(function(s, l) { return s + (l.hc || 0); }, 0), 2)}</td><td class="num">${rpNum(linhas.reduce(function(s, l) { return s + (l.dedi || 0); }, 0), 2)}</td><td class="num">${rpNum(linhas.reduce(function(s, l) { return s + l.dif; }, 0), 2)}</td><td></td></tr></tfoot>
+          </table></div>` : '<div class="small-note">Nenhuma pessoa divergente.</div>'}
+        </div>
+      </details>`;
+  }).join('');
+}
+
 function revLocalKey(g) { return NOTES_PREFIX + revComposite(g); }
 function revNorm(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\u00a0/g, ' ').trim().toUpperCase().replace(/\s+/g, ' '); }
 function revNum(v) {
