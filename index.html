@@ -340,7 +340,7 @@
   <div id="tab-geral" class="tab-panel active">
 
   <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:20px;">
-    <button onclick="exportNotes()">Exportar observacoes</button>
+    <button id="btn-relatorio-pdf" onclick="exportRelatorioPDF()">Exportar relatorio (PDF)</button>
     <button onclick="document.getElementById('import-notes-input').click()">Importar observacoes</button>
     <input type="file" id="import-notes-input" accept=".json" style="display:none" onchange="importNotes(event)">
   </div>
@@ -5949,6 +5949,385 @@ window.addEventListener('afterprint', function() {
     d.open = d.getAttribute('data-was-open') === '1';
   });
 });
+
+// ---------- Relatorio executivo (PDF) ----------
+// Botao "Exportar relatorio (PDF)" do Comparativo Geral: KPIs, sintese, visao geral, top 5 e uma analise
+// executiva por projeto (texto montado pelas regras de relAnalise) + observacoes/status do mes.
+// Respeita o gestor atual e a selecao do filtro de projetos. jsPDF/autotable carregados sob demanda.
+const REL_ING_OK = 3, REL_ING_CRIT = 10;   // % do ingresso abaixo do Pre Cierre: atencao / critico
+const REL_MB_OK = 1, REL_MB_CRIT = 3;      // p.p. de margem abaixo do Pre Cierre: atencao / critico
+const REL_TOL_RS = 1000;                   // diferencas de ingresso menores que isso nao contam
+const REL_COR = { navy: [11,37,69], slate: [92,107,122], borda: [225,230,238], ice: [234,241,251], texto: [27,36,48],
+  verde: [30,142,90], verm: [179,38,30], ambar: [163,105,10] };
+
+function garantirJsPDF() {
+  return carregarBiblioteca('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'jspdf').then(function() {
+    if (window.jspdf.jsPDF.API.autoTable) return;
+    return carregarBiblioteca('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js', '__jspdf_autotable');
+  });
+}
+
+// A fonte padrao do jsPDF so tem Latin-1: troca o que for comum e remove o resto (emoji etc.)
+function relTxt(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/[–—−]/g, '-').replace(/[‘’]/g, "'").replace(/[“”]/g, '"')
+    .replace(/…/g, '...').replace(/[•●]/g, '-').replace(/ /g, ' ').replace(/\r/g, '')
+    .replace(/[^\x00-\xFF]/g, '');
+}
+function relArred1(v) { return Math.round(v * 10) / 10 || 0; }   // sem "-0,0"
+function relPct1(v) { if (v === null || v === undefined) return '-'; v = relArred1(v); return (v > 0 ? '+' : '') + pctf(v, 1); }
+function relPP(v) { v = relArred1(v); return (v > 0 ? '+' : '') + v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + ' p.p.'; }
+function relCorSinal(v) { return v > 0.004 ? REL_COR.verde : v < -0.004 ? REL_COR.verm : REL_COR.slate; }
+function relDpfTxt(m) {
+  if (m.dpf.trend === 'excl') return 'Ingr. por fat.';
+  if (m.dpf.trend === 'na') return 'N/D';
+  return dpfValor(m.dpf.acima);
+}
+
+// Situacao do projeto no mes: so desvio para baixo (ingresso ou margem) piora a situacao.
+function relSituacao(m) {
+  const ip = m.ingreso.pr || 0, ifc = m.ingreso.fc || 0, d = ip - ifc;
+  const pct = pctDiffCalc(ip, ifc);
+  const pp = ip && ifc ? (m.margem_pct.pr || 0) - (m.margem_pct.fc || 0) : 0;
+  let nivel = 0;
+  if (d <= -REL_TOL_RS) { const a = pct === null ? 100 : -pct; nivel = a >= REL_ING_CRIT ? 2 : a >= REL_ING_OK ? 1 : 0; }
+  if (pp < 0) nivel = Math.max(nivel, -pp >= REL_MB_CRIT ? 2 : -pp >= REL_MB_OK ? 1 : 0);
+  if (ip > 0 && (m.margem.pr || 0) < 0) nivel = 2;
+  if (nivel === 2) return { ordem: 0, rotulo: 'Crítico', cor: REL_COR.verm };
+  if (nivel === 1) return { ordem: 1, rotulo: 'Atenção', cor: REL_COR.ambar };
+  if (d >= REL_TOL_RS && (pct === null || pct >= REL_ING_OK)) return { ordem: 2, rotulo: 'Acima do previsto', cor: REL_COR.verde };
+  if (!ip && !ifc) return { ordem: 4, rotulo: 'Sem movimento', cor: REL_COR.slate };
+  return { ordem: 3, rotulo: 'Em linha', cor: REL_COR.verde };
+}
+
+// Analise executiva de um projeto no mes: leitura (conclusao) + pontos (fatos com numeros).
+function relAnalise(p, mkey) {
+  const m = p.months[mkey];
+  const pts = [];
+  const ip = m.ingreso.pr || 0, ifc = m.ingreso.fc || 0, d = ip - ifc, pct = pctDiffCalc(ip, ifc);
+  if (!ip && !ifc) pts.push('Sem ingresso realizado nem previsto no mês.');
+  else if (!ifc) pts.push('Ingresso de ' + brl(ip) + ' sem previsão no Pré Cierre.');
+  else if (Math.abs(d) < REL_TOL_RS || Math.abs(pct) < REL_ING_OK) pts.push('Ingresso de ' + brl(ip) + ', em linha com o Pré Cierre (' + brl(ifc) + '; ' + relPct1(pct) + ').');
+  else pts.push('Ingresso de ' + brl(ip) + ', ' + brl(Math.abs(d)) + ' (' + relPct1(pct) + ') ' + (d > 0 ? 'acima' : 'abaixo') + ' do Pré Cierre (' + brl(ifc) + ').');
+
+  const i = MESES.indexOf(mkey);
+  const ant = i > 0 ? p.months[MESES[i - 1]] : null;
+  if (ant && ant.ingreso.pr && ip) pts.push('Ingresso ' + relPct1(pctDiffCalc(ip, ant.ingreso.pr)) + ' em relação ao mês anterior (' + brl(ant.ingreso.pr) + ').');
+
+  const ppv = ip && ifc ? (m.margem_pct.pr || 0) - (m.margem_pct.fc || 0) : 0;
+  if (ip) {
+    let t = 'Margem bruta de ' + pctf(m.margem_pct.pr || 0, 1) + ' (' + brl(m.margem.pr || 0) + ')';
+    t += ifc ? (Math.abs(ppv) < 0.05 ? ', igual ao previsto.' : ', ' + relPP(ppv) + ' vs o previsto (' + pctf(m.margem_pct.fc || 0, 1) + ').') : '.';
+    if ((m.margem.pr || 0) < 0) t += ' Margem negativa: o custo do mês supera o ingresso.';
+    pts.push(t);
+  }
+
+  const fp = m.faturamento.pr || 0, ff = m.faturamento.fc || 0, cp = m.cobro.pr || 0, cf = m.cobro.fc || 0;
+  const fc = [];
+  if (fp || ff) fc.push('faturamento de ' + brl(fp) + ' contra ' + brl(ff) + ' previstos' + (ff ? ' (' + relPct1(pctDiffCalc(fp, ff)) + ')' : ''));
+  if (cp || cf) fc.push('cobro de ' + brl(cp) + ' contra ' + brl(cf) + (cf ? ' (' + relPct1(pctDiffCalc(cp, cf)) + ')' : ''));
+  if (fc.length) { const t = fc.join('; '); pts.push(t.charAt(0).toUpperCase() + t.slice(1) + '.'); }
+
+  const dpfTot = brl(m.dpf.pr || 0);
+  if (m.dpf.trend === 'excl') pts.push('Ingresso por faturamento: DPF acima do corrente não se aplica.');
+  else if (m.dpf.trend === 'up') pts.push('DPF acima do corrente subiu ' + brl(m.dpf.acima) + ' (faturamento abaixo do ingresso do mês anterior); DPF total de ' + dpfTot + '.');
+  else if (m.dpf.trend === 'down') pts.push('DPF acima do corrente caiu ' + brl(-m.dpf.acima) + ' (faturamento acima do ingresso do mês anterior); DPF total de ' + dpfTot + '.');
+  else if (m.dpf.trend === 'flat') pts.push('DPF acima do corrente estável; DPF total de ' + dpfTot + '.');
+  else if (m.dpf.pr) pts.push('DPF total de ' + dpfTot + ' (sem mês anterior para comparar).');
+
+  if (p.year && (p.year.ingreso.pr || p.year.ingreso.fc)) {
+    pts.push('No acumulado do ano, ingresso de ' + brl(p.year.ingreso.pr) + ' (' + relPct1(pctDiffCalc(p.year.ingreso.pr, p.year.ingreso.fc)) + ' vs Pré Cierre) e margem de ' +
+      pctf(p.year.margem_pct.pr || 0, 1) + ' (' + relPP((p.year.margem_pct.pr || 0) - (p.year.margem_pct.fc || 0)) + ').');
+  }
+
+  const ingBaixo = ifc && d <= -REL_TOL_RS && pct <= -REL_ING_OK;
+  const ingAlto = d >= REL_TOL_RS && (pct === null || pct >= REL_ING_OK);
+  const mbBaixa = ppv <= -REL_MB_OK, mbAlta = ppv >= REL_MB_OK;
+  let leitura;
+  if (!ip && !ifc) leitura = 'Sem movimento no mês.';
+  else if (ip > 0 && (m.margem.pr || 0) < 0) leitura = 'Prioridade: margem negativa no mês; revisar custos lançados e premissas de ingresso.';
+  else if (ingBaixo && mbBaixa) leitura = 'Receita e margem abaixo do previsto: revisar premissas de ingresso e custos do mês.';
+  else if (ingBaixo) leitura = 'Margem preservada, mas receita abaixo do previsto: verificar postergação de entregas ou do reconhecimento de ingresso.';
+  else if (ingAlto && mbBaixa) leitura = 'Receita acima do previsto, porém com margem menor: verificar custos adicionais ligados ao ingresso extra.';
+  else if (mbBaixa) leitura = 'Receita em linha, mas margem abaixo do previsto: verificar custos do mês.';
+  else if (ingAlto) leitura = 'Desempenho acima do previsto em receita' + (mbAlta ? ' e margem.' : ', com margem em linha.');
+  else if (mbAlta) leitura = 'Receita em linha e margem acima do previsto.';
+  else leitura = 'Desempenho em linha com o Pré Cierre.';
+  if (m.dpf.trend === 'up' && ff && fp < ff - REL_TOL_RS) leitura += ' Faturamento abaixo do previsto pressiona o DPF.';
+  return { sit: relSituacao(m), leitura: leitura, pontos: pts };
+}
+
+// Observacoes (Comparativo) e status de Faturamento/Cobro/Fechamento do mes: Supabase, senao navegador.
+async function relCarregarNotas(projs, mkey) {
+  const KINDS = ['fat', 'cob', 'fech'];
+  const out = {};
+  projs.forEach(p => {
+    const n = out[p.code] = { obs: '', fat: '', cob: '', fech: '' };
+    try {
+      n.obs = localStorage.getItem(noteKey(p.code, mkey)) || '';
+      KINDS.forEach(k => { n[k] = localStorage.getItem(statusLocalKey(p.code, k, mkey)) || ''; });
+    } catch (e) {}
+  });
+  if (!SUPABASE_CONFIGURED) return out;
+  const codes = [];
+  projs.forEach(p => { codes.push(p.code); KINDS.forEach(k => codes.push(statusComposite(p.code, k))); });
+  try {
+    const { data, error } = await sb.from('notes').select('code,text').eq('month', mkey).in('code', codes);
+    if (!error && data) data.forEach(r => {
+      const i = r.code.indexOf('::status_');
+      const code = i === -1 ? r.code : r.code.slice(0, i);
+      const campo = i === -1 ? 'obs' : r.code.slice(i + 9);
+      if (out[code] && campo in out[code]) out[code][campo] = r.text || '';
+    });
+  } catch (e) {}
+  return out;
+}
+
+async function exportRelatorioPDF() {
+  const mkey = document.getElementById('month-select').value;
+  const sel = FILTER_SELECTED.geral;
+  let projs = currentProjects();
+  if (sel.size) projs = projs.filter(p => sel.has(p.code));
+  if (!projs.length) { uiAlert('Nenhum projeto para exportar.', { titulo: 'Relatorio executivo' }); return; }
+  const btn = document.getElementById('btn-relatorio-pdf');
+  const rotulo = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando PDF...'; }
+  try {
+    await garantirJsPDF();
+    const notas = await relCarregarNotas(projs, mkey);
+    const doc = relMontarPDF(projs, mkey, notas, sel.size > 0);
+    const g = CURRENT_GESTOR.normalize('NFD').replace(/[̀-ͯ]/g, '');
+    doc.save('relatorio_executivo_' + mkey + '_2026_' + g + '.pdf');
+  } catch (e) {
+    console.error('relatorio PDF', e);
+    uiAlert('Nao foi possivel gerar o PDF: ' + (e && e.message ? e.message : e), { titulo: 'Relatorio executivo', aviso: true });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = rotulo; }
+  }
+}
+
+function relMontarPDF(projs, mkey, notas, filtrado) {
+  const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+  const W = 210, H = 297, M = 14, CW = W - 2 * M, FIM = H - 18, C = REL_COR, T = relTxt;
+  const MM = 0.3528, LH = 1.35;   // pt -> mm; entrelinha dos paragrafos
+  const mnome = DATA[0].months[mkey].nome;
+  doc.setLineHeightFactor(LH);
+
+  const linhas = projs.map(p => ({ p: p, m: p.months[mkey], a: relAnalise(p, mkey) }));
+  const ordenadas = linhas.slice().sort((a, b) => a.a.sit.ordem - b.a.sit.ordem ||
+    Math.abs(b.m.ingreso.pr - b.m.ingreso.fc) - Math.abs(a.m.ingreso.pr - a.m.ingreso.fc));
+  const tot = { ip: 0, ifc: 0, mp: 0, mf: 0, ap: 0, af: 0, up: 0, down: 0, flat: 0, acima: 0 };
+  const conta = { 'Crítico': 0, 'Atenção': 0, 'Acima do previsto': 0, 'Em linha': 0, 'Sem movimento': 0 };
+  linhas.forEach(l => {
+    const m = l.m;
+    tot.ip += m.ingreso.pr; tot.ifc += m.ingreso.fc; tot.mp += m.margem.pr; tot.mf += m.margem.fc;
+    tot.ap += l.p.year.ingreso.pr; tot.af += l.p.year.ingreso.fc;
+    if (m.dpf.trend === 'up') tot.up++; else if (m.dpf.trend === 'down') tot.down++; else if (m.dpf.trend !== 'excl') tot.flat++;
+    tot.acima += m.dpf.acima || 0;
+    conta[l.a.sit.rotulo]++;
+  });
+  const mbp = tot.ip ? tot.mp / tot.ip * 100 : 0, mbf = tot.ifc ? tot.mf / tot.ifc * 100 : 0;
+
+  function fonte(estilo, tam, cor) { doc.setFont('helvetica', estilo); doc.setFontSize(tam); doc.setTextColor.apply(doc, cor); }
+  function paragrafo(txt, x, y0, w, tam, estilo, cor) {
+    fonte(estilo || 'normal', tam, cor || C.texto);
+    const ls = doc.splitTextToSize(T(txt), w);
+    doc.text(ls, x, y0);
+    return y0 + ls.length * tam * LH * MM;
+  }
+  function titulo(txt, y0) {
+    if (y0 > FIM - 20) { doc.addPage(); y0 = 18; }
+    fonte('bold', 11.5, C.navy); doc.text(T(txt), M, y0);
+    doc.setDrawColor.apply(doc, C.navy); doc.setLineWidth(0.4); doc.line(M, y0 + 1.8, M + 18, y0 + 1.8);
+    return y0 + 7;
+  }
+  function cortar(txt, w) {
+    txt = T(txt);
+    if (doc.getTextWidth(txt) <= w) return txt;
+    while (txt.length > 1 && doc.getTextWidth(txt + '...') > w) txt = txt.slice(0, -1);
+    return txt.trim() + '...';
+  }
+  const numDir = { halign: 'right' };
+  const tabelaBase = {
+    margin: { left: M, right: M, top: 16, bottom: 20 }, theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 7, cellPadding: 1.5, lineColor: C.borda, lineWidth: 0.2, textColor: C.texto, overflow: 'linebreak' },
+    headStyles: { fillColor: C.navy, textColor: 255, fontStyle: 'bold', halign: 'center', valign: 'middle' },
+    footStyles: { fillColor: C.ice, textColor: C.navy, fontStyle: 'bold' },
+  };
+
+  // ---- Cabecalho
+  doc.setFillColor.apply(doc, C.navy); doc.rect(0, 0, W, 34, 'F');
+  fonte('bold', 7.5, [159, 184, 221]); doc.text(T('RELATÓRIO EXECUTIVO · REVISÃO DE PROJETOS'), M, 12);
+  fonte('normal', 7.5, [159, 184, 221]); doc.text(T('Gerado em ' + new Date().toLocaleString('pt-BR')), W - M, 12, { align: 'right' });
+  fonte('bold', 17, [255, 255, 255]); doc.text(T('Comparativo PR vs Pré Cierre'), M, 21);
+  fonte('normal', 9.5, [199, 214, 236]);
+  doc.text(T('Mês de referência: ' + mnome + '/2026 · Gestor: ' + CURRENT_GESTOR + ' · ' + projs.length + ' projeto' + (projs.length === 1 ? '' : 's') + (filtrado ? ' (filtro aplicado)' : '')), M, 28);
+  let y = 42;
+
+  // ---- KPIs
+  const kpis = [
+    ['Ingreso do mês (PR)', brl(tot.ip), relPct1(pctDiffCalc(tot.ip, tot.ifc)) + ' vs Pré Cierre (' + brl(tot.ip - tot.ifc) + ')', relCorSinal(tot.ip - tot.ifc)],
+    ['Margem % do mês (PR)', pctf(mbp), relPP(mbp - mbf) + ' vs Pré Cierre (' + pctf(mbf) + ' previsto)', relCorSinal(mbp - mbf)],
+    ['Ingreso acumulado ano (PR)', brl(tot.ap), relPct1(pctDiffCalc(tot.ap, tot.af)) + ' vs Pré Cierre', relCorSinal(tot.ap - tot.af)],
+    ['DPF acima do corrente', tot.up + ' subindo', tot.down + ' caindo · ' + tot.flat + ' estáveis · saldo ' + dpfValor(tot.acima), C.slate],
+  ];
+  const kw = (CW - 9) / 4, kh = 25;
+  kpis.forEach((k, i) => {
+    const x = M + i * (kw + 3);
+    doc.setDrawColor.apply(doc, C.borda); doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255);
+    doc.roundedRect(x, y, kw, kh, 2, 2, 'FD');
+    fonte('bold', 6.3, C.slate); doc.text(cortar(k[0].toUpperCase(), kw - 6), x + 3, y + 6);
+    let tam = 12.5; fonte('bold', tam, C.navy);
+    while (tam > 7 && doc.getTextWidth(T(k[1])) > kw - 6) { tam -= 0.5; doc.setFontSize(tam); }
+    doc.text(T(k[1]), x + 3, y + 13.5);
+    fonte('normal', 6.6, k[3]); doc.text(doc.splitTextToSize(T(k[2]), kw - 6).slice(0, 2), x + 3, y + 18.5);
+  });
+  y += kh + 9;
+
+  // ---- Sintese executiva
+  y = titulo('Síntese executiva', y);
+  const dIng = tot.ip - tot.ifc;
+  let sint = 'Em ' + mnome + '/2026, os ' + projs.length + ' projetos somaram ingresso realizado (PR) de ' + brl(tot.ip) + ', ' +
+    (Math.abs(dIng) < REL_TOL_RS ? 'em linha com o Pré Cierre (' + brl(tot.ifc) + ')' :
+      brl(Math.abs(dIng)) + ' (' + relPct1(pctDiffCalc(tot.ip, tot.ifc)) + ') ' + (dIng > 0 ? 'acima' : 'abaixo') + ' do Pré Cierre (' + brl(tot.ifc) + ')') +
+    '. A margem bruta foi de ' + pctf(mbp, 1) + ', ' + relPP(mbp - mbf) + ' em relação ao previsto (' + pctf(mbf, 1) + '). ' +
+    'No ano, o ingresso acumulado é de ' + brl(tot.ap) + ' (' + relPct1(pctDiffCalc(tot.ap, tot.af)) + ' vs Pré Cierre).';
+  y = paragrafo(sint, M, y, CW, 9) + 1.5;
+  const sit = [];
+  if (conta['Crítico']) sit.push(conta['Crítico'] + ' crítico' + (conta['Crítico'] > 1 ? 's' : ''));
+  if (conta['Atenção']) sit.push(conta['Atenção'] + ' em atenção');
+  if (conta['Acima do previsto']) sit.push(conta['Acima do previsto'] + ' acima do previsto');
+  if (conta['Em linha']) sit.push(conta['Em linha'] + ' em linha');
+  if (conta['Sem movimento']) sit.push(conta['Sem movimento'] + ' sem movimento no mês');
+  const piores = linhas.filter(l => l.m.ingreso.pr - l.m.ingreso.fc <= -REL_TOL_RS)
+    .sort((a, b) => (a.m.ingreso.pr - a.m.ingreso.fc) - (b.m.ingreso.pr - b.m.ingreso.fc)).slice(0, 3);
+  let sint2 = 'Situação dos projetos: ' + sit.join(', ') + '. O DPF acima do corrente subiu em ' + tot.up + ' projeto' + (tot.up === 1 ? '' : 's') +
+    ' e caiu em ' + tot.down + ' (saldo ' + dpfValor(tot.acima) + ').';
+  if (piores.length) sint2 += ' Maiores desvios negativos de ingresso: ' + piores.map(l => l.p.code + ' (' + brl(l.m.ingreso.pr - l.m.ingreso.fc) + ')').join(', ') + '.';
+  y = paragrafo(sint2, M, y, CW, 9) + 6;
+
+  // ---- Visao geral
+  y = titulo('Visão geral dos projetos', y);
+  doc.autoTable(Object.assign({}, tabelaBase, {
+    startY: y,
+    head: [['Projeto', 'Ingreso PR', 'Pré Cierre', 'Dif. %', 'Margem PR', 'Margem PC', 'Dif. p.p.', 'DPF acima corr.', 'Situação'].map(T)],
+    body: ordenadas.map(l => {
+      const m = l.m, pp = m.ingreso.pr && m.ingreso.fc ? m.margem_pct.pr - m.margem_pct.fc : null;
+      return [T(l.p.code + ' · ' + l.p.name), brl(m.ingreso.pr), brl(m.ingreso.fc), relPct1(pctDiffCalc(m.ingreso.pr, m.ingreso.fc)),
+        pctf(m.margem_pct.pr, 1), pctf(m.margem_pct.fc, 1), pp === null ? '-' : relPP(pp), relDpfTxt(m), T(l.a.sit.rotulo)];
+    }),
+    foot: [[{ content: 'Total' }].concat([brl(tot.ip), brl(tot.ifc), relPct1(pctDiffCalc(tot.ip, tot.ifc)), pctf(mbp, 1), pctf(mbf, 1),
+      relPP(mbp - mbf), dpfValor(tot.acima)].map(v => ({ content: v, styles: numDir })), [{ content: '' }])],
+    styles: Object.assign({}, tabelaBase.styles, { fontSize: 6.8, cellPadding: 1.3 }),
+    columnStyles: { 0: { cellWidth: 'auto' }, 1: { halign: 'right', cellWidth: 23 }, 2: { halign: 'right', cellWidth: 23 },
+      3: { halign: 'right', cellWidth: 12 }, 4: { halign: 'right', cellWidth: 12 }, 5: { halign: 'right', cellWidth: 12 },
+      6: { halign: 'right', cellWidth: 15 }, 7: { halign: 'right', cellWidth: 23 }, 8: { halign: 'center', fontStyle: 'bold', cellWidth: 18 } },
+    didParseCell: function(d) {
+      if (d.section !== 'body') return;
+      const l = ordenadas[d.row.index], m = l.m;
+      if (d.column.index === 3) d.cell.styles.textColor = relCorSinal(relArred1(pctDiffCalc(m.ingreso.pr, m.ingreso.fc) || 0));
+      if (d.column.index === 6 && m.ingreso.pr && m.ingreso.fc) d.cell.styles.textColor = relCorSinal(relArred1(m.margem_pct.pr - m.margem_pct.fc));
+      if (d.column.index === 8) d.cell.styles.textColor = l.a.sit.cor;
+    },
+  }));
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ---- Top 5
+  y = titulo('Maiores divergências de ingresso (Top 5)', y);
+  const top5 = linhas.slice().sort((a, b) => Math.abs(b.m.ingreso.pr - b.m.ingreso.fc) - Math.abs(a.m.ingreso.pr - a.m.ingreso.fc)).slice(0, 5);
+  doc.autoTable(Object.assign({}, tabelaBase, {
+    startY: y,
+    head: [['Projeto', 'PR', 'Pré Cierre', 'Diferença', 'Dif. %'].map(T)],
+    body: top5.map(l => { const d = l.m.ingreso.pr - l.m.ingreso.fc;
+      return [T(l.p.code + ' · ' + l.p.name), brl(l.m.ingreso.pr), brl(l.m.ingreso.fc), T(brl(Math.abs(d)) + (d < 0 ? ' abaixo' : ' acima')), relPct1(pctDiffCalc(l.m.ingreso.pr, l.m.ingreso.fc))]; }),
+    columnStyles: { 0: { cellWidth: 80 }, 1: numDir, 2: numDir, 3: numDir, 4: numDir },
+    didParseCell: function(d) {
+      if (d.section === 'body' && d.column.index >= 3) d.cell.styles.textColor = relCorSinal(top5[d.row.index].m.ingreso.pr - top5[d.row.index].m.ingreso.fc);
+    },
+  }));
+  y = doc.lastAutoTable.finalY + 5;
+  if (y > FIM - 12) { doc.addPage(); y = 18; }
+  y = paragrafo('Critérios de situação: Crítico = ingresso ' + REL_ING_CRIT + '% ou mais abaixo do Pré Cierre, margem ' + REL_MB_CRIT +
+    ' p.p. ou mais abaixo, ou margem negativa; Atenção = ingresso ' + REL_ING_OK + '% a ' + REL_ING_CRIT + '% abaixo ou margem ' + REL_MB_OK +
+    ' a ' + REL_MB_CRIT + ' p.p. abaixo; diferenças de ingresso menores que ' + brl(REL_TOL_RS) + ' são desconsideradas.', M, y, CW, 7, 'italic', C.slate);
+
+  // ---- Analise por projeto
+  doc.addPage(); y = 18;
+  y = titulo('Análise executiva por projeto', y);
+  ordenadas.forEach(l => {
+    const p = l.p, m = l.m, a = l.a, n = notas[p.code] || {};
+    fonte('bold', 8.5, C.navy); const leit = doc.splitTextToSize(T(a.leitura), CW - 4);
+    fonte('normal', 8.3, C.texto); const pts = a.pontos.map(t => doc.splitTextToSize(T(t), CW - 7));
+    const nLinhas = pts.reduce((s, ls) => s + ls.length, 0);
+    const est = 13 + leit.length * 8.5 * LH * MM + nLinhas * 8.3 * LH * MM + 4 + 10 * 5.2;
+    if (y + est > FIM && y > 30) { doc.addPage(); y = 18; }
+
+    // faixa do titulo
+    doc.setFillColor.apply(doc, C.ice); doc.roundedRect(M, y, CW, 9, 1.5, 1.5, 'F');
+    doc.setFillColor.apply(doc, a.sit.cor); doc.rect(M, y, 1.4, 9, 'F');
+    fonte('bold', 9.5, C.navy); doc.text(T(p.code), M + 4, y + 6);
+    const xNome = M + 6 + doc.getTextWidth(T(p.code));
+    fonte('bold', 8, a.sit.cor); const wSit = doc.getTextWidth(T(a.sit.rotulo.toUpperCase()));
+    doc.text(T(a.sit.rotulo.toUpperCase()), W - M - 3, y + 6, { align: 'right' });
+    fonte('normal', 9, C.texto); doc.text(cortar(p.name, W - M - 8 - wSit - xNome), xNome, y + 6);
+    y += 13.5;
+
+    fonte('bold', 8.5, C.navy); doc.text(leit, M + 1, y); y += leit.length * 8.5 * LH * MM + 1;
+    fonte('normal', 8.3, C.texto);
+    pts.forEach(ls => {
+      doc.setFillColor.apply(doc, C.slate); doc.circle(M + 2.2, y - 1.05, 0.55, 'F');
+      doc.text(ls, M + 5, y); y += ls.length * 8.3 * LH * MM;
+    });
+    y += 1;
+
+    const linha = (rot, pr, fc, dif, dPct, cor) => ({ v: [T(rot), pr, fc, dif, dPct], cor: cor });
+    const lin = (rot, o) => linha(rot, brl(o.pr), brl(o.fc), brl((o.pr || 0) - (o.fc || 0)), relPct1(pctDiffCalc(o.pr || 0, o.fc || 0)), relCorSinal((o.pr || 0) - (o.fc || 0)));
+    const ppm = m.ingreso.pr && m.ingreso.fc ? m.margem_pct.pr - m.margem_pct.fc : null;
+    const ppa = (p.year.margem_pct.pr || 0) - (p.year.margem_pct.fc || 0);
+    const tab = [
+      lin('Ingreso', m.ingreso), lin('Faturamento', m.faturamento), lin('Cobro', m.cobro), lin('Margem bruta (R$)', m.margem),
+      linha('Margem bruta (%)', pctf(m.margem_pct.pr), pctf(m.margem_pct.fc), ppm === null ? '-' : relPP(ppm), '', ppm === null ? C.slate : relCorSinal(relArred1(ppm))),
+      linha('DPF', brl(m.dpf.pr), brl(m.dpf.fc), '', '', C.slate),
+      linha('DPF acima do corrente', relDpfTxt(m), m.dpf.trend === 'excl' || m.dpf.trend === 'na' ? '-' : dpfValor(m.dpf.acima_fc),
+        { up: 'Subindo', down: 'Caindo', flat: 'Estável', na: 'N/D', excl: 'Ingr. por faturamento' }[m.dpf.trend] || '', '', C.slate),
+      lin('Ingreso acumulado ano', p.year.ingreso),
+      linha('Margem % acumulada ano', pctf(p.year.margem_pct.pr), pctf(p.year.margem_pct.fc), relPP(ppa), '', relCorSinal(relArred1(ppa))),
+    ];
+    doc.autoTable(Object.assign({}, tabelaBase, {
+      startY: y, rowPageBreak: 'avoid',
+      styles: Object.assign({}, tabelaBase.styles, { fontSize: 7.2, cellPadding: 1.1 }),
+      head: [[T('Conceito (' + mnome + '/2026)'), 'PR', T('Pré Cierre'), T('Diferença'), 'Dif. %']],
+      body: tab.map(r => r.v),
+      columnStyles: { 0: { cellWidth: 52 }, 1: numDir, 2: numDir, 3: numDir, 4: numDir },
+      didParseCell: function(d) { if (d.section === 'body' && d.column.index >= 3) d.cell.styles.textColor = tab[d.row.index].cor; },
+    }));
+    y = doc.lastAutoTable.finalY + 2.5;
+
+    const obs = [['Observações', n.obs], ['Status Faturamento', n.fat], ['Status Cobro', n.cob], ['Comentários Fechamento', n.fech]]
+      .filter(o => o[1] && String(o[1]).trim());
+    if (obs.length) {
+      doc.autoTable(Object.assign({}, tabelaBase, {
+        startY: y, theme: 'plain',
+        styles: Object.assign({}, tabelaBase.styles, { fontSize: 7.5, cellPadding: 1.4, fillColor: [253, 241, 222], textColor: [92, 67, 24] }),
+        body: obs.map(o => [T(o[0]), T(String(o[1]).trim())]),
+        columnStyles: { 0: { cellWidth: 34, fontStyle: 'bold' } },
+      }));
+      y = doc.lastAutoTable.finalY + 2.5;
+    }
+    y += 6;
+  });
+
+  // ---- Rodape
+  const nPag = doc.getNumberOfPages();
+  for (let i = 1; i <= nPag; i++) {
+    doc.setPage(i);
+    doc.setDrawColor.apply(doc, C.borda); doc.setLineWidth(0.3); doc.line(M, H - 12, W - M, H - 12);
+    fonte('normal', 7, C.slate);
+    doc.text(T('Comparativo PR vs Pré Cierre · ' + mnome + '/2026 · ' + CURRENT_GESTOR + ' · gerado a partir das PRs e do Pré Cierre'), M, H - 8);
+    doc.text('Página ' + i + ' de ' + nPag, W - M, H - 8, { align: 'right' });
+  }
+  return doc;
+}
 
 // ---------- E-mail ----------
 const EMAIL_CFG_KEY = 'pr_email_config';
