@@ -5303,6 +5303,7 @@
       <div class="kpi-card">
         <div class="kpi-label">Realizado no mes (Ficha)</div>
         <div class="kpi-value" id="fat-real-total">-</div>
+        <div class="kpi-sub" style="color:var(--slate);" id="fat-ficha-saldo" title="Devedores Prod. Fat. da ficha economica no fim do mes"></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">% Avanco geral</div>
@@ -5335,6 +5336,7 @@
       <div class="kpi-card">
         <div class="kpi-label">Realizado no mes (Ficha)</div>
         <div class="kpi-value" id="cob-real-total">-</div>
+        <div class="kpi-sub" style="color:var(--slate);" id="cob-ficha-saldo" title="Dividas (impostos incluidos) da ficha economica no fim do mes"></div>
       </div>
       <div class="kpi-card">
         <div class="kpi-label">% Avanco geral</div>
@@ -6885,6 +6887,17 @@ function updateProgressKpis(prefix, mkey) {
     totalReal += r.real;
   });
   updateConsolidadoNote(prefix, projs);
+  // saldo da ficha no fim do mes: DPF (Devedores Prod. Fat.) no Faturamento, Dividas no Cobro
+  var saldoEl = document.getElementById(prefix + '-ficha-saldo');
+  if (saldoEl) {
+    var campo = prefix === 'fat' ? 'dpf' : 'div', rotulo = prefix === 'fat' ? 'DPF' : 'Divida';
+    var saldo = 0, temSaldo = false;
+    projs.forEach(function(p) {
+      var f = FICHA[p.code] && FICHA[p.code][mkey];
+      if (f && typeof f[campo] === 'number') { saldo += f[campo]; temSaldo = true; }
+    });
+    saldoEl.textContent = rotulo + ' (ficha): ' + (temSaldo ? brl(saldo) : 'atualize as fichas para carregar');
+  }
   var metaTotalEl = document.getElementById(prefix + '-meta-total');
   var realTotalEl = document.getElementById(prefix + '-real-total');
   if (metaTotalEl) metaTotalEl.textContent = brl(totalMeta);
@@ -8360,9 +8373,11 @@ function parseFichaHtml(html) {
           const label = tokens[k];
           const row = tokens.slice(k, k + 16);
           if (row.length < 16) break;
-          if (label === 'Faturação' || label.indexOf('Cobranças') === 0 || label === 'Vendas' || label === 'Total Custos') {
+          // "Dívidas (Impostos Incluídos)" e "Devedores Prod. Fat." (DPF) sao saldos no fim de cada mes
+          const ehDiv = /^D.{0,3}vidas/.test(label), ehDpf = label.indexOf('Devedores Prod') === 0;
+          if (label === 'Faturação' || label.indexOf('Cobranças') === 0 || label === 'Vendas' || label === 'Total Custos' || ehDiv || ehDpf) {
             const vals = row.slice(2, 14);
-            const key = label === 'Faturação' ? 'fat' : (label.indexOf('Cobranças') === 0 ? 'cob' : (label === 'Vendas' ? 'ing' : 'cst'));
+            const key = ehDiv ? 'div' : ehDpf ? 'dpf' : label === 'Faturação' ? 'fat' : (label.indexOf('Cobranças') === 0 ? 'cob' : (label === 'Vendas' ? 'ing' : 'cst'));
             for (let mi = 0; mi < 12; mi++) {
               const pt = FICHA_MONTHS_PT[mi];
               if (!months[pt]) months[pt] = {};
@@ -8450,6 +8465,8 @@ async function handleFichaFiles(event) {
         cob: v ? parseFichaNum(v.cob) : (FICHA[code][mk] ? FICHA[code][mk].cob : 0),
         ing: v ? parseFichaNum(v.ing) : (FICHA[code][mk] ? FICHA[code][mk].ing : 0),
         cst: v ? parseFichaNum(v.cst) : (FICHA[code][mk] ? FICHA[code][mk].cst : 0),
+        dpf: v ? parseFichaNum(v.dpf) : (FICHA[code][mk] ? FICHA[code][mk].dpf : 0),
+        div: v ? parseFichaNum(v.div) : (FICHA[code][mk] ? FICHA[code][mk].div : 0),
       };
     });
   });
@@ -8473,6 +8490,8 @@ async function handleFichaFiles(event) {
       rows.push({ code: fichaOverrideCode(code, 'cob'), month: mk, text: String(v.cob), updated_at: new Date().toISOString() });
       rows.push({ code: fichaOverrideCode(code, 'ing'), month: mk, text: String(v.ing), updated_at: new Date().toISOString() });
       rows.push({ code: fichaOverrideCode(code, 'cst'), month: mk, text: String(v.cst), updated_at: new Date().toISOString() });
+      rows.push({ code: fichaOverrideCode(code, 'dpf'), month: mk, text: String(v.dpf || 0), updated_at: new Date().toISOString() });
+      rows.push({ code: fichaOverrideCode(code, 'div'), month: mk, text: String(v.div || 0), updated_at: new Date().toISOString() });
     });
   });
 
@@ -8487,7 +8506,7 @@ async function handleFichaFiles(event) {
   });
 }
 
-const FICHA_FIELD_LABELS = { fat: 'Faturacao', cob: 'Cobrancas', ing: 'Vendas', cst: 'Total Custos' };
+const FICHA_FIELD_LABELS = { fat: 'Faturacao', cob: 'Cobrancas', ing: 'Vendas', cst: 'Total Custos', dpf: 'DPF', div: 'Dividas' };
 
 function buildFichaChanges(foundCodes, merged, oldSnapshot) {
   const changes = [];
@@ -8498,7 +8517,8 @@ function buildFichaChanges(foundCodes, merged, oldSnapshot) {
     Object.keys(merged[code].months).forEach(mk => {
       const oldV = oldForCode[mk] || { fat: 0, cob: 0, ing: 0, cst: 0 };
       const newV = FICHA[code][mk] || { fat: 0, cob: 0, ing: 0, cst: 0 };
-      ['fat', 'cob', 'ing', 'cst'].forEach(key => {
+      ['fat', 'cob', 'ing', 'cst', 'dpf', 'div'].forEach(key => {
+        if ((key === 'dpf' || key === 'div') && oldV[key] === undefined) return;  // 1a carga desses campos: nao e "alteracao"
         const ov = oldV[key] || 0;
         const nv = newV[key] || 0;
         if (Math.abs(ov - nv) > 0.004) {
