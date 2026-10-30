@@ -8343,13 +8343,16 @@ function tokenizeFichaParagraphs(html) {
 const FICHA_MONTHS_PT = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 const FICHA_CODE_RE = /^(\d{2}AP\d{1,3})\s+(.*)$/;
 
+// Dois formatos: "Resumo" (varios projetos, em espanhol: Proyecto:/Conceptos, valores com centavos) e o
+// individual ISPR_005 (um projeto, em portugues: Projeto:/Conceitos, valores inteiros, sem centavos).
 function parseFichaHtml(html) {
+  const ehProj = function(t) { return t === 'Proyecto:' || t === 'Projeto:'; };
   const tokens = tokenizeFichaParagraphs(html);
   const results = {};
   let i = 0;
   const n = tokens.length;
   while (i < n) {
-    if (tokens[i] === 'Proyecto:') {
+    if (ehProj(tokens[i])) {
       const rawProj = tokens[i + 1] || '';
       const m = FICHA_CODE_RE.exec(rawProj);
       const code = m ? m[1] : rawProj;
@@ -8357,19 +8360,21 @@ function parseFichaHtml(html) {
 
       let j = i + 2;
       let conceptosIdx = -1;
-      while (j < n && tokens[j] !== 'Proyecto:') {
-        if (tokens[j] === 'Conceptos') { conceptosIdx = j; break; }
+      while (j < n && !ehProj(tokens[j])) {
+        if (tokens[j] === 'Conceptos' || tokens[j] === 'Conceitos') { conceptosIdx = j; break; }
         j++;
       }
 
       const months = {};
+      let comCentavos = false;
       if (conceptosIdx !== -1) {
         // O bloco de um projeto tem varias sub-tabelas (Proveitos, Outros Proveitos, Costes),
         // cada uma com seu proprio cabecalho "Conceptos" repetido -- por isso o scan precisa
         // percorrer bem alem da primeira ocorrencia para chegar em "Total Custos".
         let k = conceptosIdx + 16;
         let scanned = 0;
-        while (k < n && tokens[k] !== 'Proyecto:' && scanned < 400) {
+        let temCst = false;
+        while (k < n && !ehProj(tokens[k]) && scanned < 400) {
           const label = tokens[k];
           const row = tokens.slice(k, k + 16);
           if (row.length < 16) break;
@@ -8378,17 +8383,22 @@ function parseFichaHtml(html) {
           if (label === 'Faturação' || label.indexOf('Cobranças') === 0 || label === 'Vendas' || label === 'Total Custos' || ehDiv || ehDpf) {
             const vals = row.slice(2, 14);
             const key = ehDiv ? 'div' : ehDpf ? 'dpf' : label === 'Faturação' ? 'fat' : (label.indexOf('Cobranças') === 0 ? 'cob' : (label === 'Vendas' ? 'ing' : 'cst'));
-            for (let mi = 0; mi < 12; mi++) {
-              const pt = FICHA_MONTHS_PT[mi];
-              if (!months[pt]) months[pt] = {};
-              months[pt][key] = vals[mi];
+            // a ficha individual tem um 2o "Total Custos" (Custos Corporativos), fora da margem: vale o 1o
+            if (!(key === 'cst' && temCst)) {
+              if (key === 'cst') temCst = true;
+              if (vals.some(function(v) { return String(v).indexOf(',') !== -1; })) comCentavos = true;
+              for (let mi = 0; mi < 12; mi++) {
+                const pt = FICHA_MONTHS_PT[mi];
+                if (!months[pt]) months[pt] = {};
+                months[pt][key] = vals[mi];
+              }
             }
           }
           k += 16;
           scanned++;
         }
       }
-      results[code] = { name: name, months: months };
+      results[code] = { name: name, months: months, semCentavos: !comCentavos };
       i = j;
     } else {
       i++;
@@ -8460,14 +8470,14 @@ async function handleFichaFiles(event) {
     if (!FICHA[code]) FICHA[code] = {};
     FICHA_MONTHS_PT.forEach(mk => {
       const v = merged[code].months[mk];
-      FICHA[code][mk] = {
-        fat: v ? parseFichaNum(v.fat) : (FICHA[code][mk] ? FICHA[code][mk].fat : 0),
-        cob: v ? parseFichaNum(v.cob) : (FICHA[code][mk] ? FICHA[code][mk].cob : 0),
-        ing: v ? parseFichaNum(v.ing) : (FICHA[code][mk] ? FICHA[code][mk].ing : 0),
-        cst: v ? parseFichaNum(v.cst) : (FICHA[code][mk] ? FICHA[code][mk].cst : 0),
-        dpf: v ? parseFichaNum(v.dpf) : (FICHA[code][mk] ? FICHA[code][mk].dpf : 0),
-        div: v ? parseFichaNum(v.div) : (FICHA[code][mk] ? FICHA[code][mk].div : 0),
+      const ant = FICHA[code][mk];
+      // ficha sem centavos: se so difere pelo arredondamento, fica o valor com centavos ja carregado
+      const valor = function(key) {
+        if (!v) return ant ? ant[key] : 0;
+        const nv = parseFichaNum(v[key]);
+        return merged[code].semCentavos && ant && typeof ant[key] === 'number' && Math.abs(ant[key] - nv) <= 0.5001 ? ant[key] : nv;
       };
+      FICHA[code][mk] = { fat: valor('fat'), cob: valor('cob'), ing: valor('ing'), cst: valor('cst'), dpf: valor('dpf'), div: valor('div') };
     });
   });
   renderAllTabs(document.getElementById('month-select').value);
