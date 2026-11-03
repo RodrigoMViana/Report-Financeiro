@@ -81,6 +81,8 @@
   .mini-label { font-size:10px; text-transform:uppercase; color:var(--slate); letter-spacing:0.3px; }
   .mini-value { font-size:14px; font-weight:700; color:#1b2430; }
   .mini-value.ok { color:var(--ok); } .mini-value.warn { color:var(--warn); } .mini-value.bad { color:var(--bad); } .mini-value.neutral { color:var(--neutral); }
+  .mini-sub { font-size:11px; font-weight:600; color:var(--slate); }
+  .mini-sub.ok { color:var(--ok); } .mini-sub.bad { color:var(--bad); }
   .chevron { color:var(--slate); transition:transform 0.2s; font-size:12px; }
   details[open] .chevron { transform:rotate(180deg); }
   .dpf-badge { font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; white-space:nowrap; }
@@ -5385,7 +5387,7 @@
         <div class="kpi-value" id="fech-real-total">-</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Diferenca (%)</div>
+        <div class="kpi-label">Diferenca (R$)</div>
         <div class="kpi-value" id="fech-avanco-geral">-</div>
         <div class="kpi-sub" id="fech-avanco-geral-sub"></div>
       </div>
@@ -7264,12 +7266,19 @@ function computeParamCost(p, mkey, ingreso) {
   return { rateioCalc: rateioCalc, impostoCalc: impostoCalc };
 }
 
+function fechDiffRSTxt(v) {
+  if (v === null || v === undefined) return '-';
+  return (v > 0.005 ? '+' : '') + brl(Math.abs(v) < 0.005 ? 0 : v);
+}
+
 function computeFechRow(p, mkey) {
   const fichaMonth = (FICHA[p.code] && FICHA[p.code][mkey]) ? FICHA[p.code][mkey] : null;
   const ingreso = resolveIngreso(p, mkey);
   const custoFicha = fichaMonth ? (fichaMonth.cst || 0) : 0;
 
   const ex = getExtra(p.code, mkey, 'fech');
+  // "Outros" = soma dos itens detalhados; recalcula aqui para o cabecalho nao usar o valor de antes da carga dos itens.
+  recomputeOutrosSum(p.code, mkey);
   const existencia = ex.existencia || 0;
   const paramCost = computeParamCost(p, mkey, ingreso);
   const transf = trCustosProjeto(p.code, mkey);
@@ -7279,6 +7288,8 @@ function computeFechRow(p, mkey) {
   const metaPct = p.months[mkey].margem_pct.pr;
   const realPct = ingreso !== 0 ? ((ingreso + existencia - custoTotal) / ingreso) * 100 : null;
   const diffPp = (realPct !== null && metaPct !== null && metaPct !== undefined) ? (realPct - metaPct) : null;
+  // Diferenca em R$ = margem realizada/prevista - margem que a meta da PR daria sobre o mesmo ingresso.
+  const diffRS = diffPp !== null ? diffPp / 100 * ingreso : null;
 
   // Custo do Pre Cierre derivado por identidade contabil: margem = ingreso - custo => custo = ingreso - margem.
   const custoFc = (p.months[mkey].ingreso.fc || 0) - (p.months[mkey].margem.fc || 0);
@@ -7287,7 +7298,8 @@ function computeFechRow(p, mkey) {
   return {
     code: p.code, name: p.name,
     ingreso: ingreso, custoFicha: custoFicha, custoTotal: custoTotal, existencia: existencia,
-    metaPct: metaPct, realPct: realPct, diffPp: diffPp,
+    metaPct: metaPct, realPct: realPct, diffPp: diffPp, diffRS: diffRS,
+    clsRS: diffRS === null ? 'neutral' : (diffRS >= -0.005 ? 'ok' : 'bad'),
     custoFc: custoFc, diffCustoRS: diffCustoRS,
     rateioCalc: paramCost.rateioCalc, impostoCalc: paramCost.impostoCalc, transf: transf,
     cls: diffPp === null ? 'neutral' : (diffPp >= 0 ? 'ok' : 'bad'),
@@ -7308,7 +7320,8 @@ function fechAggregates(mkey) {
   const metaGeralPct = totalIngPr !== 0 ? (totalMbPr / totalIngPr) * 100 : null;
   const realGeralPct = totalIngreso !== 0 ? ((totalIngreso + totalExistencia - totalCustoTotal) / totalIngreso) * 100 : null;
   const diffGeralPp = (metaGeralPct !== null && realGeralPct !== null) ? (realGeralPct - metaGeralPct) : null;
-  return { metaGeralPct: metaGeralPct, realGeralPct: realGeralPct, diffGeralPp: diffGeralPp };
+  const diffGeralRS = diffGeralPp !== null ? diffGeralPp / 100 * totalIngreso : null;
+  return { metaGeralPct: metaGeralPct, realGeralPct: realGeralPct, diffGeralPp: diffGeralPp, diffGeralRS: diffGeralRS };
 }
 
 function updateFechKpis(mkey) {
@@ -7322,8 +7335,8 @@ function updateFechKpis(mkey) {
   const geralSub = document.getElementById('fech-avanco-geral-sub');
   if (geralEl && geralSub) {
     if (agg.diffGeralPp !== null) {
-      geralEl.textContent = ppf(agg.diffGeralPp);
-      geralSub.textContent = agg.diffGeralPp >= 0 ? 'Acima da meta' : 'Abaixo da meta';
+      geralEl.textContent = fechDiffRSTxt(agg.diffGeralRS);
+      geralSub.textContent = '(' + ppf(agg.diffGeralPp) + ') ' + (agg.diffGeralPp >= 0 ? 'Acima da meta' : 'Abaixo da meta');
       geralSub.className = 'kpi-sub ' + (agg.diffGeralPp >= 0 ? 'ok' : 'bad');
     } else {
       geralEl.textContent = '-';
@@ -7341,7 +7354,9 @@ function updateFechRowDisplay(code, mkey) {
   const realEl = document.getElementById('fech-real-val-' + code);
   if (realEl) realEl.textContent = r.realPct !== null ? pctf(r.realPct) : '-';
   const diffEl = document.getElementById('fech-diff-val-' + code);
-  if (diffEl) { diffEl.textContent = r.diffPp !== null ? ppf(r.diffPp) : '-'; diffEl.className = 'mini-value ' + r.cls; }
+  if (diffEl) { diffEl.textContent = fechDiffRSTxt(r.diffRS); diffEl.className = 'mini-value ' + r.clsRS; }
+  const diffPctEl = document.getElementById('fech-diff-pct-' + code);
+  if (diffPctEl) { diffPctEl.textContent = r.diffPp !== null ? '(' + ppf(r.diffPp) + ')' : ''; diffPctEl.className = 'mini-sub ' + r.cls; }
   const diffRsEl = document.getElementById('fech-diff-rs-val-' + code);
   if (diffRsEl) { diffRsEl.textContent = brl(r.diffCustoRS); diffRsEl.className = 'mini-value ' + r.clsCustoRS; }
   const custoFichaEl = document.getElementById('fech-custo-ficha-val-' + code);
@@ -7401,7 +7416,8 @@ function renderFechTab(mkey) {
             </div>
             <div class="mini-metric">
               <span class="mini-label">Diferenca</span>
-              <span class="mini-value ${r.cls}" id="fech-diff-val-${r.code}">${r.diffPp !== null ? ppf(r.diffPp) : '-'}</span>
+              <span class="mini-value ${r.clsRS}" id="fech-diff-val-${r.code}" title="Margem realizada/prevista menos a margem da meta (PR) sobre o mesmo ingresso">${fechDiffRSTxt(r.diffRS)}</span>
+              <span class="mini-sub ${r.cls}" id="fech-diff-pct-${r.code}">${r.diffPp !== null ? '(' + ppf(r.diffPp) + ')' : ''}</span>
             </div>
             <div class="mini-metric">
               <span class="mini-label">Custo Total (Ficha)</span>
