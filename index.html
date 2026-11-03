@@ -83,6 +83,14 @@
   .mini-value.ok { color:var(--ok); } .mini-value.warn { color:var(--warn); } .mini-value.bad { color:var(--bad); } .mini-value.neutral { color:var(--neutral); }
   .mini-sub { font-size:11px; font-weight:600; color:var(--slate); }
   .mini-sub.ok { color:var(--ok); } .mini-sub.bad { color:var(--bad); }
+  .realoc-ok { color:var(--ok); } .realoc-bad { color:var(--bad); }
+  .realoc-linha { display:flex; align-items:center; gap:8px; font-size:13px; padding:5px 0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .realoc-seta { font-weight:700; font-size:15px; } .realoc-seta.ok { color:var(--ok); } .realoc-seta.bad { color:var(--bad); }
+  .realoc-resumo { display:flex; gap:28px; flex-wrap:wrap; padding:10px 14px; background:#f5f8fc; border:1px solid var(--border); border-radius:10px; }
+  .realoc-resumo > div { display:flex; flex-direction:column; gap:2px; font-size:15px; }
+  .realoc-row-bad td { background:var(--bad-bg, #fdecea); }
+  .obs-toolbar button.realoc-modo-ativo { background:var(--navy); color:#fff; border-color:var(--navy); }
+  .ficha-modal-footer button:disabled { opacity:.45; cursor:not-allowed; }
   .chevron { color:var(--slate); transition:transform 0.2s; font-size:12px; }
   details[open] .chevron { transform:rotate(180deg); }
   .dpf-badge { font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; white-space:nowrap; }
@@ -334,6 +342,23 @@
       <div class="ficha-modal-body" id="custos-ficha-body"></div>
       <div class="ficha-modal-footer">
         <button type="button" onclick="fecharCustosFicha()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="ficha-modal-overlay" id="realoc-overlay" onclick="if(event.target===this) realocFechar()">
+    <div class="ficha-modal" style="max-width:900px;">
+      <div class="ficha-modal-header">
+        <h3 id="realoc-title">Sugestao de realocacao</h3>
+        <button type="button" class="ficha-modal-close" onclick="realocFechar()">&times;</button>
+      </div>
+      <div class="ficha-modal-body" id="realoc-body"></div>
+      <div class="ficha-modal-footer" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <span class="small-note" id="realoc-aviso" style="text-align:left;"></span>
+        <div style="display:flex; gap:8px;">
+          <button type="button" style="background:#fff; color:var(--navy); border:1px solid var(--border);" onclick="realocFechar()">Cancelar</button>
+          <button type="button" id="realoc-aplicar" onclick="realocAplicar()">OK, registrar realocacao</button>
+        </div>
       </div>
     </div>
   </div>
@@ -7375,6 +7400,7 @@ function updateFechRowDisplay(code, mkey) {
   if (impostoNoteEl) impostoNoteEl.innerHTML = zeroed.imposto
     ? 'Zerado neste mes. <a href="#" onclick="restaurarZerado(\'' + code + '\',\'imposto\'); return false;">Restaurar calculo</a>'
     : 'Calculado automaticamente na aba Parametrizacao.';
+  realocAtualizarCard(code, mkey);
 
   updateFechKpis(mkey);
 }
@@ -7429,11 +7455,13 @@ function renderFechTab(mkey) {
         </summary>
         <div class="card-body">
           <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:8px;">
+            <button type="button" id="realoc-btn-${r.code}" onclick="realocAbrir('${r.code}')" style="${(function() { const ef = realocEfetivo(r.code, mkey, r); return ef !== null && ef < -REALOC_TOL ? '' : 'display:none;'; })()}" title="Sugere projetos com folga para absorver o custo sem ficar abaixo da meta">&#128161; Sugerir realocacao</button>
             <button type="button" onclick="abrirCustosFicha('${r.code}')">Custos da ficha</button>
           </div>
           <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechOutrosRow(r.code, mkey)}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
           <div class="extra-row">${fechEntreEmpresasRow(r, mkey)}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}</div>
           <div class="extra-row">${fechComputedRow(r.code, mkey, 'rateio', 'Rateio (parametrizado)', r.rateioCalc, 'Calculado automaticamente na aba Parametrizacao.')}${fechComputedRow(r.code, mkey, 'imposto', 'Imposto (parametrizado)', r.impostoCalc, 'Calculado automaticamente na aba Parametrizacao.')}</div>
+          <div id="realoc-fech-${r.code}">${realocBlocoHtml(r.code, mkey)}</div>
           <div class="obs-block">
             <div class="obs-header">
               <label>Comentarios</label>
@@ -7459,6 +7487,7 @@ function renderAllTabs(mkey) {
   loadStatusForMonth('fat', mkey);
   loadStatusForMonth('cob', mkey);
   loadStatusForMonth('fech', mkey);
+  realocCarregar(mkey);
   filterProjects();
   filterProgress('fat');
   filterProgress('cob');
@@ -8179,6 +8208,265 @@ function fecharCustosFicha() {
   document.removeEventListener('keydown', custosFichaEsc);
 }
 function custosFichaEsc(e) { if (e.key === 'Escape') fecharCustosFicha(); }
+
+// ---------- Sugestao de realocacao de custos (Fechamento) ----------
+// Projeto com diferenca negativa (margem abaixo da meta da PR, em R$) recebe sugestao de quais projetos do
+// gestor tem folga (diferenca positiva) para absorver o custo sem ficar abaixo da meta. Ao confirmar, a
+// realocacao fica registrada nos dois projetos (campo acima de Comentarios) -- e um registro: nao altera os
+// custos do Fechamento, mas entra na conta das proximas sugestoes (folga ja comprometida nao e oferecida de novo).
+// REALOC[mkey][code] = [{id, tipo:'envia'|'recebe', outro, valor, t}] -- gravado em code::fech_realoc (month = mes).
+var REALOC = {};
+var REALOC_DRAFT = null;
+const REALOC_TOL = 0.5;
+
+function realocComposite(code) { return code + '::fech_realoc'; }
+function realocLocalKey(code, mkey) { return NOTES_PREFIX + realocComposite(code) + '::' + mkey; }
+function realocLista(code, mkey) { return (REALOC[mkey] && REALOC[mkey][code]) || []; }
+function realocDefinir(code, mkey, lista) {
+  if (!REALOC[mkey]) REALOC[mkey] = {};
+  REALOC[mkey][code] = lista;
+}
+function realocPct(v) { return ppf(Math.abs(v) < 0.005 ? 0 : v); }
+function realocLerTexto(txt) {
+  try { const v = JSON.parse(txt || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+}
+
+// Diferenca em R$ considerando as realocacoes registradas: enviar custo sobe a margem, receber desce.
+function realocEfetivo(code, mkey, r) {
+  if (!r) r = computeFechRow(DATA.find(function(x) { return x.code === code; }), mkey);
+  if (r.diffRS === null) return null;
+  return realocLista(code, mkey).reduce(function(s, e) { return s + (e.tipo === 'envia' ? e.valor : -e.valor); }, r.diffRS);
+}
+
+function realocCarregar(mkey) {
+  DATA.forEach(function(p) {
+    let raw = null;
+    try { raw = localStorage.getItem(realocLocalKey(p.code, mkey)); } catch (e) {}
+    if (raw !== null) realocDefinir(p.code, mkey, realocLerTexto(raw));
+  });
+  realocAtualizarCards(mkey);
+  if (!SUPABASE_CONFIGURED || redeRecente('realoc:' + mkey)) return;
+  sb.from('notes').select('code,text').eq('month', mkey).like('code', '%::fech_realoc').then(function(res) {
+    if (res.error || !res.data) return;
+    res.data.forEach(function(row) {
+      const code = row.code.slice(0, row.code.lastIndexOf('::fech_realoc'));
+      realocDefinir(code, mkey, realocLerTexto(row.text));
+      try { localStorage.setItem(realocLocalKey(code, mkey), row.text || '[]'); } catch (e) {}
+    });
+    if (document.getElementById('month-select').value === mkey) realocAtualizarCards(mkey);
+    else delete REDE_RECENTE['realoc:' + mkey];
+  });
+}
+
+// Le o gravado dos projetos (outro navegador pode ter registrado algo), aplica a mudanca e grava.
+async function realocGravar(mkey, codes, mudar) {
+  if (SUPABASE_CONFIGURED) {
+    try {
+      const res = await sb.from('notes').select('code,text').eq('month', mkey).in('code', codes.map(realocComposite));
+      if (!res.error && res.data) res.data.forEach(function(row) {
+        realocDefinir(row.code.slice(0, row.code.lastIndexOf('::fech_realoc')), mkey, realocLerTexto(row.text));
+      });
+    } catch (e) {}
+  }
+  mudar();
+  const agora = new Date().toISOString();
+  const linhas = codes.map(function(code) {
+    const txt = JSON.stringify(realocLista(code, mkey));
+    try { localStorage.setItem(realocLocalKey(code, mkey), txt); } catch (e) {}
+    return { code: realocComposite(code), month: mkey, text: txt, updated_at: agora };
+  });
+  realocAtualizarCards(mkey);
+  if (!SUPABASE_CONFIGURED) return true;
+  const res = await sb.from('notes').upsert(linhas, { onConflict: 'code,month' });
+  if (res.error) { uiAlert('A realocacao ficou salva neste navegador, mas falhou ao sincronizar.', { titulo: 'Realocacao', aviso: true }); return false; }
+  return true;
+}
+
+function realocBlocoHtml(code, mkey) {
+  const lista = realocLista(code, mkey);
+  if (!lista.length) return '';
+  const nome = function(c) { const p = DATA.find(function(x) { return x.code === c; }); return p ? p.name : ''; };
+  const linhas = lista.slice().sort(function(a, b) { return (a.t || '').localeCompare(b.t || ''); }).map(function(e) {
+    const envia = e.tipo === 'envia';
+    return '<div class="realoc-linha">' +
+      '<span class="realoc-seta ' + (envia ? 'ok' : 'bad') + '">' + (envia ? '&#8599;' : '&#8601;') + '</span>' +
+      '<span>' + (envia ? 'Enviar' : 'Receber') + ' <b>' + brl(e.valor) + '</b> ' + (envia ? 'para' : 'de') + ' <b>' + escHtml(e.outro) + '</b> <span class="small-note">' + escHtml(nome(e.outro)) + '</span></span>' +
+      '<span class="small-note" style="margin-left:auto;">' + (e.t ? new Date(e.t).toLocaleDateString('pt-BR') : '') + '</span>' +
+      '<a href="#" class="small-note" onclick="event.preventDefault(); realocRemover(\'' + code + '\',\'' + e.id + '\')">remover</a></div>';
+  }).join('');
+  const r = computeFechRow(DATA.find(function(x) { return x.code === code; }), mkey);
+  const ef = realocEfetivo(code, mkey, r);
+  const efPct = ef !== null && r.ingreso ? ef / r.ingreso * 100 : null;
+  return '<div class="obs-block"><div class="obs-header"><label>Realocacao de custos</label></div>' + linhas +
+    '<div class="small-note" style="margin-top:6px;">Diferenca com as realocacoes: <b class="' + (ef === null ? '' : ef >= -0.005 ? 'realoc-ok' : 'realoc-bad') + '">' + fechDiffRSTxt(ef) +
+    (efPct !== null ? ' (' + realocPct(efPct) + ')' : '') + '</b> &middot; registro da sugestao aceita, nao altera os custos do Fechamento.</div></div>';
+}
+
+function realocAtualizarCard(code, mkey) {
+  const bloco = document.getElementById('realoc-fech-' + code);
+  if (bloco) bloco.innerHTML = realocBlocoHtml(code, mkey);
+  const btn = document.getElementById('realoc-btn-' + code);
+  if (btn) { const ef = realocEfetivo(code, mkey); btn.style.display = ef !== null && ef < -REALOC_TOL ? '' : 'none'; }
+}
+function realocAtualizarCards(mkey) {
+  if (document.getElementById('month-select').value !== mkey) return;
+  DATA.forEach(function(p) { realocAtualizarCard(p.code, mkey); });
+}
+
+function realocAbrir(code) {
+  const mkey = document.getElementById('month-select').value;
+  const p = DATA.find(function(x) { return x.code === code; });
+  const r = computeFechRow(p, mkey);
+  const ef = realocEfetivo(code, mkey, r);
+  const cands = currentProjects().filter(function(q) { return q.code !== code; }).map(function(q) {
+    const rq = computeFechRow(q, mkey);
+    const folga = realocEfetivo(q.code, mkey, rq);
+    return { code: q.code, name: q.name, ingreso: rq.ingreso, diffRS: rq.diffRS, folga: folga, valor: 0 };
+  }).filter(function(c) { return c.folga !== null && c.folga > REALOC_TOL && c.ingreso; })
+    .sort(function(a, b) { return b.folga - a.folga; });
+  REALOC_DRAFT = { code: code, mkey: mkey, nome: p.name, ingreso: r.ingreso, diffRS: r.diffRS, efetivo: ef, deficit: Math.max(0, -ef), cands: cands };
+  realocSugerir('concentrar');
+  document.getElementById('realoc-title').textContent = 'Sugestao de realocacao — ' + code + ' · ' + p.name + ' · ' + revMesNome(mkey);
+  document.getElementById('realoc-overlay').classList.add('show');
+  document.addEventListener('keydown', realocEsc);
+}
+function realocFechar() {
+  document.getElementById('realoc-overlay').classList.remove('show');
+  document.removeEventListener('keydown', realocEsc);
+  REALOC_DRAFT = null;
+}
+function realocEsc(e) { if (e.key === 'Escape') realocFechar(); }
+
+// concentrar = maiores folgas primeiro (menos projetos); proporcional = cada um recebe na proporcao da sua folga.
+function realocSugerir(modo) {
+  const d = REALOC_DRAFT;
+  if (!d) return;
+  const totalFolga = d.cands.reduce(function(s, c) { return s + c.folga; }, 0);
+  const cobrir = Math.min(d.deficit, totalFolga);
+  let resta = cobrir;
+  d.cands.forEach(function(c) {
+    if (modo === 'proporcional') c.valor = totalFolga ? Math.floor(cobrir * c.folga / totalFolga * 100) / 100 : 0;
+    else { c.valor = Math.floor(Math.min(c.folga, resta) * 100) / 100; resta -= c.valor; }
+  });
+  // centavos que sobraram do arredondamento vao para quem ainda tem folga
+  let falta = Math.round((cobrir - d.cands.reduce(function(s, c) { return s + c.valor; }, 0)) * 100) / 100;
+  d.cands.forEach(function(c) {
+    if (falta <= 0) return;
+    const cabe = Math.floor((c.folga - c.valor) * 100) / 100;
+    const add = Math.min(cabe, falta);
+    if (add > 0) { c.valor = Math.round((c.valor + add) * 100) / 100; falta = Math.round((falta - add) * 100) / 100; }
+  });
+  d.modo = modo;
+  realocRenderPopup();
+}
+
+function realocRenderPopup() {
+  const d = REALOC_DRAFT;
+  const body = document.getElementById('realoc-body');
+  const jaEnviado = d.efetivo - d.diffRS;
+  const cab = '<div class="realoc-resumo">' +
+    '<div><span class="mini-label">Diferenca hoje</span><b class="realoc-bad">' + fechDiffRSTxt(d.diffRS) + '</b> <span class="small-note">(' + ppf(d.diffRS / d.ingreso * 100) + ')</span></div>' +
+    (Math.abs(jaEnviado) > 0.005 ? '<div><span class="mini-label">Ja realocado</span><b>' + brl(jaEnviado) + '</b></div>' : '') +
+    '<div><span class="mini-label">A cobrir</span><b>' + brl(d.deficit) + '</b></div>' +
+    '<div><span class="mini-label">Depois da realocacao</span><b id="realoc-origem-depois"></b> <span class="small-note" id="realoc-origem-depois-pct"></span></div></div>';
+  if (d.deficit <= REALOC_TOL) {
+    body.innerHTML = cab + '<div class="ficha-modal-empty">As realocacoes ja registradas cobrem a diferenca deste projeto.</div>';
+  } else if (!d.cands.length) {
+    body.innerHTML = cab + '<div class="ficha-modal-empty">Nenhum projeto de ' + escHtml(CURRENT_GESTOR) + ' tem folga (diferenca positiva) neste mes para absorver o custo.</div>';
+  } else {
+    const linhas = d.cands.map(function(c, i) {
+      return '<tr id="realoc-row-' + i + '"><td><b>' + c.code + '</b> <span class="small-note">' + escHtml(c.name) + '</span></td>' +
+        '<td class="num">' + fechDiffRSTxt(c.diffRS) + '<div class="small-note">' + ppf(c.diffRS / c.ingreso * 100) + '</div></td>' +
+        '<td class="num">' + brl(c.folga) + '</td>' +
+        '<td class="num"><input type="text" inputmode="decimal" class="rp-input" style="width:120px; text-align:right;" value="' + (c.valor ? rpNum(c.valor, 2) : '') + '" placeholder="0,00" onfocus="this.select()" oninput="realocSetValor(' + i + ', this.value)"></td>' +
+        '<td class="num" id="realoc-depois-' + i + '"></td></tr>';
+    }).join('');
+    body.innerHTML = cab +
+      '<div class="obs-toolbar" style="margin:12px 0 8px; gap:8px; align-items:center;"><span class="small-note">Sugerir:</span>' +
+      '<button type="button" class="' + (d.modo === 'concentrar' ? 'realoc-modo-ativo' : '') + '" onclick="realocSugerir(\'concentrar\')">Concentrar (menos projetos)</button>' +
+      '<button type="button" class="' + (d.modo === 'proporcional' ? 'realoc-modo-ativo' : '') + '" onclick="realocSugerir(\'proporcional\')">Distribuir pela folga</button></div>' +
+      '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Projeto com folga</th><th class="num">Diferenca hoje</th><th class="num">Folga disponivel</th><th class="num">Receber (R$)</th><th class="num">Diferenca depois</th></tr></thead><tbody>' + linhas +
+      '</tbody><tfoot><tr><td>Total</td><td></td><td class="num">' + brl(d.cands.reduce(function(s, c) { return s + c.folga; }, 0)) + '</td><td class="num" id="realoc-total"></td><td></td></tr></tfoot></table></div>' +
+      '<div class="small-note" style="margin-top:8px;">Folga = diferenca positiva do projeto (ja descontado o que ele recebeu em outras realocacoes). Os valores sugeridos podem ser alterados.</div>';
+  }
+  realocAtualizarTotais();
+}
+
+function realocSetValor(i, txt) {
+  const v = parseBRNum(txt);
+  REALOC_DRAFT.cands[i].valor = isNaN(v) ? 0 : Math.round(v * 100) / 100;
+  realocAtualizarTotais();
+}
+
+function realocAtualizarTotais() {
+  const d = REALOC_DRAFT;
+  let total = 0, erro = '';
+  d.cands.forEach(function(c, i) {
+    total += c.valor;
+    const depois = c.folga - c.valor;
+    const cel = document.getElementById('realoc-depois-' + i);
+    const row = document.getElementById('realoc-row-' + i);
+    const ruim = c.valor < 0 || depois < -0.005;
+    if (ruim && !erro) erro = c.valor < 0 ? 'Use valores positivos.' : c.code + ' ficaria abaixo da meta.';
+    if (row) row.classList.toggle('realoc-row-bad', ruim);
+    if (cel) {
+      const dif = c.diffRS - c.valor;
+      cel.innerHTML = '<span class="' + (dif >= -0.005 ? 'realoc-ok' : 'realoc-bad') + '">' + fechDiffRSTxt(dif) + '</span><div class="small-note">' + realocPct(dif / c.ingreso * 100) + '</div>';
+    }
+  });
+  total = Math.round(total * 100) / 100;
+  if (!erro && total > d.deficit + 0.005) erro = 'O total passa do valor a cobrir (' + brl(d.deficit) + ').';
+  const totEl = document.getElementById('realoc-total');
+  if (totEl) totEl.textContent = brl(total);
+  const depois = d.efetivo + total;
+  const dEl = document.getElementById('realoc-origem-depois');
+  if (dEl) { dEl.textContent = fechDiffRSTxt(depois); dEl.className = depois >= -0.005 ? 'realoc-ok' : 'realoc-bad'; }
+  const pEl = document.getElementById('realoc-origem-depois-pct');
+  if (pEl) pEl.textContent = '(' + realocPct(depois / d.ingreso * 100) + ')';
+  const btn = document.getElementById('realoc-aplicar');
+  const vazio = total <= 0.005;
+  btn.disabled = !!erro || vazio || d.deficit <= REALOC_TOL;
+  const aviso = document.getElementById('realoc-aviso');
+  aviso.className = 'small-note' + (erro ? ' realoc-bad' : '');
+  aviso.textContent = erro || (vazio ? '' : (depois < -0.005 ? 'Ainda faltam ' + brl(-depois) + ' para chegar na meta.' : 'Com isso ' + d.code + ' chega na meta.'));
+}
+
+async function realocAplicar() {
+  const d = REALOC_DRAFT;
+  if (!d) return;
+  const usados = d.cands.filter(function(c) { return c.valor > 0.005; });
+  if (!usados.length) return;
+  const t = new Date().toISOString();
+  const base = Date.now().toString(36);
+  const novos = usados.map(function(c, i) { return { id: 'r' + base + i, para: c.code, valor: c.valor }; });
+  const btn = document.getElementById('realoc-aplicar');
+  btn.disabled = true;
+  const ok = await realocGravar(d.mkey, [d.code].concat(novos.map(function(n) { return n.para; })), function() {
+    realocDefinir(d.code, d.mkey, realocLista(d.code, d.mkey).concat(novos.map(function(n) { return { id: n.id, tipo: 'envia', outro: n.para, valor: n.valor, t: t }; })));
+    novos.forEach(function(n) {
+      realocDefinir(n.para, d.mkey, realocLista(n.para, d.mkey).concat([{ id: n.id, tipo: 'recebe', outro: d.code, valor: n.valor, t: t }]));
+    });
+  });
+  realocFechar();
+  const card = document.querySelector('#fech-projects-list details[data-code="' + d.code + '"]');
+  if (card) card.open = true;
+  if (ok !== false) {
+    const st = document.getElementById('status-fech-status-' + d.code);
+    if (st) { st.textContent = 'Realocacao registrada'; st.classList.add('show'); clearTimeout(st._t); st._t = setTimeout(function() { st.classList.remove('show'); }, 2500); }
+  }
+}
+
+async function realocRemover(code, id) {
+  const mkey = document.getElementById('month-select').value;
+  const e = realocLista(code, mkey).find(function(x) { return x.id === id; });
+  if (!e) return;
+  const de = e.tipo === 'envia' ? code : e.outro, para = e.tipo === 'envia' ? e.outro : code;
+  const sim = await uiConfirm('Remover a realocacao de ' + brl(e.valor) + ' de ' + de + ' para ' + para + '? Ela sai dos dois projetos.', { titulo: 'Remover realocacao', okTexto: 'Remover', perigo: true });
+  if (!sim) return;
+  await realocGravar(mkey, [code, e.outro], function() {
+    [code, e.outro].forEach(function(c) { realocDefinir(c, mkey, realocLista(c, mkey).filter(function(x) { return x.id !== id; })); });
+  });
+}
 
 function closeOutrosModal() {
   if (_outrosModalCode) refreshOutrosMainDisplay(_outrosModalCode, _outrosModalMkey);
@@ -9664,6 +9952,7 @@ function trRefreshFech(mkey) {
   if (document.getElementById('month-select').value !== mkey) return;
   renderFechTab(mkey);
   loadStatusForMonth('fech', mkey);
+  realocCarregar(mkey);
   filterProgress('fech');
 }
 
