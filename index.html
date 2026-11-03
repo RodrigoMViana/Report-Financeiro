@@ -9695,6 +9695,23 @@ function trCalcCusto(o) {
 
 function trAplicarCusto(o) { Object.assign(o, trCalcCusto(o)); return o; }
 
+// Aba da folha variavel: sempre a "Sheet1", em qualquer posicao (alguem pode criar outra aba antes dela -- decisao
+// do usuario). Sem Sheet1, usa a primeira aba que tenha a coluna CODIGO_FUNCIONARIO (reserva = true).
+function trFolhaAba(wb) {
+  const cabecalho = function(rows) { return rows.findIndex(function(r) { return (r || []).some(function(v) { return revNorm(v) === 'CODIGO_FUNCIONARIO'; }); }); };
+  const s1 = wb.SheetNames.find(function(n) { return String(n).trim().toLowerCase() === 'sheet1'; });
+  if (s1) {
+    const rows = xlsxSheetRows(wb.Sheets[s1]), h = cabecalho(rows);
+    if (h === -1) throw new Error('coluna CODIGO_FUNCIONARIO nao encontrada na aba "' + s1 + '".');
+    return { nome: s1, rows: rows, h: h, reserva: false };
+  }
+  for (const nome of wb.SheetNames) {
+    const rows = xlsxSheetRows(wb.Sheets[nome]), h = cabecalho(rows);
+    if (h !== -1) return { nome: nome, rows: rows, h: h, reserva: true };
+  }
+  return null;
+}
+
 async function trUploadFolha(inp) {
   const file = inp.files && inp.files[0];
   inp.value = '';
@@ -9704,9 +9721,9 @@ async function trUploadFolha(inp) {
   try {
     await garantirXLSX();
     const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
-    const rows = xlsxSheetRows(wb.Sheets[wb.SheetNames[0]]);
-    const h = rows.findIndex(function(r) { return (r || []).some(function(v) { return revNorm(v) === 'CODIGO_FUNCIONARIO'; }); });
-    if (h === -1) throw new Error('coluna CODIGO_FUNCIONARIO nao encontrada.');
+    const aba = trFolhaAba(wb);
+    if (!aba) throw new Error('aba "Sheet1" nao encontrada (e nenhuma outra aba tem a coluna CODIGO_FUNCIONARIO).');
+    const rows = aba.rows, h = aba.h;
     const head = rows[h].map(revNorm);
     const cP = head.indexOf('PROJETO'), cM = head.indexOf('MES'), cA = head.indexOf('ANO'), cF = head.indexOf('CODIGO_FUNCIONARIO'), cV = head.indexOf('VALOR');
     if ([cP, cM, cF, cV].some(function(c) { return c === -1; })) throw new Error('colunas PROJETO / MES / CODIGO_FUNCIONARIO / VALOR nao encontradas.');
@@ -9735,8 +9752,9 @@ async function trUploadFolha(inp) {
     await revPersist();
     const recalc = await trRecalcularCustos(Array.from(meses));
     renderTransfTab(document.getElementById('month-select').value);
-    rpSetStatus('tr-status', 'Folha variavel de ' + Array.from(meses).map(function(m) { return revMesNome(m); }).join(', ') + ' lida (' + n + ' linhas, ' + Object.keys(valores).length + ' pessoa/projeto). ' +
-      (recalc ? recalc + ' transferencia(s) recalculada(s).' : ''), 'ok');
+    rpSetStatus('tr-status', 'Folha variavel de ' + Array.from(meses).map(function(m) { return revMesNome(m); }).join(', ') + ' lida da aba "' + aba.nome + '"' +
+      (aba.reserva ? ' (o arquivo nao tem aba Sheet1)' : '') + ' (' + n + ' linhas, ' + Object.keys(valores).length + ' pessoa/projeto). ' +
+      (recalc ? recalc + ' transferencia(s) recalculada(s).' : ''), aba.reserva ? null : 'ok');
   } catch (e) {
     rpSetStatus('tr-status', 'Nao foi possivel ler a folha variavel: ' + e.message, 'bad');
   }
