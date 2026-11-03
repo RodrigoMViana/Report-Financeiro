@@ -209,6 +209,10 @@
     .project-card { break-inside:avoid; }
   }
   @media (max-width:800px) { .kpi-grid { grid-template-columns:repeat(2,1fr); } .summary-right { gap:14px; } }
+  .campo-sinal { display:flex; gap:6px; align-items:stretch; }
+  .campo-sinal input { flex:1; min-width:0; }
+  .btn-sinal { flex:0 0 44px; min-height:38px; border:1px solid var(--border); background:#fff; color:var(--navy); border-radius:8px; font-size:17px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .btn-sinal:hover { border-color:var(--navy); }
   .ficha-modal-overlay { display:none; position:fixed; inset:0; background:rgba(11,37,69,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
   .ficha-modal-overlay.show { display:flex; }
   .ficha-modal { background:#fff; border-radius:14px; max-width:720px; width:100%; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(11,37,69,0.3); }
@@ -315,6 +319,19 @@
           <button type="button" style="background:#fff; color:var(--navy); border:1px solid var(--border);" onclick="trCopiarResumo()">Copiar resumo</button>
           <button type="button" onclick="trFecharResumo()">Fechar</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ficha-modal-overlay" id="custos-ficha-overlay" onclick="if(event.target===this) fecharCustosFicha()">
+    <div class="ficha-modal">
+      <div class="ficha-modal-header">
+        <h3 id="custos-ficha-title">Custos da ficha</h3>
+        <button type="button" class="ficha-modal-close" onclick="fecharCustosFicha()">&times;</button>
+      </div>
+      <div class="ficha-modal-body" id="custos-ficha-body"></div>
+      <div class="ficha-modal-footer">
+        <button type="button" onclick="fecharCustosFicha()">Fechar</button>
       </div>
     </div>
   </div>
@@ -7079,8 +7096,23 @@ function fechInputRow(code, mkey, field, label, placeholder) {
               <label>${label}</label>
               <span class="obs-status" id="${field}-status-fech-${code}"></span>
             </div>
-            <input type="text" inputmode="decimal" id="${field}-fech-${code}" class="obs-textarea" style="min-height:auto;" value="${val ? brlPlain(val) : ''}" placeholder="${placeholder}" oninput="saveExtra('${code}','fech','${field}')" onblur="blurExtra('${code}','fech','${field}')">
+            <div class="campo-sinal">
+              <input type="text" inputmode="decimal" id="${field}-fech-${code}" class="obs-textarea" style="min-height:auto;" value="${val ? brlPlain(val) : ''}" placeholder="${placeholder}" oninput="saveExtra('${code}','fech','${field}')" onblur="blurExtra('${code}','fech','${field}')">
+              <button type="button" class="btn-sinal" title="Trocar o sinal (+/-)" onclick="trocarSinal('${field}-fech-${code}')">&plusmn;</button>
+            </div>
           </div>`;
+}
+
+// O teclado numerico do celular (iOS) nao tem o "-": este botao inverte o sinal do campo e dispara o mesmo
+// salvamento da digitacao (eventos input/change).
+function trocarSinal(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const v = parseBRNum(el.value);
+  if (!v) { el.focus(); return; }
+  el.value = brlPlain(-v);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 // "Entre Empresas": valor manual (ajuste) + custo das transferencias cadastradas na aba Transferencias
@@ -7116,8 +7148,9 @@ function ingresoFonte(p, mkey) {
   const fichaMonth = (FICHA[p.code] && FICHA[p.code][mkey]) ? FICHA[p.code][mkey] : null;
   const ingFicha = fichaMonth ? (fichaMonth.ing || 0) : 0;
   if (ingFicha !== 0) return { valor: ingFicha, fonte: 'ficha' };
-  const aj = getExtra(p.code, mkey, 'fech').ingajuste || 0;
-  if (aj !== 0) return { valor: aj, fonte: 'ajuste' };
+  const exI = getExtra(p.code, mkey, 'fech');
+  const aj = exI.ingajuste || 0;
+  if (aj !== 0 || exI.ingajusteZero) return { valor: aj, fonte: 'ajuste' };
   return { valor: p.months[mkey].ingreso.pr, fonte: 'pr' };
 }
 
@@ -7147,7 +7180,8 @@ function fechVoltarIngressoPR(code) {
   fechSalvarIngresso(code);
 }
 
-// Salva o ingresso ajustado (vazio ou igual ao da PR = sem ajuste) e recalcula o card.
+// Salva o ingresso ajustado (vazio ou igual ao da PR = sem ajuste) e recalcula o card. Zero digitado de proposito
+// (PR diferente de zero) e gravado como 'ZERO' -- o "0" gravado sempre significou "sem ajuste".
 function fechSalvarIngresso(code) {
   const mkey = document.getElementById('month-select').value;
   const p = DATA.find(function(x) { return x.code === code; });
@@ -7156,15 +7190,19 @@ function fechSalvarIngresso(code) {
   const pr = p.months[mkey].ingreso.pr;
   const txt = String(el.value || '').trim();
   const v = parseBRNum(txt);
-  const aj = !txt || Math.abs(v - pr) < 0.005 ? 0 : v;
-  getExtra(code, mkey, 'fech').ingajuste = aj;
-  try { localStorage.setItem(extraLocalKey(code, 'ingajuste', 'fech', mkey), String(aj)); } catch (e) {}
+  const semAjuste = !txt || Math.abs(v - pr) < 0.005;
+  const aj = semAjuste ? 0 : v;
+  const exI = getExtra(code, mkey, 'fech');
+  exI.ingajuste = aj;
+  exI.ingajusteZero = !semAjuste && v === 0;
+  const texto = exI.ingajusteZero ? 'ZERO' : String(aj);
+  try { localStorage.setItem(extraLocalKey(code, 'ingajuste', 'fech', mkey), texto); } catch (e) {}
   const cel = document.getElementById('fech-ing-cel-' + code);
   if (cel) cel.innerHTML = fechIngressoCelula(p, mkey);
   updateFechRowDisplay(code, mkey);
   if (typeof updateFechKpis === 'function') updateFechKpis(mkey);
   if (!SUPABASE_CONFIGURED) return;
-  sb.from('notes').upsert({ code: extraComposite(code, 'ingajuste', 'fech'), month: mkey, text: String(aj), updated_at: new Date().toISOString() }, { onConflict: 'code,month' })
+  sb.from('notes').upsert({ code: extraComposite(code, 'ingajuste', 'fech'), month: mkey, text: texto, updated_at: new Date().toISOString() }, { onConflict: 'code,month' })
     .then(function(res) { if (res.error) uiAlert('Ingresso de ' + code + ' salvo neste navegador, mas falhou ao sincronizar.', { titulo: 'Ingresso do mes', aviso: true }); });
 }
 
@@ -7372,6 +7410,9 @@ function renderFechTab(mkey) {
           </div>
         </summary>
         <div class="card-body">
+          <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:8px;">
+            <button type="button" onclick="abrirCustosFicha('${r.code}')">Custos da ficha</button>
+          </div>
           <div class="extra-row">${fechInputRow(r.code, mkey, 'existencia', 'Existencia', 'Existencia')}${fechOutrosRow(r.code, mkey)}${fechInputRow(r.code, mkey, 'miops', 'MIOPs', 'Custos cadastrados no MIOPS')}</div>
           <div class="extra-row">${fechEntreEmpresasRow(r, mkey)}${fechInputRow(r.code, mkey, 'provisao', 'Provisao', 'Provisoes')}</div>
           <div class="extra-row">${fechComputedRow(r.code, mkey, 'rateio', 'Rateio (parametrizado)', r.rateioCalc, 'Calculado automaticamente na aba Parametrizacao.')}${fechComputedRow(r.code, mkey, 'imposto', 'Imposto (parametrizado)', r.impostoCalc, 'Calculado automaticamente na aba Parametrizacao.')}</div>
@@ -8064,7 +8105,8 @@ function renderOutrosModalBody() {
   const rowsHtml = items.map(function(item, idx) {
     return '<div class="outros-item-row" style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">' +
       '<input type="text" placeholder="Descricao do custo" value="' + escHtml(item.desc || '') + '" style="flex:2;" oninput="updateOutrosItemField(' + idx + ',\'desc\',this.value)">' +
-      '<input type="text" inputmode="decimal" placeholder="Valor" value="' + (item.valor ? brlPlain(item.valor) : '') + '" style="flex:1;" oninput="updateOutrosItemField(' + idx + ',\'valor\',this.value)" onblur="blurOutrosItemValor(' + idx + ')">' +
+      '<input type="text" inputmode="decimal" id="outros-valor-' + idx + '" placeholder="Valor" value="' + (item.valor ? brlPlain(item.valor) : '') + '" style="flex:1; min-width:0;" oninput="updateOutrosItemField(' + idx + ',\'valor\',this.value)" onblur="blurOutrosItemValor(' + idx + ')">' +
+      '<button type="button" class="btn-sinal" title="Trocar o sinal (+/-)" onclick="trocarSinal(\'outros-valor-' + idx + '\')">&plusmn;</button>' +
       '<button type="button" class="ficha-modal-close" style="font-size:18px;" title="Excluir linha" onclick="removeOutrosItem(' + idx + ')">&times;</button>' +
       '</div>';
   }).join('');
@@ -8087,6 +8129,38 @@ function openOutrosModal(code, mkey) {
   document.getElementById('outros-modal-overlay').classList.add('show');
   document.addEventListener('keydown', outrosModalEscHandler);
 }
+
+// Popup "Custos da ficha": linhas de custo da ficha economica do projeto no mes selecionado.
+function abrirCustosFicha(code) {
+  const mkey = document.getElementById('month-select').value;
+  const p = DATA.find(function(x) { return x.code === code; });
+  document.getElementById('custos-ficha-title').textContent = 'Custos da ficha — ' + code + (p ? ' · ' + p.name : '') + ' · ' + revMesNome(mkey);
+  const det = FICHA_DET[code] && FICHA_DET[code][mkey];
+  const totalFicha = (FICHA[code] && FICHA[code][mkey] && FICHA[code][mkey].cst) || 0;
+  const body = document.getElementById('custos-ficha-body');
+  if (!det) {
+    body.innerHTML = '<div class="ficha-modal-empty">O detalhe linha a linha ainda nao foi carregado para este projeto/mes.<br>Envie a ficha de novo em <b>"Atualizar fichas"</b> (geral ou a individual do projeto).' +
+      (totalFicha ? '<br><br>Total Custos da ficha: <b>' + brl(totalFicha) + '</b>' : '') + '</div>';
+  } else if (!det.length) {
+    body.innerHTML = '<div class="ficha-modal-empty">A ficha nao tem custos neste mes.</div>';
+  } else {
+    const soma = det.reduce(function(s, l) { return s + l.v; }, 0);
+    const rows = det.map(function(l) {
+      return '<tr><td>' + escHtml(l.d) + '</td><td class="num">' + brl(l.v) + '</td><td class="num">' + (soma ? pctf(l.v / soma * 100, 1) : '-') + '</td></tr>';
+    }).join('');
+    const dif = totalFicha - soma;
+    body.innerHTML = '<div class="table-wrap"><table class="rp-table"><thead><tr><th>Linha da ficha</th><th class="num">Valor</th><th class="num">% do total</th></tr></thead><tbody>' + rows +
+      '</tbody><tfoot><tr><td>Total (' + det.length + ' linha(s))</td><td class="num">' + brl(soma) + '</td><td class="num">100,0%</td></tr></tfoot></table></div>' +
+      (Math.abs(dif) >= 1 ? '<div class="small-note" style="margin-top:8px;">Total Custos usado no Fechamento: ' + brl(totalFicha) + ' (diferenca de ' + brl(dif) + ').</div>' : '');
+  }
+  document.getElementById('custos-ficha-overlay').classList.add('show');
+  document.addEventListener('keydown', custosFichaEsc);
+}
+function fecharCustosFicha() {
+  document.getElementById('custos-ficha-overlay').classList.remove('show');
+  document.removeEventListener('keydown', custosFichaEsc);
+}
+function custosFichaEsc(e) { if (e.key === 'Escape') fecharCustosFicha(); }
 
 function closeOutrosModal() {
   if (_outrosModalCode) refreshOutrosMainDisplay(_outrosModalCode, _outrosModalMkey);
@@ -8207,9 +8281,10 @@ function loadExtraFromSupabase() {
     Object.keys(EXTRA_FIELDS).forEach(function(kind) {
       EXTRA_FIELDS[kind].forEach(function(field) {
         MESES.forEach(function(mkey) {
-          let val = 0;
-          try { val = parseFloat(localStorage.getItem(extraLocalKey(p.code, field, kind, mkey))) || 0; } catch (e) {}
+          let val = 0, bruto = null;
+          try { bruto = localStorage.getItem(extraLocalKey(p.code, field, kind, mkey)); val = parseFloat(bruto) || 0; } catch (e) {}
           if (val) getExtra(p.code, mkey, kind)[field] = val;
+          if (field === 'ingajuste' && bruto === 'ZERO') getExtra(p.code, mkey, kind).ingajusteZero = true;
         });
       });
     });
@@ -8240,6 +8315,7 @@ function loadExtraFromSupabase() {
         if (!DATA.some(function(p) { return p.code === code; })) return;
         const num = parseFloat(row.text);
         getExtra(code, row.month, kind)[field] = isNaN(num) ? 0 : num;
+        if (field === 'ingajuste') getExtra(code, row.month, kind).ingajusteZero = row.text === 'ZERO';
         touched = true;
       });
     });
@@ -8366,6 +8442,7 @@ function parseFichaHtml(html) {
       }
 
       const months = {};
+      const custos = [];
       let comCentavos = false;
       if (conceptosIdx !== -1) {
         // O bloco de um projeto tem varias sub-tabelas (Proveitos, Outros Proveitos, Costes),
@@ -8373,11 +8450,16 @@ function parseFichaHtml(html) {
         // percorrer bem alem da primeira ocorrencia para chegar em "Total Custos".
         let k = conceptosIdx + 16;
         let scanned = 0;
-        let temCst = false;
+        let temCst = false, emCustos = false;
         while (k < n && !ehProj(tokens[k]) && scanned < 400) {
           const label = tokens[k];
           const row = tokens.slice(k, k + 16);
           if (row.length < 16) break;
+          // cabecalho de sub-tabela ("Conceptos/Costes/Custos | Acum Ant | Enero..."): a de custos do projeto e a
+          // primeira "Costes"/"Custos"; as linhas dela ate o 1o "Total Custos" sao o detalhe do custo
+          if (row[1] === 'Acum Ant') { emCustos = !temCst && (label === 'Costes' || label === 'Custos'); k += 16; scanned++; continue; }
+          if (emCustos && label !== 'Total Custos') custos.push({ d: label, vals: row.slice(2, 14) });
+          if (label === 'Total Custos') emCustos = false;
           // "Dívidas (Impostos Incluídos)" e "Devedores Prod. Fat." (DPF) sao saldos no fim de cada mes
           const ehDiv = /^D.{0,3}vidas/.test(label), ehDpf = label.indexOf('Devedores Prod') === 0;
           if (label === 'Faturação' || label.indexOf('Cobranças') === 0 || label === 'Vendas' || label === 'Total Custos' || ehDiv || ehDpf) {
@@ -8398,7 +8480,7 @@ function parseFichaHtml(html) {
           scanned++;
         }
       }
-      results[code] = { name: name, months: months, semCentavos: !comCentavos };
+      results[code] = { name: name, months: months, semCentavos: !comCentavos, custos: custos };
       i = j;
     } else {
       i++;
@@ -8419,6 +8501,9 @@ function parseFichaNum(s) {
 }
 
 // ---------- Upload / sincronizacao das fichas ----------
+// Detalhe do custo da ficha, linha a linha: FICHA_DET[code][mes] = [{d: rotulo, v: valor}] (so linhas com valor),
+// gravado em 'code::ficha_cstdet' (JSON). So existe para fichas enviadas depois desta funcionalidade.
+let FICHA_DET = {};
 function fichaOverrideCode(code, kind) {
   return code + '::ficha_' + kind;
 }
@@ -8478,6 +8563,12 @@ async function handleFichaFiles(event) {
         return merged[code].semCentavos && ant && typeof ant[key] === 'number' && Math.abs(ant[key] - nv) <= 0.5001 ? ant[key] : nv;
       };
       FICHA[code][mk] = { fat: valor('fat'), cob: valor('cob'), ing: valor('ing'), cst: valor('cst'), dpf: valor('dpf'), div: valor('div') };
+      const linhas = merged[code].custos || [];
+      if (linhas.length) {
+        if (!FICHA_DET[code]) FICHA_DET[code] = {};
+        const mi = FICHA_MONTHS_PT.indexOf(mk);
+        FICHA_DET[code][mk] = linhas.map(function(l) { return { d: l.d, v: parseFichaNum(l.vals[mi]) }; }).filter(function(l) { return Math.abs(l.v) > 0.004; });
+      }
     });
   });
   renderAllTabs(document.getElementById('month-select').value);
@@ -8502,6 +8593,8 @@ async function handleFichaFiles(event) {
       rows.push({ code: fichaOverrideCode(code, 'cst'), month: mk, text: String(v.cst), updated_at: new Date().toISOString() });
       rows.push({ code: fichaOverrideCode(code, 'dpf'), month: mk, text: String(v.dpf || 0), updated_at: new Date().toISOString() });
       rows.push({ code: fichaOverrideCode(code, 'div'), month: mk, text: String(v.div || 0), updated_at: new Date().toISOString() });
+      if (FICHA_DET[code] && FICHA_DET[code][mk] && (merged[code].custos || []).length)
+        rows.push({ code: fichaOverrideCode(code, 'cstdet'), month: mk, text: JSON.stringify(FICHA_DET[code][mk]), updated_at: new Date().toISOString() });
     });
   });
 
@@ -8597,8 +8690,12 @@ async function loadFichaOverridesFromSupabase() {
     const idx = row.code.lastIndexOf('::ficha_');
     if (idx === -1) return;
     const code = row.code.slice(0, idx);
-    const kind = row.code.slice(idx + 8); // 'fat', 'cob', 'ing' ou 'cst'
+    const kind = row.code.slice(idx + 8); // 'fat', 'cob', 'ing', 'cst', 'dpf', 'div' ou 'cstdet'
     if (!DATA.some(p => p.code === code)) return;
+    if (kind === 'cstdet') {
+      try { (FICHA_DET[code] = FICHA_DET[code] || {})[row.month] = JSON.parse(row.text); } catch (e) {}
+      return;
+    }
     if (!FICHA[code]) FICHA[code] = {};
     // Nao reaproveitar objeto pre-existente do baked-in estatico: garante que fat/cob/ing/cst
     // fiquem consistentes (o objeto baked so tinha fat/cob, faltando ing/cst).
