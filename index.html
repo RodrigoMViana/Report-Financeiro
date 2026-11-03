@@ -9655,6 +9655,7 @@ var TR_PREFIX = '__TRANSF__::';
 var TR_REMOTE = SUPABASE_CONFIGURED && !/^(localhost|127\.0\.0\.1|\[::1\]|)$/.test(location.hostname);
 var TR_ROWS = {};        // { MKEY: { id: linha } }
 var TR_EDIT_ID = null;
+var TR_DUPLICANDO = false;
 var TR_MES_NOMES = { JAN:'JANEIRO', FEV:'FEVEREIRO', MAR:'MARÇO', ABR:'ABRIL', MAI:'MAIO', JUN:'JUNHO', JUL:'JULHO', AGO:'AGOSTO', SET:'SETEMBRO', OUT:'OUTUBRO', NOV:'NOVEMBRO', DEZ:'DEZEMBRO' };
 var TR_FIELDS = ['matricula', 'horas', 'mescomp', 'folha', 'projorig', 'edtorig', 'emporig', 'projdest', 'edtdest', 'empdest'];
 var TR_MOTIVO = 'Transferência de Horas';
@@ -9753,7 +9754,7 @@ function trDoGestor(r) { return (r.gestor || 'Rodrigo') === CURRENT_GESTOR; }
 function renderTransfTab(mkey) {
   const list = document.getElementById('tr-list');
   if (!list) return;
-  if (!TR_EDIT_ID) trFillMesComp(mkey);
+  if (!TR_EDIT_ID && !TR_DUPLICANDO) trFillMesComp(mkey);
   const dl = document.getElementById('tr-projetos-list');
   if (dl && !dl.childElementCount) {
     const ops = {};
@@ -9776,12 +9777,13 @@ function renderTransfTab(mkey) {
         '</td><td>' + rpEsc(r.projorig) + '</td><td>' + rpEsc(r.edtorig) + '</td><td>' + rpEsc(r.emporig) + '</td><td>' + rpEsc(r.projdest) + '</td><td>' + rpEsc(r.edtdest) + '</td><td>' + rpEsc(r.empdest) +
         '</td><td class="num">' + (r.taxa ? brl(r.taxa) : '<span style="color:var(--warn);">sem taxa</span>') + '</td><td class="num">' + (r.custoHoras ? brl(r.custoHoras) : '-') + '</td><td class="num">' + (r.desmant != null ? brl(r.desmant) : '-') +
         '</td><td class="num" title="' + rpEsc(r.folhaInfo || '') + '">' + (r.folhaVar != null ? brl(r.folhaVar) : '-') + '</td><td class="num"><b>' + (r.custo ? brl(r.custo) : '-') + '</b>' +
-        '</td><td><a href="#" onclick="trEditar(\'' + x.id + '\'); return false;">Editar</a><a href="#" style="color:var(--bad);" onclick="trExcluir(\'' + x.id + '\'); return false;">Excluir</a></td></tr>';
+        '</td><td><a href="#" onclick="trEditar(\'' + x.id + '\'); return false;">Editar</a><a href="#" onclick="trEditar(\'' + x.id + '\', true); return false;" title="Leva os dados para o formulario como uma nova transferencia">Duplicar</a><a href="#" style="color:var(--bad);" onclick="trExcluir(\'' + x.id + '\'); return false;">Excluir</a></td></tr>';
     }).join('')}</tbody></table></div>`;
 }
 
 function trLimparForm() {
   TR_EDIT_ID = null;
+  TR_DUPLICANDO = false;
   TR_FIELDS.forEach(function(f) { if (f !== 'mescomp') trFormEl(f).value = ''; });
   ['taxa', 'nome', 'custo'].forEach(function(f) { trFormEl(f).value = ''; });
   document.getElementById('tr-custo-det').textContent = '';
@@ -9830,11 +9832,13 @@ async function trSalvarForm() {
   else rpSetStatus('tr-form-status', (editando ? 'Alteracao salva' : 'Transferencia adicionada') + (o.custo ? ' (custo ' + brl(o.custo) + ')' : ' -- sem taxa, custo nao calculado') + (r.local ? ' (preview local: so neste navegador).' : '.'), o.custo ? 'ok' : 'warn');
 }
 
-function trEditar(id) {
+// duplicar = mesmos dados no formulario, mas salva como transferencia nova (o original nao muda).
+function trEditar(id, duplicar) {
   const mkey = document.getElementById('month-select').value;
   const r = (TR_ROWS[mkey] || {})[id];
   if (!r) return;
-  TR_EDIT_ID = id;
+  TR_EDIT_ID = duplicar ? null : id;
+  TR_DUPLICANDO = !!duplicar;
   trFillMesComp(mkey, r.mescomp);
   TR_FIELDS.forEach(function(f) {
     if (f === 'mescomp') return;
@@ -9842,13 +9846,15 @@ function trEditar(id) {
   });
   trSyncEmpresa();
   trFormEl('taxa').value = r.taxa ? rpNum(r.taxa, 2) : '';
-  trFormEl('taxa').dataset.manual = r.taxa ? '1' : '';
+  // na copia a taxa so fica fixa se foi digitada; senao recalcula se mudar a pessoa ou o projeto origem
+  trFormEl('taxa').dataset.manual = r.taxa && (!duplicar || r.taxaFonte === 'Informada manualmente.') ? '1' : '';
   document.getElementById('tr-taxa-fonte').textContent = r.taxaFonte || '';
   trAutoTaxa();
-  document.getElementById('tr-form-title').textContent = 'Editando transferencia';
-  document.getElementById('tr-save-btn').textContent = 'Salvar alteracao';
+  document.getElementById('tr-form-title').textContent = duplicar ? 'Nova transferencia (copia) — altere o que precisar' : 'Editando transferencia';
+  document.getElementById('tr-save-btn').textContent = duplicar ? 'Adicionar' : 'Salvar alteracao';
   document.getElementById('tr-cancel-btn').style.display = '';
   document.getElementById('tr-form-title').scrollIntoView({ behavior: 'smooth' });
+  if (duplicar) setTimeout(function() { trFormEl('projdest').focus(); trFormEl('projdest').select(); }, 400);
 }
 
 async function trExcluir(id) {
