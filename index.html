@@ -5467,6 +5467,8 @@
     <div id="tr-unlocked" style="display:none;">
       <div class="report-bar" style="align-items:center;">
         <button type="button" onclick="trExportar()">Exportar para planilha...</button>
+        <button type="button" class="secondary" onclick="document.getElementById('tr-import-file').click()">Importar de planilha...</button>
+        <input type="file" id="tr-import-file" accept=".xlsx,.xlsm,.xls" style="display:none;" onchange="trImportar(this)">
         <button type="button" class="secondary" onclick="document.getElementById('tr-folha-file').click()">Subir folha variavel</button>
         <input type="file" id="tr-folha-file" accept=".xlsx,.xls,.xlsb" style="display:none;" onchange="trUploadFolha(this)">
         <button type="button" class="secondary" onclick="trAbrirResumo()">Resumo das transferencias</button>
@@ -5475,7 +5477,7 @@
         <input type="file" id="tr-file" accept=".xlsx,.xlsm" style="display:none;" onchange="trExportarArquivo(this)">
         <span class="email-status" id="tr-status"></span>
       </div>
-      <div class="small-note" style="margin-bottom:20px;">Transferencias de horas entre empresas do mes selecionado no topo. Cada gestor cadastra as suas (solicitante e motivo sao preenchidos automaticamente). "Exportar para planilha" pede a planilha do mes, preenche a aba BASE com as transferencias <b>deste gestor</b> e baixa uma copia preenchida -- o arquivo original nao e alterado.</div>
+      <div class="small-note" style="margin-bottom:20px;">Transferencias de horas entre empresas do mes selecionado no topo. Cada gestor cadastra as suas (solicitante e motivo sao preenchidos automaticamente). "Exportar para planilha" pede a planilha do mes, preenche a aba BASE com as transferencias <b>deste gestor</b> e baixa uma copia preenchida -- o arquivo original nao e alterado. "Importar de planilha" faz o caminho inverso: le a aba BASE de uma planilha ja preenchida e traz as linhas para a lista abaixo (mes selecionado, deste gestor; linhas de outro solicitante e as que ja estao na lista ficam de fora).</div>
       <div class="section-title" id="tr-form-title">Nova transferencia</div>
       <div class="tr-form">
         <div class="tr-row tr-row-4">
@@ -10018,6 +10020,118 @@ async function trExportarArquivo(inp) {
   } catch (e) {
     console.error(e);
     rpSetStatus('tr-status', 'Nao foi possivel preencher: ' + e.message, 'bad');
+  }
+}
+
+// ---------- Importacao: traz as transferencias de uma planilha ja preenchida (aba BASE) ----------
+// Mesmo mapa de colunas da exportacao (TR_COLS, pelo texto do cabecalho, sem acento). Entra no mes selecionado e no
+// gestor atual, com taxa/custo calculados como no "Adicionar". Ficam de fora: linhas de outro solicitante,
+// incompletas e as que ja existem (mesma matricula, horas, competencia, projetos e EDTs).
+function trImportMes(v, mkeyPadrao) {
+  if (typeof v === 'number') {
+    if (v >= 1 && v <= 12) return TR_MES_NOMES[MESES[v - 1]];
+    const d = XLSX.SSF.parse_date_code(v);            // data do Excel
+    if (d && d.m >= 1 && d.m <= 12) return TR_MES_NOMES[MESES[d.m - 1]];
+  }
+  const t = revNorm(v);
+  if (!t) return TR_MES_NOMES[mkeyPadrao];
+  const m = MESES.find(function(k) { const n = revNorm(TR_MES_NOMES[k]); return n === t || (t.length >= 3 && n.indexOf(t.slice(0, 3)) === 0); });
+  return m ? TR_MES_NOMES[m] : null;
+}
+function trImportChave(o) {
+  return [revMat(o.matricula), (Math.round((o.horas || 0) * 100) / 100).toFixed(2), revNorm(o.mescomp), revNorm(o.projorig), revNorm(o.edtorig), revNorm(o.projdest), revNorm(o.edtdest)].join('|');
+}
+
+async function trImportar(inp) {
+  const file = inp.files && inp.files[0];
+  inp.value = '';
+  if (!file) return;
+  const mkey = document.getElementById('month-select').value;
+  rpSetStatus('tr-status', 'Lendo ' + file.name + '...', null);
+  try {
+    await garantirXLSX();
+    const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: 'array' });
+    const temCab = function(rows) { return rows.slice(0, 30).findIndex(function(r) { return (r || []).some(function(v) { return revNorm(v) === 'MATRICULA'; }); }); };
+    const nomeAba = wb.SheetNames.find(function(n) { return revNorm(n) === 'BASE'; }) ||
+      wb.SheetNames.find(function(n) { return temCab(xlsxSheetRows(wb.Sheets[n])) !== -1; });
+    if (!nomeAba) throw new Error('nao encontrei a aba BASE (nem outra aba com o cabecalho "MATRICULA").');
+    const rows = xlsxSheetRows(wb.Sheets[nomeAba]);
+    const h = temCab(rows);
+    if (h === -1) throw new Error('nao encontrei o cabecalho "MATRICULA" na aba ' + nomeAba + '.');
+    const cab = rows[h].map(revNorm), col = {};
+    TR_COLS.forEach(function(def) {
+      const i = cab.findIndex(function(t) { return def.h.some(function(x) { return t.indexOf(revNorm(x)) === 0; }); });
+      if (i !== -1) col[def.f] = i;
+    });
+    const faltam = ['matricula', 'horas', 'projorig', 'projdest'].filter(function(f) { return col[f] === undefined; });
+    if (faltam.length) throw new Error('colunas nao encontradas: ' + faltam.join(', ') + '.');
+
+    const meuSolic = revNorm(TR_SOLICITANTE[CURRENT_GESTOR] || CURRENT_GESTOR);
+    const existentes = new Set(trLinhasOrdenadas(mkey).map(function(x) { return trImportChave(x.r); }));
+    const novas = [], incompletas = [], outros = [], repetidas = [];
+    const val = function(r, f) { return col[f] === undefined ? null : r[col[f]]; };
+    const txt = function(v) { return v === null || v === undefined ? '' : String(v).trim(); };
+    for (let i = h + 1; i < rows.length; i++) {
+      const r = rows[i] || [];
+      const linha = i + 1;   // numero da linha no Excel
+      const mat = revMat(val(r, 'matricula'));
+      const horas = revNum(val(r, 'horas'));
+      if (!mat && !horas && !txt(val(r, 'projorig'))) continue;   // linha vazia da tabela
+      const solic = revNorm(val(r, 'solicitante'));
+      if (solic && solic !== meuSolic) { outros.push(linha); continue; }
+      const o = {
+        matricula: mat, horas: horas || 0, mescomp: trImportMes(val(r, 'mescomp'), mkey),
+        folha: ({ SIM: 'SIM', NAO: 'NAO' })[revNorm(val(r, 'folha'))] || '',
+        projorig: txt(val(r, 'projorig')).toUpperCase(), edtorig: txt(val(r, 'edtorig')), emporig: revNorm(val(r, 'emporig')),
+        projdest: txt(val(r, 'projdest')).toUpperCase(), edtdest: txt(val(r, 'edtdest')), empdest: revNorm(val(r, 'empdest')),
+      };
+      if (!o.empdest) o.empdest = o.emporig === 'A3' ? 'B2' : (o.emporig === 'B2' ? 'A3' : '');
+      if (!o.matricula || !o.horas || !o.mescomp || !o.folha || !o.projorig || !o.projdest || !o.edtorig || !o.edtdest || !o.emporig) { incompletas.push(linha); continue; }
+      const chave = trImportChave(o);
+      if (existentes.has(chave)) { repetidas.push(linha); continue; }
+      existentes.add(chave);
+      novas.push(o);
+    }
+    const lista = function(arr) { return arr.slice(0, 15).join(', ') + (arr.length > 15 ? '...' : ''); };
+    const resumo = (incompletas.length ? '\n- ' + incompletas.length + ' incompleta(s) (linhas ' + lista(incompletas) + ')' : '') +
+      (repetidas.length ? '\n- ' + repetidas.length + ' ja na lista (linhas ' + lista(repetidas) + ')' : '') +
+      (outros.length ? '\n- ' + outros.length + ' de outro solicitante (linhas ' + lista(outros) + ')' : '');
+    if (!novas.length) {
+      rpSetStatus('tr-status', 'Nenhuma transferencia nova em ' + file.name + '.', 'warn');
+      uiAlert('Nenhuma transferencia nova para importar da aba ' + nomeAba + '.' + (resumo ? '\nIgnoradas:' + resumo : ''), { titulo: 'Importar transferencias' });
+      return;
+    }
+    const ok = await uiConfirm('Importar ' + novas.length + ' transferencia(s) da aba ' + nomeAba + ' para ' + TR_MES_NOMES[mkey] + ' (' + CURRENT_GESTOR + ')?' +
+      (resumo ? '\n\nFicam de fora:' + resumo : ''), { titulo: 'Importar transferencias', okTexto: 'Importar' });
+    if (!ok) { rpSetStatus('tr-status', '', null); return; }
+
+    if (!TR_ROWS[mkey]) TR_ROWS[mkey] = {};
+    const base = Date.now();
+    let falhas = 0, semTaxa = 0;
+    for (let k = 0; k < novas.length; k++) {
+      const o = novas[k];
+      const t = trTaxaPessoa(o.matricula, trMkeyDeMes(o.mescomp), o.projorig);
+      o.taxa = t && t.taxa ? t.taxa : null;
+      o.taxaFonte = t ? t.fonte : '';
+      o.nome = t && t.nome ? t.nome : '';
+      trAplicarCusto(o);
+      if (!o.custo) semTaxa++;
+      o.gestor = CURRENT_GESTOR;
+      o.solicitante = TR_SOLICITANTE[CURRENT_GESTOR] || CURRENT_GESTOR;
+      o.motivo = TR_MOTIVO;
+      o.criado_em = new Date(base + k).toISOString();   // mantem a ordem da planilha
+      const id = 't' + (base + k).toString(36) + Math.random().toString(36).slice(2, 6);
+      TR_ROWS[mkey][id] = o;
+      const res = await trPersist(id, mkey, o);
+      if (!res.ok) falhas++;
+    }
+    renderTransfTab(mkey);
+    trRefreshFech(mkey);
+    rpSetStatus('tr-status', novas.length + ' transferencia(s) importada(s) de ' + file.name + (semTaxa ? ' -- ' + semTaxa + ' sem taxa (custo nao calculado; edite para informar)' : '') +
+      (falhas ? ' -- ' + falhas + ' FALHARAM ao sincronizar (ficaram so neste navegador)' : '') + '.', falhas ? 'bad' : (semTaxa ? 'warn' : 'ok'));
+  } catch (e) {
+    console.error(e);
+    rpSetStatus('tr-status', 'Nao foi possivel importar: ' + e.message, 'bad');
   }
 }
 
