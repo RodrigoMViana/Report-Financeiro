@@ -5514,12 +5514,12 @@
           <div><label>Transferir folha variavel</label><select class="rp-input" id="tr-folha" onchange="trAtualizaCusto()"><option value="">Selecionar</option><option value="SIM">SIM</option><option value="NAO">NÃO</option></select></div>
         </div>
         <div class="tr-row tr-row-3">
-          <div><label>Projeto origem</label><input type="text" class="rp-input" id="tr-projorig" list="tr-projetos-list" placeholder="Ex: SBPEBR" onchange="trAutoTaxa()"></div>
+          <div><label>Projeto origem</label><input type="text" class="rp-input" id="tr-projorig" list="tr-projetos-list" placeholder="Codigo, ex: 22AP09" onchange="trAutoTaxa()"></div>
           <div><label>EDT origem</label><input type="text" class="rp-input" id="tr-edtorig" placeholder="Ex: 1.2.1"></div>
           <div><label>Empresa origem</label><select class="rp-input" id="tr-emporig" onchange="trSyncEmpresa()"><option value="">Selecionar</option><option value="A3">A3</option><option value="B2">B2</option></select></div>
         </div>
         <div class="tr-row tr-row-3">
-          <div><label>Projeto destino</label><input type="text" class="rp-input" id="tr-projdest" list="tr-projetos-list" placeholder="Ex: SBPEBR"></div>
+          <div><label>Projeto destino</label><input type="text" class="rp-input" id="tr-projdest" list="tr-projetos-list" placeholder="Codigo, ex: 22AP09"></div>
           <div><label>EDT destino</label><input type="text" class="rp-input" id="tr-edtdest" placeholder="Ex: 1.2.1"></div>
           <div><label>Empresa destino</label><select class="rp-input" id="tr-empdest" disabled><option value=""></option><option value="A3">A3</option><option value="B2">B2</option></select></div>
         </div>
@@ -7676,8 +7676,13 @@ async function aplicarParametrizacao() {
   if (btn) btn.disabled = true;
   if (statusEl) { statusEl.textContent = 'Aplicando...'; statusEl.classList.add('show'); }
 
+  // Grava SO os projetos alterados neste navegador (PARAM_PENDING). Antes gravava todos os projetos do DATA, de
+  // todos os gestores, com o que estava na memoria -- e um "Aplicar" de um navegador aberto ha mais tempo
+  // sobrescrevia o que outro gestor tinha acabado de parametrizar.
   const nowIso = new Date().toISOString();
-  DATA.forEach(function(p) {
+  const alterados = DATA.filter(function(p) { return PARAM_PENDING.has(p.code); });
+  const globais = PARAM_PENDING.has(RATEIO_GLOBAL_CODE);
+  alterados.forEach(function(p) {
     const params = getParams(p.code);
     try {
       localStorage.setItem(paramLocalKey(p.code, 'rateiotipo'), params.rateioTipo);
@@ -7685,27 +7690,31 @@ async function aplicarParametrizacao() {
       localStorage.setItem(paramLocalKey(p.code, 'rateiopct'), typeof params.rateioPctManual === 'number' ? String(params.rateioPctManual) : '');
     } catch (e) {}
   });
-  try {
-    localStorage.setItem(rateioPctLocalKey('ds'), String(RATEIO_PCT.ds));
-    localStorage.setItem(rateioPctLocalKey('vertical'), String(RATEIO_PCT.vertical));
-  } catch (e) {}
+  if (globais) {
+    try {
+      localStorage.setItem(rateioPctLocalKey('ds'), String(RATEIO_PCT.ds));
+      localStorage.setItem(rateioPctLocalKey('vertical'), String(RATEIO_PCT.vertical));
+    } catch (e) {}
+  }
 
   let syncError = null;
-  if (SUPABASE_CONFIGURED) {
+  if (SUPABASE_CONFIGURED && (alterados.length || globais)) {
     const rows = [];
-    DATA.forEach(function(p) {
+    alterados.forEach(function(p) {
       const params = getParams(p.code);
       rows.push({ code: paramComposite(p.code, 'rateiotipo'), month: 'PARAM', text: params.rateioTipo, updated_at: nowIso });
       rows.push({ code: paramComposite(p.code, 'impostopct'), month: 'PARAM', text: String(params.impostoPct || 0), updated_at: nowIso });
       rows.push({ code: paramComposite(p.code, 'rateiopct'), month: 'PARAM', text: typeof params.rateioPctManual === 'number' ? String(params.rateioPctManual) : '', updated_at: nowIso });
     });
-    rows.push({ code: rateioPctComposite('ds'), month: 'PARAM', text: String(RATEIO_PCT.ds), updated_at: nowIso });
-    rows.push({ code: rateioPctComposite('vertical'), month: 'PARAM', text: String(RATEIO_PCT.vertical), updated_at: nowIso });
+    if (globais) {
+      rows.push({ code: rateioPctComposite('ds'), month: 'PARAM', text: String(RATEIO_PCT.ds), updated_at: nowIso });
+      rows.push({ code: rateioPctComposite('vertical'), month: 'PARAM', text: String(RATEIO_PCT.vertical), updated_at: nowIso });
+    }
     const { error } = await sb.from('notes').upsert(rows, { onConflict: 'code,month' });
     syncError = error;
   }
 
-  PARAM_PENDING.clear();
+  if (!syncError) PARAM_PENDING.clear();   // com falha, continua pendente para tentar de novo
   updateAplicarButtonState();
   if (btn) btn.disabled = false;
 
@@ -8705,16 +8714,27 @@ function htmlUnescapeFicha(s) {
           .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 }
 
-function tokenizeFichaParagraphs(html) {
-  const tokens = [];
-  const re = /<p[^>]*>([\s\S]*?)<\/p>/g;
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    let t = m[1].replace(/<[^>]+>/g, '');
-    t = htmlUnescapeFicha(t).replace(/\u00a0/g, ' ').trim();
-    if (t !== '') tokens.push(t);
+// A ficha e lida por linhas e celulas da tabela (<tr>/<td>), mantendo as celulas vazias. Antes era lida como uma
+// sequencia de paragrafos, que descartava as celulas vazias e contava 16 paragrafos por linha: uma linha com celula
+// em branco (ex.: "Tipo de juro", que vem com "Acum Ant" vazio) desalinhava tudo dali para frente e o leitor passava
+// direto para os projetos seguintes, pegando a linha "Vendas" de outro projeto (nov/2026: 26 projetos errados).
+function fichaCelulaTexto(html) {
+  return htmlUnescapeFicha(html.replace(/<\/p>/gi, ' ').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ''))
+    .replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function fichaLinhasTabela(html) {
+  const linhas = [];
+  const reTr = /<tr[\s>][\s\S]*?<\/tr>/gi, reTd = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+  let mt;
+  while ((mt = reTr.exec(html)) !== null) {
+    const cels = [];
+    let mc;
+    reTd.lastIndex = 0;
+    while ((mc = reTd.exec(mt[0])) !== null) cels.push(fichaCelulaTexto(mc[1]));
+    if (cels.length) linhas.push(cels);
   }
-  return tokens;
+  return linhas;
 }
 
 const FICHA_MONTHS_PT = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
@@ -8722,71 +8742,61 @@ const FICHA_CODE_RE = /^(\d{2}AP\d{1,3})\s+(.*)$/;
 
 // Dois formatos: "Resumo" (varios projetos, em espanhol: Proyecto:/Conceptos, valores com centavos) e o
 // individual ISPR_005 (um projeto, em portugues: Projeto:/Conceitos, valores inteiros, sem centavos).
+// Cada linha de conceito tem: rotulo | Acum Ant | 12 meses | Total Ano | Total.
+// Conferencia de cada projeto: nos conceitos de fluxo (Vendas, Faturacao, Cobrancas, Total Custos) o "Total Ano"
+// tem que ser a soma dos 12 meses, e os 4 conceitos tem que existir -- senao o projeto vem com `problemas` e o
+// upload nao grava esse projeto (melhor nao atualizar do que gravar valor errado).
 function parseFichaHtml(html) {
   const ehProj = function(t) { return t === 'Proyecto:' || t === 'Projeto:'; };
-  const tokens = tokenizeFichaParagraphs(html);
   const results = {};
-  let i = 0;
-  const n = tokens.length;
-  while (i < n) {
-    if (ehProj(tokens[i])) {
-      const rawProj = tokens[i + 1] || '';
+  let cur = null;
+  fichaLinhasTabela(html).forEach(function(row) {
+    if (ehProj(row[0])) {
+      const rawProj = row[1] || '';
       const m = FICHA_CODE_RE.exec(rawProj);
       const code = m ? m[1] : rawProj;
-      const name = m ? m[2] : '';
-
-      let j = i + 2;
-      let conceptosIdx = -1;
-      while (j < n && !ehProj(tokens[j])) {
-        if (tokens[j] === 'Conceptos' || tokens[j] === 'Conceitos') { conceptosIdx = j; break; }
-        j++;
-      }
-
-      const months = {};
-      const custos = [];
-      let comCentavos = false;
-      if (conceptosIdx !== -1) {
-        // O bloco de um projeto tem varias sub-tabelas (Proveitos, Outros Proveitos, Costes),
-        // cada uma com seu proprio cabecalho "Conceptos" repetido -- por isso o scan precisa
-        // percorrer bem alem da primeira ocorrencia para chegar em "Total Custos".
-        let k = conceptosIdx + 16;
-        let scanned = 0;
-        let temCst = false, emCustos = false;
-        while (k < n && !ehProj(tokens[k]) && scanned < 400) {
-          const label = tokens[k];
-          const row = tokens.slice(k, k + 16);
-          if (row.length < 16) break;
-          // cabecalho de sub-tabela ("Conceptos/Costes/Custos | Acum Ant | Enero..."): a de custos do projeto e a
-          // primeira "Costes"/"Custos"; as linhas dela ate o 1o "Total Custos" sao o detalhe do custo
-          if (row[1] === 'Acum Ant') { emCustos = !temCst && (label === 'Costes' || label === 'Custos'); k += 16; scanned++; continue; }
-          if (emCustos && label !== 'Total Custos') custos.push({ d: label, vals: row.slice(2, 14) });
-          if (label === 'Total Custos') emCustos = false;
-          // "Dívidas (Impostos Incluídos)" e "Devedores Prod. Fat." (DPF) sao saldos no fim de cada mes
-          const ehDiv = /^D.{0,3}vidas/.test(label), ehDpf = label.indexOf('Devedores Prod') === 0;
-          if (label === 'Faturação' || label.indexOf('Cobranças') === 0 || label === 'Vendas' || label === 'Total Custos' || ehDiv || ehDpf) {
-            const vals = row.slice(2, 14);
-            const key = ehDiv ? 'div' : ehDpf ? 'dpf' : label === 'Faturação' ? 'fat' : (label.indexOf('Cobranças') === 0 ? 'cob' : (label === 'Vendas' ? 'ing' : 'cst'));
-            // a ficha individual tem um 2o "Total Custos" (Custos Corporativos), fora da margem: vale o 1o
-            if (!(key === 'cst' && temCst)) {
-              if (key === 'cst') temCst = true;
-              if (vals.some(function(v) { return String(v).indexOf(',') !== -1; })) comCentavos = true;
-              for (let mi = 0; mi < 12; mi++) {
-                const pt = FICHA_MONTHS_PT[mi];
-                if (!months[pt]) months[pt] = {};
-                months[pt][key] = vals[mi];
-              }
-            }
-          }
-          k += 16;
-          scanned++;
-        }
-      }
-      results[code] = { name: name, months: months, semCentavos: !comCentavos, custos: custos };
-      i = j;
-    } else {
-      i++;
+      cur = { name: m ? m[2] : '', months: {}, custos: [], comCentavos: false, temCst: false, emCustos: false, achou: {}, problemas: [] };
+      if (results[code]) results[code].problemas.push('projeto repetido no arquivo');
+      results[code] = cur;
+      return;
     }
-  }
+    if (!cur) return;
+    const label = row[0];
+    // cabecalho de sub-tabela ("Conceptos/Costes/Custos | Acum Ant | Enero..."): a de custos do projeto e a primeira
+    // "Costes"/"Custos"; as linhas dela ate o 1o "Total Custos" sao o detalhe do custo
+    if (row[1] === 'Acum Ant') { cur.emCustos = !cur.temCst && (label === 'Costes' || label === 'Custos'); return; }
+    if (row.length < 15) return;
+    const vals = row.slice(2, 14);
+    if (cur.emCustos && label !== 'Total Custos') cur.custos.push({ d: label, vals: vals });
+    if (label === 'Total Custos') cur.emCustos = false;
+    // "Dívidas (Impostos Incluídos)" e "Devedores Prod. Fat." (DPF) sao saldos no fim de cada mes
+    const ehDiv = /^D.{0,3}vidas/.test(label), ehDpf = label.indexOf('Devedores Prod') === 0;
+    if (!(label === 'Faturação' || label.indexOf('Cobranças') === 0 || label === 'Vendas' || label === 'Total Custos' || ehDiv || ehDpf)) return;
+    const key = ehDiv ? 'div' : ehDpf ? 'dpf' : label === 'Faturação' ? 'fat' : (label.indexOf('Cobranças') === 0 ? 'cob' : (label === 'Vendas' ? 'ing' : 'cst'));
+    // a ficha individual tem um 2o "Total Custos" (Custos Corporativos), fora da margem: vale o 1o
+    if (cur.achou[key]) return;
+    cur.achou[key] = true;
+    if (key === 'cst') cur.temCst = true;
+    const temCent = vals.some(function(v) { return String(v).indexOf(',') !== -1; });
+    if (temCent) cur.comCentavos = true;
+    if (key !== 'div' && key !== 'dpf' && row[14]) {
+      const soma = vals.reduce(function(s, v) { return s + parseFichaNum(v); }, 0);
+      const tol = temCent ? 1.01 : 7;   // sem centavos cada mes vem arredondado
+      if (Math.abs(soma - parseFichaNum(row[14])) > tol) cur.problemas.push(label + ': a soma dos meses nao bate com o Total Ano');
+    }
+    for (let mi = 0; mi < 12; mi++) {
+      const pt = FICHA_MONTHS_PT[mi];
+      if (!cur.months[pt]) cur.months[pt] = {};
+      cur.months[pt][key] = vals[mi];
+    }
+  });
+  const nomes = { ing: 'Vendas', fat: 'Faturação', cob: 'Cobranças', cst: 'Total Custos' };
+  Object.keys(results).forEach(function(code) {
+    const r = results[code];
+    const faltam = ['ing', 'fat', 'cob', 'cst'].filter(function(k) { return !r.achou[k]; });
+    if (faltam.length) r.problemas.push('linha(s) nao encontrada(s): ' + faltam.map(function(k) { return nomes[k]; }).join(', '));
+    results[code] = { name: r.name, months: r.months, semCentavos: !r.comCentavos, custos: r.custos, problemas: r.problemas };
+  });
   return results;
 }
 
@@ -8820,6 +8830,7 @@ async function handleFichaFiles(event) {
 
   const dataCodes = new Set(DATA.map(p => p.code));
   const merged = {};
+  const rejeitados = [];   // projetos que nao passaram na conferencia da leitura: nao sao gravados
   let parseErrors = 0;
 
   for (const file of files) {
@@ -8831,17 +8842,23 @@ async function handleFichaFiles(event) {
       const parsed = parseFichaHtml(html);
       Object.keys(parsed).forEach(code => {
         if (!dataCodes.has(code)) return; // ignora projetos fora do dashboard
+        if (parsed[code].problemas.length) { rejeitados.push(code + ' (' + file.name + '): ' + parsed[code].problemas.join('; ')); delete merged[code]; return; }
         merged[code] = parsed[code];
       });
     } catch (e) {
       parseErrors++;
     }
   }
+  const avisarRejeitados = function() {
+    if (rejeitados.length) uiAlert('Estes projetos NAO foram atualizados, porque a leitura da ficha nao passou na conferencia ' +
+      '(os valores que ja estavam ficam como estao):\n\n- ' + rejeitados.join('\n- ') + '\n\nAvise para ajustar o leitor da ficha.', { titulo: 'Fichas com problema' });
+  };
 
   const foundCodes = Object.keys(merged);
   if (!foundCodes.length) {
     statusEl.className = 'email-status bad';
-    statusEl.textContent = 'Nao encontrei nenhum projeto reconhecido nos arquivos selecionados.';
+    statusEl.textContent = rejeitados.length ? 'Nenhum projeto atualizado: ' + rejeitados.length + ' com problema na leitura.' : 'Nao encontrei nenhum projeto reconhecido nos arquivos selecionados.';
+    avisarRejeitados();
     return;
   }
 
@@ -8876,10 +8893,12 @@ async function handleFichaFiles(event) {
 
   const changes = buildFichaChanges(foundCodes, merged, oldSnapshot);
   showFichaChangesModal(changes, foundCodes.length, parseErrors);
+  avisarRejeitados();
+  const txtRejeitados = rejeitados.length ? ' ATENCAO: ' + rejeitados.length + ' projeto(s) nao atualizado(s) por problema na leitura.' : '';
 
   if (!SUPABASE_CONFIGURED) {
     statusEl.className = 'email-status ok';
-    statusEl.textContent = foundCodes.length + ' projeto(s) atualizados neste navegador (Supabase nao configurado, nao sincroniza).';
+    statusEl.textContent = foundCodes.length + ' projeto(s) atualizados neste navegador (Supabase nao configurado, nao sincroniza).' + txtRejeitados;
     return;
   }
 
@@ -8902,10 +8921,10 @@ async function handleFichaFiles(event) {
   sb.from('notes').upsert(rows, { onConflict: 'code,month' }).then(({ error }) => {
     if (error) {
       statusEl.className = 'email-status bad';
-      statusEl.textContent = 'Atualizado neste navegador, mas falhou ao sincronizar (' + foundCodes.length + ' projetos). ' + (parseErrors ? parseErrors + ' arquivo(s) com erro.' : '');
+      statusEl.textContent = 'Atualizado neste navegador, mas falhou ao sincronizar (' + foundCodes.length + ' projetos). ' + (parseErrors ? parseErrors + ' arquivo(s) com erro.' : '') + txtRejeitados;
     } else {
-      statusEl.className = 'email-status ok';
-      statusEl.textContent = foundCodes.length + ' projeto(s) atualizados e sincronizados ' + new Date().toLocaleTimeString('pt-BR') + (parseErrors ? ' (' + parseErrors + ' arquivo(s) ignorado(s))' : '');
+      statusEl.className = rejeitados.length ? 'email-status bad' : 'email-status ok';
+      statusEl.textContent = foundCodes.length + ' projeto(s) atualizados e sincronizados ' + new Date().toLocaleTimeString('pt-BR') + (parseErrors ? ' (' + parseErrors + ' arquivo(s) ignorado(s))' : '') + txtRejeitados;
     }
   });
 }
@@ -9756,10 +9775,11 @@ function renderTransfTab(mkey) {
   if (!list) return;
   if (!TR_EDIT_ID && !TR_DUPLICANDO) trFillMesComp(mkey);
   const dl = document.getElementById('tr-projetos-list');
-  if (dl && !dl.childElementCount) {
-    const ops = {};
-    DATA.forEach(function(p) { if (p.operacion) ops[p.operacion] = p.code + ' - ' + p.name; });
-    dl.innerHTML = Object.keys(ops).sort().map(function(o) { return '<option value="' + rpEsc(o) + '">' + rpEsc(ops[o]) + '</option>'; }).join('');
+  if (dl && dl.childElementCount !== DATA.length) {
+    // sugestoes pelo CODIGO do projeto (a operacion so aparece no rotulo, para ajudar a achar)
+    dl.innerHTML = DATA.slice().sort(function(a, b) { return a.code.localeCompare(b.code); }).map(function(p) {
+      return '<option value="' + rpEsc(p.code) + '">' + rpEsc(p.name + (p.operacion ? ' (' + p.operacion + ')' : '')) + '</option>';
+    }).join('');
   }
   const rows = trLinhasOrdenadas(mkey);
   trRenderFolhaInfo();
@@ -9774,7 +9794,7 @@ function renderTransfTab(mkey) {
     <tbody>${rows.map(function(x) {
       const r = x.r;
       return '<tr><td>' + rpEsc(r.matricula) + '</td><td class="num">' + rpNum(r.horas, 2) + '</td><td>' + rpEsc(r.mescomp) + '</td><td>' + (r.folha === 'NAO' ? 'NÃO' : rpEsc(r.folha)) +
-        '</td><td>' + rpEsc(r.projorig) + '</td><td>' + rpEsc(r.edtorig) + '</td><td>' + rpEsc(r.emporig) + '</td><td>' + rpEsc(r.projdest) + '</td><td>' + rpEsc(r.edtdest) + '</td><td>' + rpEsc(r.empdest) +
+        '</td><td>' + trProjetoTxt(r.projorig) + '</td><td>' + rpEsc(r.edtorig) + '</td><td>' + rpEsc(r.emporig) + '</td><td>' + trProjetoTxt(r.projdest) + '</td><td>' + rpEsc(r.edtdest) + '</td><td>' + rpEsc(r.empdest) +
         '</td><td class="num">' + (r.taxa ? brl(r.taxa) : '<span style="color:var(--warn);">sem taxa</span>') + '</td><td class="num">' + (r.custoHoras ? brl(r.custoHoras) : '-') + '</td><td class="num">' + (r.desmant != null ? brl(r.desmant) : '-') +
         '</td><td class="num" title="' + rpEsc(r.folhaInfo || '') + '">' + (r.folhaVar != null ? brl(r.folhaVar) : '-') + '</td><td class="num"><b>' + (r.custo ? brl(r.custo) : '-') + '</b>' +
         '</td><td><a href="#" onclick="trEditar(\'' + x.id + '\'); return false;">Editar</a><a href="#" onclick="trEditar(\'' + x.id + '\', true); return false;" title="Leva os dados para o formulario como uma nova transferencia">Duplicar</a><a href="#" style="color:var(--bad);" onclick="trExcluir(\'' + x.id + '\'); return false;">Excluir</a></td></tr>';
@@ -9800,8 +9820,15 @@ async function trSalvarForm() {
   const o = {};
   TR_FIELDS.forEach(function(f) { o[f] = trFormEl(f).value.trim(); });
   o.horas = parseBRNum(o.horas);
-  o.projorig = o.projorig.toUpperCase();
-  o.projdest = o.projdest.toUpperCase();
+  // grava sempre o codigo do projeto (operacion digitada vira codigo; operacion de varios projetos nao passa)
+  const nOrig = trNormalizarProjeto(o.projorig), nDest = trNormalizarProjeto(o.projdest);
+  const amb = [[o.projorig, nOrig], [o.projdest, nDest]].filter(function(x) { return x[1].ambiguo; });
+  if (amb.length) {
+    rpSetStatus('tr-form-status', amb.map(function(x) { return x[0].toUpperCase() + ' e de mais de um projeto (' + x[1].ambiguo.join(', ') + ')'; }).join('; ') + '. Informe o codigo do projeto.', 'bad');
+    return;
+  }
+  o.projorig = nOrig.codigo;
+  o.projdest = nDest.codigo;
   const faltando = [];
   if (!o.matricula) faltando.push('matricula');
   if (!o.horas) faltando.push('horas');
@@ -9842,7 +9869,8 @@ function trEditar(id, duplicar) {
   trFillMesComp(mkey, r.mescomp);
   TR_FIELDS.forEach(function(f) {
     if (f === 'mescomp') return;
-    trFormEl(f).value = f === 'horas' ? rpNum(r.horas, 2) : (r[f] || '');
+    const proj = (f === 'projorig' || f === 'projdest') ? trProjetoSite(r[f]) : null;   // antiga pela operacion -> codigo
+    trFormEl(f).value = f === 'horas' ? rpNum(r.horas, 2) : (proj ? proj.code : (r[f] || ''));
   });
   trSyncEmpresa();
   trFormEl('taxa').value = r.taxa ? rpNum(r.taxa, 2) : '';
@@ -9872,11 +9900,38 @@ async function trExcluir(id) {
 // ---------- Custo das transferencias (taxa x horas) ----------
 function trMkeyDeMes(nome) { return MESES.find(function(m) { return TR_MES_NOMES[m] === nome; }) || null; }
 
-// Projeto do site a partir do texto da transferencia (codigo 22AP09 ou operacion, ex.: SBPEBR).
+// Projeto do site a partir do texto da transferencia. Vale o CODIGO (22AP09). A operacion (ex.: BR-22SUSTENTACAOTJPB)
+// e repetida em varios projetos (22AP26 e 23AP09...), entao so serve para transferencias antigas e quando aponta para
+// um unico projeto -- antes pegava o primeiro projeto com aquela operacion e o custo podia cair no projeto errado.
+function trProjetosDaOperacion(t) {
+  return DATA.filter(function(p) { return String(p.operacion || '').toUpperCase() === t; });
+}
 function trProjetoSite(txt) {
   const t = String(txt || '').trim().toUpperCase();
   if (!t) return null;
-  return DATA.find(function(p) { return p.code.toUpperCase() === t || String(p.operacion || '').toUpperCase() === t; }) || null;
+  const porCodigo = DATA.find(function(p) { return p.code.toUpperCase() === t; });
+  if (porCodigo) return porCodigo;
+  const porOp = trProjetosDaOperacion(t);
+  return porOp.length === 1 ? porOp[0] : null;
+}
+// Texto digitado/importado -> codigo do projeto. {codigo} quando acha; {ambiguo: [codigos]} quando e uma operacion de
+// varios projetos; {codigo: texto} quando nao e projeto do site (ex.: projeto de outra area), que fica como veio.
+function trNormalizarProjeto(txt) {
+  const t = String(txt || '').trim().toUpperCase();
+  if (!t) return { codigo: '' };
+  const porCodigo = DATA.find(function(p) { return p.code.toUpperCase() === t; });
+  if (porCodigo) return { codigo: porCodigo.code };
+  const porOp = trProjetosDaOperacion(t);
+  if (porOp.length === 1) return { codigo: porOp[0].code };
+  if (porOp.length > 1) return { ambiguo: porOp.map(function(p) { return p.code; }) };
+  return { codigo: t };
+}
+// Na lista: transferencia antiga gravada pela operacion aparece com o codigo e a operacion entre parenteses.
+function trProjetoTxt(txt) {
+  const p = trProjetoSite(txt);
+  const t = String(txt || '').trim().toUpperCase();
+  if (p && p.code !== t) return rpEsc(p.code) + ' <span style="color:var(--slate);font-size:11px;">(' + rpEsc(t) + ')</span>';
+  return rpEsc(txt);
 }
 
 // Taxa da pessoa: planilha de pessoas da Revisao (PEOPLE+) > taxa do mes de competencia na aba HC da PR
@@ -10313,7 +10368,10 @@ async function trExportarArquivo(inp) {
   const mkey = document.getElementById('month-select').value;
   rpSetStatus('tr-status', 'Preenchendo ' + file.name + '...', null);
   try {
-    const out = await trPreencherPlanilha(file, trLinhasOrdenadas(mkey).map(function(x) { return x.r; }));
+    const out = await trPreencherPlanilha(file, trLinhasOrdenadas(mkey).map(function(x) {
+      // planilha sai sempre com o codigo do projeto (transferencias antigas podem estar gravadas pela operacion)
+      return Object.assign({}, x.r, { projorig: trCodigoProjeto(x.r.projorig), projdest: trCodigoProjeto(x.r.projdest) });
+    }));
     const ext = /\.xlsm$/i.test(file.name) ? '.xlsm' : '.xlsx';
     const nome = file.name.replace(/\.(xlsx|xlsm)$/i, '') + '_preenchida' + ext;
     const a = document.createElement('a');
@@ -10343,8 +10401,9 @@ function trImportMes(v, mkeyPadrao) {
   const m = MESES.find(function(k) { const n = revNorm(TR_MES_NOMES[k]); return n === t || (t.length >= 3 && n.indexOf(t.slice(0, 3)) === 0); });
   return m ? TR_MES_NOMES[m] : null;
 }
+function trCodigoProjeto(txt) { const p = trProjetoSite(txt); return p ? p.code : String(txt || '').trim().toUpperCase(); }
 function trImportChave(o) {
-  return [revMat(o.matricula), (Math.round((o.horas || 0) * 100) / 100).toFixed(2), revNorm(o.mescomp), revNorm(o.projorig), revNorm(o.edtorig), revNorm(o.projdest), revNorm(o.edtdest)].join('|');
+  return [revMat(o.matricula), (Math.round((o.horas || 0) * 100) / 100).toFixed(2), revNorm(o.mescomp), revNorm(trCodigoProjeto(o.projorig)), revNorm(o.edtorig), revNorm(trCodigoProjeto(o.projdest)), revNorm(o.edtdest)].join('|');
 }
 
 async function trImportar(inp) {
@@ -10373,7 +10432,7 @@ async function trImportar(inp) {
 
     const meuSolic = revNorm(TR_SOLICITANTE[CURRENT_GESTOR] || CURRENT_GESTOR);
     const existentes = new Set(trLinhasOrdenadas(mkey).map(function(x) { return trImportChave(x.r); }));
-    const novas = [], incompletas = [], outros = [], repetidas = [];
+    const novas = [], incompletas = [], outros = [], repetidas = [], ambiguas = [];
     const val = function(r, f) { return col[f] === undefined ? null : r[col[f]]; };
     const txt = function(v) { return v === null || v === undefined ? '' : String(v).trim(); };
     for (let i = h + 1; i < rows.length; i++) {
@@ -10391,6 +10450,10 @@ async function trImportar(inp) {
         projdest: txt(val(r, 'projdest')).toUpperCase(), edtdest: txt(val(r, 'edtdest')), empdest: revNorm(val(r, 'empdest')),
       };
       if (!o.empdest) o.empdest = o.emporig === 'A3' ? 'B2' : (o.emporig === 'B2' ? 'A3' : '');
+      // projeto sempre pelo codigo: operacion de um so projeto vira o codigo; de varios projetos fica de fora
+      const nO = trNormalizarProjeto(o.projorig), nD = trNormalizarProjeto(o.projdest);
+      if (nO.ambiguo || nD.ambiguo) { ambiguas.push(linha + ' (' + (nO.ambiguo ? o.projorig : o.projdest) + ')'); continue; }
+      o.projorig = nO.codigo; o.projdest = nD.codigo;
       if (!o.matricula || !o.horas || !o.mescomp || !o.folha || !o.projorig || !o.projdest || !o.edtorig || !o.edtdest || !o.emporig) { incompletas.push(linha); continue; }
       const chave = trImportChave(o);
       if (existentes.has(chave)) { repetidas.push(linha); continue; }
@@ -10400,7 +10463,8 @@ async function trImportar(inp) {
     const lista = function(arr) { return arr.slice(0, 15).join(', ') + (arr.length > 15 ? '...' : ''); };
     const resumo = (incompletas.length ? '\n- ' + incompletas.length + ' incompleta(s) (linhas ' + lista(incompletas) + ')' : '') +
       (repetidas.length ? '\n- ' + repetidas.length + ' ja na lista (linhas ' + lista(repetidas) + ')' : '') +
-      (outros.length ? '\n- ' + outros.length + ' de outro solicitante (linhas ' + lista(outros) + ')' : '');
+      (outros.length ? '\n- ' + outros.length + ' de outro solicitante (linhas ' + lista(outros) + ')' : '') +
+      (ambiguas.length ? '\n- ' + ambiguas.length + ' com operacion de mais de um projeto, sem o codigo (linhas ' + lista(ambiguas) + ') -- troque pelo codigo do projeto' : '');
     if (!novas.length) {
       rpSetStatus('tr-status', 'Nenhuma transferencia nova em ' + file.name + '.', 'warn');
       uiAlert('Nenhuma transferencia nova para importar da aba ' + nomeAba + '.' + (resumo ? '\nIgnoradas:' + resumo : ''), { titulo: 'Importar transferencias' });
