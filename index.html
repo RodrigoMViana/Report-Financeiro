@@ -6982,7 +6982,7 @@ function showTab(name) {
   // A Revisao confere as horas com o Rateio: redesenha ao abrir, para refletir edicoes feitas no Rateio.
   if (name === 'revisao' && typeof renderRevisaoTab === 'function') renderRevisaoTab(document.getElementById('month-select').value);
   if (name === 'dedicacao') renderDedicacaoTab(document.getElementById('month-select').value);
-  if (name === 'painel') renderPainel(document.getElementById('month-select').value);
+  if (name === 'painel') { renderPainel(document.getElementById('month-select').value); painelVivoLigar(); }
 }
 
 function computeProgressRow(p, mkey, prefix, metaField, fichaField) {
@@ -7476,6 +7476,7 @@ function fechAggregates(mkey) {
 }
 
 function updateFechKpis(mkey) {
+  if (typeof painelAgendar === 'function') painelAgendar();   // Dashboard acompanha toda alteracao do Fechamento
   const agg = fechAggregates(mkey);
   updateConsolidadoNote('fech', getConsolidadoProjects('fech'));
   const metaTotalEl = document.getElementById('fech-meta-total');
@@ -7633,6 +7634,51 @@ function painelAbrirFechamento(code) {
   }, 50);
 }
 function painelBaseNome() { return PAINEL.base === 'fc' ? 'Pre Cierre' : 'Meta PR'; }
+
+// Dashboard sempre atualizado. Neste navegador: toda alteracao do Fechamento passa por updateFechKpis, que chama
+// painelAgendar (redesenha em seguida, agrupando digitacao rapida). De outra pessoa/navegador: com o Dashboard
+// aberto, a cada 20 s e ao voltar para a janela, pergunta ao banco so o que mudou desde a ultima vez (code +
+// updated_at); se mudou algo do fechamento, recarrega esses dados e redesenha. Nada e gravado aqui.
+var PAINEL_TIMER = null;
+function painelAgendar() {
+  if (!painelAtivo()) return;
+  clearTimeout(PAINEL_TIMER);
+  PAINEL_TIMER = setTimeout(function() { PAINEL_TIMER = null; if (painelAtivo()) renderPainel(painelMkey()); }, 150);
+}
+var PAINEL_VIVO = { cursor: null, timer: null, ocupado: false, ultima: null };
+var PAINEL_RELEVANTE = /_fech$|::fech_realoc$|::outros_items$|::ficha_|::param_|::zerado_|^__GLOBAL__::rateio_pct|^__TRANSF__::|::pr_cache$|::pc_cache$/;
+async function painelChecarMudancas() {
+  if (!SUPABASE_CONFIGURED || !painelAtivo() || document.hidden || PAINEL_VIVO.ocupado) return;
+  PAINEL_VIVO.ocupado = true;
+  try {
+    if (!PAINEL_VIVO.cursor) {   // 1a vez: so marca o ponto de partida (os dados acabaram de ser carregados)
+      const r0 = await sb.from('notes').select('updated_at').order('updated_at', { ascending: false }).limit(1);
+      if (!r0.error && r0.data && r0.data[0]) PAINEL_VIVO.cursor = r0.data[0].updated_at;
+      return;
+    }
+    // as mais recentes primeiro: o cursor pula direto para a ultima (upload de ficha grava centenas de linhas de uma vez)
+    const r = await sb.from('notes').select('code,updated_at').gt('updated_at', PAINEL_VIVO.cursor).order('updated_at', { ascending: false }).limit(1000);
+    if (r.error || !r.data || !r.data.length) return;
+    PAINEL_VIVO.cursor = r.data[0].updated_at;
+    if (!r.data.some(function(x) { return PAINEL_RELEVANTE.test(x.code); })) return;
+    REDE_RECENTE = {};
+    const cargas = [loadFichaOverridesFromSupabase(), loadExtraFromSupabase(), loadOutrosItemsFromSupabase(), realocCarregarTodos(), loadPrPcCacheFromSupabase()];
+    if (!PARAM_PENDING.size) cargas.push(loadParamsFromSupabase());   // nao atropela rascunho da Parametrizacao
+    await comRenderUnico(cargas);
+    await loadTransfMonth(painelMkey());
+    painelAgendar();
+  } catch (e) {
+    console.warn('Dashboard: nao foi possivel checar alteracoes', e);
+  } finally {
+    PAINEL_VIVO.ocupado = false;
+  }
+}
+function painelVivoLigar() {
+  if (!PAINEL_VIVO.timer) PAINEL_VIVO.timer = setInterval(painelChecarMudancas, 20000);
+  painelChecarMudancas();
+}
+document.addEventListener('visibilitychange', function() { if (!document.hidden) painelChecarMudancas(); });
+window.addEventListener('focus', function() { painelChecarMudancas(); });
 
 // Linhas de custo da ficha agrupadas em categorias executivas (os dois formatos de ficha tem rotulos diferentes:
 // o Resumo vem agregado, a individual ISPR_005 detalhada -- ex.: horas extras so aparecem na individual).
@@ -7810,7 +7856,8 @@ function renderPainel(mkey) {
   const filtros = '<div class="pn-filtros">' +
     '<div class="pn-ctl"><span>Comparar margem com</span>' + painelSeg('base', [['pr', 'Meta PR'], ['fc', 'Pre Cierre']]) + '</div>' +
     '<div class="pn-ctl"><span>Considerar em linha ate</span><input type="text" inputmode="decimal" class="rp-input" style="width:120px;text-align:right;" value="' + rpNum(min, 2) + '" onchange="painelSetMin(this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" title="Desvios de margem menores que este valor (R$) contam como em linha"></div>' +
-    '<div class="pn-ctl" style="margin-left:auto;text-align:right;"><span>' + escHtml(mesNome) + '</span><b style="color:var(--navy);font-size:15px;">' + escHtml(CURRENT_GESTOR) + '</b></div>' +
+    '<div class="pn-ctl" style="margin-left:auto;text-align:right;"><span>' + escHtml(mesNome) + '</span><b style="color:var(--navy);font-size:15px;">' + escHtml(CURRENT_GESTOR) + '</b>' +
+      '<span style="text-transform:none;letter-spacing:0;font-weight:500;" title="Atualiza sozinho a cada alteracao do Fechamento e, com o Dashboard aberto, confere o banco a cada 20 s">&#9679; ao vivo &middot; ' + new Date().toLocaleTimeString('pt-BR') + '</span></div>' +
     '</div>';
 
   const validas = linhas.filter(function(x) { return x.f !== null; });
