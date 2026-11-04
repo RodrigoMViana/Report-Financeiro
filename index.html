@@ -39,7 +39,21 @@
   .tab-btn.active { color:var(--navy); border-bottom-color:var(--navy); }
   .main-tabs { flex-wrap:wrap; }
   .tab-btn { white-space:nowrap; }
-  @media (max-width: 1200px) { .tab-btn { padding:12px 13px; } }   /* 9 abas numa linha a partir de ~1000px */
+  /* grupos de abas (Fechamento / Revisao): nome + setinha que abre o menu */
+  .tab-group { position:relative; display:flex; align-items:stretch; border-bottom:3px solid transparent; margin-bottom:-2px; }
+  .tab-group .tab-btn { border-bottom:none; margin-bottom:0; padding-right:6px; }
+  .tab-group.active { border-bottom-color:var(--navy); }
+  .tab-group.active .tab-btn { color:var(--navy); }
+  .tab-sub { font-weight:500; color:var(--slate); margin-left:6px; }
+  .tab-sub:empty { display:none; }
+  .tab-caret { background:none; border:none; cursor:pointer; color:var(--slate); font-size:13px; padding:12px 12px 12px 4px; font-family:inherit; }
+  .tab-caret:hover, .tab-group.menu-open .tab-caret { color:var(--navy); }
+  .tab-menu { display:none; position:absolute; top:100%; left:0; z-index:60; min-width:200px; margin-top:3px; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 8px 24px rgba(15,23,42,0.12); padding:6px; }
+  .tab-group.menu-open .tab-menu { display:block; }
+  .tab-menu button { display:block; width:100%; text-align:left; background:none; border:none; padding:9px 12px; border-radius:6px; font-size:14px; font-weight:600; color:var(--slate); cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .tab-menu button:hover { background:var(--bg); color:var(--navy); }
+  .tab-menu button.active { color:var(--navy); background:var(--bg); }
+  .tab-menu button.active::after { content:' \2713'; }
   .tab-panel { display:none; }
   .tab-panel.active { display:block; }
   .progress-row { background:#fff; border:1px solid var(--border); border-radius:10px; padding:16px 20px; margin-bottom:10px; }
@@ -210,7 +224,7 @@
   .dedi-badge.neutral { background:var(--bg); color:var(--slate); }
 
   @media print {
-    #tab-rateio, .tab-btn[data-tab="rateio"], #tab-transferencias, .tab-btn[data-tab="transferencias"], #tab-revisao, .tab-btn[data-tab="revisao"] { display:none !important; }
+    #tab-rateio, #tab-transferencias, #tab-revisao, .tab-menu { display:none !important; }
     .report-bar, .email-panel, .month-picker, .chevron, .obs-toolbar { display:none !important; }
     .project-card summary { cursor:default; }
     body { background:#fff; }
@@ -381,19 +395,32 @@
     </div>
   </div>
 
+  <!-- Abas agrupadas: o nome do grupo abre a 1a aba dele; a setinha abre o menu com as outras (TAB_GRUPOS) -->
   <div class="main-tabs">
-    <button type="button" class="tab-btn active" data-tab="geral" onclick="showTab('geral')">Comparativo</button>
+    <div class="tab-group active" data-group="fech">
+      <button type="button" class="tab-btn tab-group-btn" onclick="showTab('fechamento')">Fechamento<span class="tab-sub" id="tab-sub-fech"></span></button>
+      <button type="button" class="tab-caret" onclick="tabMenuToggle('fech', event)" aria-label="Escolher aba do Fechamento" aria-haspopup="true">&#9662;</button>
+      <div class="tab-menu" id="tab-menu-fech" role="menu">
+        <button type="button" role="menuitem" class="active" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
+        <button type="button" role="menuitem" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
+        <button type="button" role="menuitem" data-tab="transferencias" onclick="showTab('transferencias')">&#128274; Transferencias</button>
+      </div>
+    </div>
+    <div class="tab-group" data-group="rev">
+      <button type="button" class="tab-btn tab-group-btn" onclick="showTab('geral')">Revisao<span class="tab-sub" id="tab-sub-rev"></span></button>
+      <button type="button" class="tab-caret" onclick="tabMenuToggle('rev', event)" aria-label="Escolher aba da Revisao" aria-haspopup="true">&#9662;</button>
+      <div class="tab-menu" id="tab-menu-rev" role="menu">
+        <button type="button" role="menuitem" data-tab="geral" onclick="showTab('geral')">Comparativo</button>
+        <button type="button" role="menuitem" data-tab="dedicacao" onclick="showTab('dedicacao')">Dedicacao</button>
+        <button type="button" role="menuitem" data-tab="rateio" onclick="showTab('rateio')">&#128274; Rateio</button>
+        <button type="button" role="menuitem" data-tab="revisao" onclick="showTab('revisao')">&#128274; Revisao</button>
+      </div>
+    </div>
     <button type="button" class="tab-btn" data-tab="faturamento" onclick="showTab('faturamento')">Faturamento</button>
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
-    <button type="button" class="tab-btn" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
-    <button type="button" class="tab-btn" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
-    <button type="button" class="tab-btn" data-tab="dedicacao" onclick="showTab('dedicacao')">Dedicacao</button>
-    <button type="button" class="tab-btn" data-tab="transferencias" onclick="showTab('transferencias')">&#128274; Transferencias</button>
-    <button type="button" class="tab-btn" data-tab="rateio" onclick="showTab('rateio')">&#128274; Rateio</button>
-    <button type="button" class="tab-btn" data-tab="revisao" onclick="showTab('revisao')">&#128274; Revisao</button>
   </div>
 
-  <div id="tab-geral" class="tab-panel active">
+  <div id="tab-geral" class="tab-panel">
 
   <div class="obs-toolbar" style="justify-content:flex-end; margin-bottom:20px;">
     <button id="btn-relatorio-pdf" onclick="exportRelatorioPDF()">Exportar relatorio (PDF)</button>
@@ -5400,7 +5427,7 @@
     <div id="cob-projects-list"></div>
   </div>
 
-  <div id="tab-fechamento" class="tab-panel">
+  <div id="tab-fechamento" class="tab-panel active">
     <div class="small-note" id="fech-consolidado-note" style="margin-bottom:10px;"></div>
     <div class="kpi-grid kpi-grid-3">
       <div class="kpi-card">
@@ -6848,12 +6875,42 @@ function clearProjectFilter() {
   filterProjects();
 }
 
+// Abas agrupadas: Fechamento (Fechamento, Parametrizacao, Transferencias) e Revisao (Comparativo, Dedicacao, Rateio,
+// Revisao). O botao do grupo mostra ao lado o nome da aba aberta quando for diferente do nome do grupo.
+var TAB_GRUPOS = {
+  fech: { nome: 'Fechamento', abas: ['fechamento', 'parametrizacao', 'transferencias'] },
+  rev: { nome: 'Revisao', abas: ['geral', 'dedicacao', 'rateio', 'revisao'] }
+};
+var TAB_NOMES = { geral: 'Comparativo', faturamento: 'Faturamento', cobro: 'Cobro', fechamento: 'Fechamento', parametrizacao: 'Parametrizacao',
+  dedicacao: 'Dedicacao', transferencias: 'Transferencias', rateio: 'Rateio', revisao: 'Revisao' };
+
+function tabMenuFechar() {
+  document.querySelectorAll('.tab-group.menu-open').forEach(function(g) { g.classList.remove('menu-open'); });
+}
+function tabMenuToggle(grupo, ev) {
+  if (ev) ev.stopPropagation();
+  var g = document.querySelector('.tab-group[data-group="' + grupo + '"]');
+  if (!g) return;
+  var abrir = !g.classList.contains('menu-open');
+  tabMenuFechar();
+  if (abrir) g.classList.add('menu-open');
+}
+document.addEventListener('click', function(e) { if (!e.target.closest || !e.target.closest('.tab-menu')) tabMenuFechar(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') tabMenuFechar(); });
+
 function showTab(name) {
-  ['geral', 'faturamento', 'cobro', 'fechamento', 'parametrizacao', 'dedicacao', 'transferencias', 'rateio', 'revisao'].forEach(function(t) {
+  tabMenuFechar();
+  Object.keys(TAB_NOMES).forEach(function(t) {
     var panel = document.getElementById('tab-' + t);
     if (panel) panel.classList.toggle('active', t === name);
-    var btn = document.querySelector('.tab-btn[data-tab="' + t + '"]');
-    if (btn) btn.classList.toggle('active', t === name);
+    document.querySelectorAll('[data-tab="' + t + '"]').forEach(function(btn) { btn.classList.toggle('active', t === name); });
+  });
+  Object.keys(TAB_GRUPOS).forEach(function(k) {
+    var gr = TAB_GRUPOS[k], ativo = gr.abas.indexOf(name) !== -1;
+    var g = document.querySelector('.tab-group[data-group="' + k + '"]');
+    if (g) g.classList.toggle('active', ativo);
+    var sub = document.getElementById('tab-sub-' + k);
+    if (sub) sub.textContent = ativo && TAB_NOMES[name] !== gr.nome ? '› ' + TAB_NOMES[name] : '';
   });
   // A Revisao confere as horas com o Rateio: redesenha ao abrir, para refletir edicoes feitas no Rateio.
   if (name === 'revisao' && typeof renderRevisaoTab === 'function') renderRevisaoTab(document.getElementById('month-select').value);
