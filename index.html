@@ -63,7 +63,7 @@
   .pn-seg button { border:none; background:none; padding:6px 11px; border-radius:6px; font-size:13px; font-weight:600; color:var(--slate); cursor:pointer; font-family:inherit; white-space:nowrap; }
   .pn-seg button:hover { color:var(--navy); }
   .pn-seg button.on { background:#fff; color:var(--navy); box-shadow:0 1px 3px rgba(15,23,42,0.12); }
-  .pn-grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:18px; margin-bottom:18px; }
+  .pn-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; margin-bottom:18px; align-items:start; }
   @media (max-width:900px) { .pn-grid { grid-template-columns:1fr; } }
   .pn-card { background:#fff; border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
   .pn-card h3 { margin:0; font-size:15px; color:var(--navy); }
@@ -86,16 +86,25 @@
   .pn-legenda { display:flex; gap:14px; font-size:12px; color:var(--slate); flex-wrap:wrap; }
   .pn-legenda i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
   .pn-vazio { font-size:13px; color:var(--slate); padding:10px 6px; }
-  .pn-mapa { width:100%; border-collapse:separate; border-spacing:0 2px; font-size:13px; }
-  .pn-mapa th { font-size:11px; text-transform:uppercase; letter-spacing:0.4px; color:var(--slate); font-weight:700; text-align:right; padding:6px 8px; cursor:pointer; white-space:nowrap; user-select:none; }
-  .pn-mapa th:first-child { text-align:left; }
-  .pn-mapa th.on { color:var(--navy); }
-  .pn-mapa td { padding:7px 8px; text-align:right; white-space:nowrap; color:#1b2430; }
-  .pn-mapa td:first-child { text-align:left; max-width:280px; overflow:hidden; text-overflow:ellipsis; }
-  .pn-mapa tbody tr { cursor:pointer; }
-  .pn-mapa tbody tr:hover td:first-child, .pn-mapa tbody tr.sel td:first-child { background:var(--bg); }
-  .pn-mapa tbody tr.sel td:first-child { box-shadow:inset 3px 0 0 var(--navy); }
-  .pn-mapa td small { display:block; font-size:11px; color:var(--slate); }
+  .pn-col h3 { display:flex; align-items:center; gap:8px; }
+  .pn-col h3 span { font-size:12px; font-weight:700; border-radius:999px; padding:1px 9px; }
+  .pn-col.neg { border-top:4px solid var(--bad); } .pn-col.neg h3 { color:var(--bad); } .pn-col.neg h3 span { background:var(--bad-bg); }
+  .pn-col.pos { border-top:4px solid var(--ok); } .pn-col.pos h3 { color:var(--ok); } .pn-col.pos h3 span { background:var(--ok-bg); }
+  .pn-item { padding:10px 10px 9px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
+  .pn-item + .pn-item { margin-top:4px; }
+  .pn-item:hover { background:var(--bg); }
+  .pn-item.sel { background:var(--bg); border-color:var(--border); }
+  .pn-item-top { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .pn-item-top .pn-lbl { padding-top:2px; }
+  .pn-item-val { font-size:17px; font-weight:700; text-align:right; white-space:nowrap; }
+  .pn-item-val small { display:block; font-size:11px; font-weight:600; color:var(--slate); }
+  .pn-item-bar { height:8px; background:var(--bg); border-radius:4px; margin:6px 0; position:relative; overflow:hidden; }
+  .pn-fill2 { position:absolute; top:0; bottom:0; }
+  .pn-fill2.neg { right:0; background:var(--bad); border-radius:4px 0 0 4px; }
+  .pn-fill2.pos { left:0; background:var(--ok); border-radius:0 4px 4px 0; }
+  .pn-item-foot { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--slate); }
+  .pn-btn-reg { background:#fff; border:1px solid var(--border); color:var(--navy); border-radius:6px; padding:4px 10px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .pn-btn-reg:hover { border-color:var(--navy); }
   .pn-det-top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
   .pn-det-stats { display:flex; gap:26px; flex-wrap:wrap; margin:12px 0 4px; }
   .pn-det-stats div { display:flex; flex-direction:column; gap:2px; }
@@ -455,7 +464,7 @@
       <button type="button" class="tab-caret" onclick="tabMenuToggle('fech', event)" aria-label="Escolher aba do Fechamento" aria-haspopup="true">&#9662;</button>
       <div class="tab-menu" id="tab-menu-fech" role="menu">
         <button type="button" role="menuitem" class="active" data-tab="fechamento" onclick="showTab('fechamento')">Fechamento</button>
-        <button type="button" role="menuitem" data-tab="painel" onclick="showTab('painel')">Painel de desvios</button>
+        <button type="button" role="menuitem" data-tab="painel" onclick="showTab('painel')">Dashboard</button>
         <button type="button" role="menuitem" data-tab="parametrizacao" onclick="showTab('parametrizacao')">Parametrizacao</button>
         <button type="button" role="menuitem" data-tab="transferencias" onclick="showTab('transferencias')">&#128274; Transferencias</button>
       </div>
@@ -6939,7 +6948,7 @@ var TAB_GRUPOS = {
   fech: { nome: 'Fechamento', abas: ['fechamento', 'painel', 'parametrizacao', 'transferencias'] },
   rev: { nome: 'Revisao', abas: ['geral', 'dedicacao', 'rateio', 'revisao'] }
 };
-var TAB_NOMES = { geral: 'Comparativo', faturamento: 'Faturamento', cobro: 'Cobro', fechamento: 'Fechamento', painel: 'Painel de desvios', parametrizacao: 'Parametrizacao',
+var TAB_NOMES = { geral: 'Comparativo', faturamento: 'Faturamento', cobro: 'Cobro', fechamento: 'Fechamento', painel: 'Dashboard', parametrizacao: 'Parametrizacao',
   dedicacao: 'Dedicacao', transferencias: 'Transferencias', rateio: 'Rateio', revisao: 'Revisao' };
 
 function tabMenuFechar() {
@@ -7591,33 +7600,30 @@ function renderFechTab(mkey) {
   }).join('');
 }
 
-// ---------- Painel de desvios (grupo Fechamento) ----------
-// Visao executiva do mes: quem esta acima/abaixo (Meta PR ou Pre Cierre), por indicador, e o que explica o desvio de
-// margem. Desvio "favoravel" (f) e positivo em todos os indicadores; no custo, f = previsto - realizado.
-// Ofensores: a PR so tem o custo total, entao a margem e explicada contra o padrao de custo do proprio projeto no ano:
-// o custo que a meta permite (ingresso x (1 - meta%)) e repartido pelas categorias na proporcao em que elas pesaram
-// nos meses anteriores com ficha; impacto = o que podia - o que custou. A soma dos impactos = desvio de margem.
-var PAINEL = { base: 'pr', ind: 'margem', top: 5, min: 1000, escopo: 'abaixo', sel: null, ordem: 'margem', ordemAsc: true };
+// ---------- Dashboard do fechamento (grupo Fechamento) ----------
+// Para usar no ato do fechamento: quem esta abaixo e acima da margem prevista (Meta PR ou Pre Cierre), quanto falta
+// cobrir x quanto ha de folga, regularizacao direto do projeto negativo e o que explica o desvio (custos).
+// Desvio de margem = margem realizada/prevista - % da base x ingresso (o mesmo do Fechamento); com ingresso ~zero vale
+// a margem em R$ da base. Ofensores: a PR so tem o custo total, entao o custo que a margem prevista permite e repartido
+// pelo peso de cada categoria no proprio projeto nos meses anteriores com ficha; impacto = podia - custou (soma = desvio).
+var PAINEL = { base: 'pr', min: 1000, escopo: 'abaixo', sel: null };
 (function() {
   try {
     const s = JSON.parse(localStorage.getItem('pr_painel_cfg') || 'null');
-    if (s) ['base', 'ind', 'top', 'min', 'escopo'].forEach(function(k) { if (s[k] !== undefined && s[k] !== null) PAINEL[k] = s[k]; });
+    if (s) ['base', 'min', 'escopo'].forEach(function(k) { if (s[k] !== undefined && s[k] !== null) PAINEL[k] = s[k]; });
   } catch (e) {}
 })();
 function painelSalvarCfg() {
-  try { localStorage.setItem('pr_painel_cfg', JSON.stringify({ base: PAINEL.base, ind: PAINEL.ind, top: PAINEL.top, min: PAINEL.min, escopo: PAINEL.escopo })); } catch (e) {}
+  try { localStorage.setItem('pr_painel_cfg', JSON.stringify({ base: PAINEL.base, min: PAINEL.min, escopo: PAINEL.escopo })); } catch (e) {}
 }
 function painelMkey() { return document.getElementById('month-select').value; }
+function painelAtivo() { const el = document.getElementById('tab-painel'); return !!(el && el.classList.contains('active')); }
 function painelSet(k, v) { PAINEL[k] = v; painelSalvarCfg(); renderPainel(painelMkey()); }
 function painelSetMin(txt) { const v = parseBRNum(txt); painelSet('min', isNaN(v) || v < 0 ? 0 : v); }
 function painelSelecionar(code) {
   PAINEL.sel = PAINEL.sel === code ? null : code;
   renderPainel(painelMkey());
   if (PAINEL.sel) { const el = document.getElementById('pn-detalhe'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-}
-function painelOrdenar(k) {
-  if (PAINEL.ordem === k) PAINEL.ordemAsc = !PAINEL.ordemAsc; else { PAINEL.ordem = k; PAINEL.ordemAsc = true; }
-  renderPainel(painelMkey());
 }
 function painelAbrirFechamento(code) {
   showTab('fechamento');
@@ -7626,8 +7632,6 @@ function painelAbrirFechamento(code) {
     if (card) { card.open = true; card.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   }, 50);
 }
-
-var PAINEL_INDS = { margem: 'Margem', ingresso: 'Ingresso', faturamento: 'Faturamento', cobro: 'Cobro', custo: 'Custo' };
 function painelBaseNome() { return PAINEL.base === 'fc' ? 'Pre Cierre' : 'Meta PR'; }
 
 // Linhas de custo da ficha agrupadas em categorias executivas (os dois formatos de ficha tem rotulos diferentes:
@@ -7688,11 +7692,16 @@ function painelMargemRef(p, mkey, ing) {
   return { ref: meta !== null ? meta / 100 * ing : null, pct: meta };
 }
 
-// Sem ficha no mes (nem custo nem venda), o Fechamento usa o ingresso da PR com custo zero -- margem de 100% falsa.
-// No painel esses projetos ficam fora de margem/custo/ingresso (so faturamento e cobro contam).
+// Sem ficha no mes e sem nenhum custo lancado a mao: o Fechamento usa o ingresso da PR com custo zero e a margem sai
+// 100% (falsa). Esses projetos ficam fora do dashboard e das sugestoes de regularizacao. Com custo lancado (Outros,
+// MIOPs, Existencia...) o projeto conta, porque e o caso de prever o mes antes da ficha sair.
 function painelSemFicha(p, mkey) {
   const f = FICHA[p.code] && FICHA[p.code][mkey];
-  return !f || (!f.cst && !f.ing);
+  if (f && (f.cst || f.ing)) return false;
+  const ex = getExtra(p.code, mkey, 'fech');
+  const lancado = Math.abs(ex.existencia || 0) + Math.abs(ex.outros || 0) + Math.abs(ex.miops || 0) + Math.abs(ex.entreempresas || 0) +
+    Math.abs(ex.provisao || 0) + Math.abs(trCustosProjeto(p.code, mkey).saldo || 0) + Math.abs(realocCusto(p.code, mkey) || 0);
+  return lancado < 0.005;
 }
 
 function painelOfensores(p, mkey) {
@@ -7728,6 +7737,7 @@ function painelOfensores(p, mkey) {
   return { itens: itens, desvio: permitido - custoEf, fonte: fonte, nHist: nHist, ing: ing, meta: meta, custoEf: custoEf, permitido: permitido };
 }
 
+// Uma linha por projeto do gestor: margem (real x referencia) e custo (real x previsto pela base). f = desvio de margem.
 function painelLinhas(mkey) {
   const b = PAINEL.base;
   const g = function(o, k) { return o && typeof o[k] === 'number' ? o[k] : 0; };
@@ -7735,23 +7745,16 @@ function painelLinhas(mkey) {
     const mm = p.months[mkey] || {};
     const r = computeFechRow(p, mkey);
     const mr = painelMargemRef(p, mkey, r.ingreso);
-    const margemReal = r.ingreso + r.existencia - r.custoTotal;
-    const v = {
-      margem: { real: margemReal, ref: mr.ref, realPct: Math.abs(r.ingreso) >= PAINEL_ING_ZERO ? margemReal / r.ingreso * 100 : null, refPct: mr.pct },
-      ingresso: { real: r.ingreso, ref: g(mm.ingreso, b) },
-      faturamento: { real: computeProgressRow(p, mkey, 'fat', 'faturamento', 'fat').real, ref: g(mm.faturamento, b) },
-      cobro: { real: computeProgressRow(p, mkey, 'cob', 'cobro', 'cob').real, ref: g(mm.cobro, b) },
-      custo: { real: r.custoTotal - r.existencia, ref: g(mm.ingreso, b) - g(mm.margem, b) },
-    };
+    const real = r.ingreso + r.existencia - r.custoTotal;
     const semFicha = painelSemFicha(p, mkey);
-    let vazio = true;
-    Object.keys(v).forEach(function(k) {
-      const x = v[k];
-      x.d = x.ref === null || (semFicha && (k === 'margem' || k === 'custo' || k === 'ingresso')) ? null : x.real - x.ref;
-      x.f = x.d === null ? null : (k === 'custo' ? -x.d : x.d);
-      if (Math.abs(x.real || 0) >= 0.5 || Math.abs(x.ref || 0) >= 0.5) vazio = false;
-    });
-    return { p: p, r: r, v: v, vazio: vazio, semFicha: semFicha };
+    const f = semFicha || mr.ref === null ? null : real - mr.ref;
+    const custoReal = r.custoTotal - r.existencia, custoRef = g(mm.ingreso, b) - g(mm.margem, b);
+    const vazio = Math.abs(r.ingreso) < 0.5 && Math.abs(custoReal) < 0.5 && Math.abs(mr.ref || 0) < 0.5 && Math.abs(custoRef) < 0.5;
+    return {
+      p: p, r: r, semFicha: semFicha, vazio: vazio, f: f, real: real, ref: mr.ref,
+      realPct: r.ingreso >= PAINEL_ING_ZERO ? real / r.ingreso * 100 : null, refPct: r.ingreso >= PAINEL_ING_ZERO ? mr.pct : null,   // % so com ingresso positivo
+      custoReal: custoReal, custoRef: custoRef
+    };
   }).filter(function(x) { return !x.vazio; });
 }
 
@@ -7764,13 +7767,6 @@ function painelK(v, semSinal) {
   else if (a >= 1e3) t = (a / 1e3).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' mil';
   else t = a.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return sinal + 'R$ ' + t;
-}
-// % do desvio: na margem em pontos percentuais (real% - meta%); nos demais, sobre o previsto
-function painelPctTxt(k, x) {
-  if (k === 'margem') return x.realPct !== null && x.refPct !== null ? ppf(x.realPct - x.refPct) : '';
-  if (!x.ref) return '';
-  const pct = x.d / Math.abs(x.ref) * 100;
-  return (pct > 0.05 ? '+' : '') + pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
 }
 
 function painelBarra(f, max) {
@@ -7785,82 +7781,128 @@ function painelSeg(chave, opcoes) {
   }).join('') + '</div>';
 }
 
+function painelMargemTxt(x) {
+  return x.realPct !== null && x.refPct !== null
+    ? 'Margem ' + pctf(x.realPct) + ' &middot; prevista ' + pctf(x.refPct)
+    : 'Margem ' + painelK(x.real) + ' &middot; prevista ' + painelK(x.ref) + (Math.abs(x.r.ingreso) < PAINEL_ING_ZERO ? ' (ingresso zero)' : ' (ingresso negativo)');
+}
+
+// Cartao de um projeto na coluna "abaixo"/"acima": barra proporcional ao desvio (mesma escala nas duas colunas).
+function painelItem(x, max, lado) {
+  const w = max > 0 ? Math.max(Math.min(Math.abs(x.f) / max, 1) * 100, 1.5) : 0;
+  const pp = x.realPct !== null && x.refPct !== null ? ppf(x.realPct - x.refPct) : '';
+  return '<div class="pn-item ' + lado + (PAINEL.sel === x.p.code ? ' sel' : '') + '" onclick="painelSelecionar(\'' + x.p.code + '\')" title="Clique para ver o que explica o desvio">' +
+    '<div class="pn-item-top"><div class="pn-lbl"><b>' + x.p.code + '</b><span>' + escHtml(x.p.name) + '</span></div>' +
+    '<div class="pn-item-val ' + (lado === 'neg' ? 'bad-txt' : 'ok-txt') + '">' + painelK(x.f) + (pp ? '<small>' + pp + '</small>' : '') + '</div></div>' +
+    '<div class="pn-item-bar"><div class="pn-fill2 ' + lado + '" style="width:' + w.toFixed(1) + '%"></div></div>' +
+    '<div class="pn-item-foot"><span>' + painelMargemTxt(x) + '</span>' +
+    (lado === 'neg' ? '<button type="button" class="pn-btn-reg" onclick="event.stopPropagation(); realocAbrir(\'' + x.p.code + '\')" title="Sugere projetos com folga para absorver o custo sem ficar abaixo da meta">&#128161; Regularizar</button>' : '<span class="ok-txt">folga</span>') +
+    '</div></div>';
+}
+
 function renderPainel(mkey) {
   const root = document.getElementById('painel-root');
   if (!root) return;
-  const linhas = painelLinhas(mkey);
-  const ind = PAINEL.ind, min = PAINEL.min || 0;
+  const min = PAINEL.min || 0;
   const mesNome = (MESES_NOMES_PC && MESES_NOMES_PC[mkey]) || mkey;
+  const linhas = painelLinhas(mkey);
 
   const filtros = '<div class="pn-filtros">' +
-    '<div class="pn-ctl"><span>Comparar com</span>' + painelSeg('base', [['pr', 'Meta PR'], ['fc', 'Pre Cierre']]) + '</div>' +
-    '<div class="pn-ctl"><span>Ranking por</span>' + painelSeg('ind', Object.keys(PAINEL_INDS).map(function(k) { return [k, PAINEL_INDS[k]]; })) + '</div>' +
-    '<div class="pn-ctl"><span>Mostrar</span>' + painelSeg('top', [[5, 'Top 5'], [10, 'Top 10'], [0, 'Todos']]) + '</div>' +
-    '<div class="pn-ctl"><span>Considerar em linha ate</span><input type="text" inputmode="decimal" class="rp-input" style="width:120px;text-align:right;" value="' + rpNum(min, 2) + '" onchange="painelSetMin(this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" title="Desvios menores que este valor (R$) contam como em linha"></div>' +
+    '<div class="pn-ctl"><span>Comparar margem com</span>' + painelSeg('base', [['pr', 'Meta PR'], ['fc', 'Pre Cierre']]) + '</div>' +
+    '<div class="pn-ctl"><span>Considerar em linha ate</span><input type="text" inputmode="decimal" class="rp-input" style="width:120px;text-align:right;" value="' + rpNum(min, 2) + '" onchange="painelSetMin(this.value)" onkeydown="if(event.key===\'Enter\')this.blur()" title="Desvios de margem menores que este valor (R$) contam como em linha"></div>' +
+    '<div class="pn-ctl" style="margin-left:auto;text-align:right;"><span>' + escHtml(mesNome) + '</span><b style="color:var(--navy);font-size:15px;">' + escHtml(CURRENT_GESTOR) + '</b></div>' +
     '</div>';
 
-  if (!linhas.length) {
-    root.innerHTML = filtros + '<div class="pn-card"><div class="pn-vazio">Nenhum projeto de ' + escHtml(CURRENT_GESTOR) + ' com movimento em ' + escHtml(mesNome) + '.</div></div>';
+  const validas = linhas.filter(function(x) { return x.f !== null; });
+  const semFicha = linhas.filter(function(x) { return x.semFicha; });
+  if (!validas.length) {
+    root.innerHTML = filtros + '<div class="pn-card"><div class="pn-vazio">Nenhum projeto de ' + escHtml(CURRENT_GESTOR) + ' com fechamento em ' + escHtml(mesNome) + '.' +
+      (semFicha.length ? ' ' + semFicha.length + ' projeto(s) ainda sem ficha nem custo lancado.' : '') + '</div></div>';
     return;
   }
-
-  // ---- KPIs (sempre de margem e ingresso) ----
-  let mReal = 0, mMeta = 0, ingReal = 0, ingRef = 0, nAbaixo = 0, nAcima = 0, nLinha = 0, sAbaixo = 0, sAcima = 0;
-  const semFicha = linhas.filter(function(x) { return x.semFicha; });
-  linhas.forEach(function(x) {
-    if (x.semFicha) return;
-    const m = x.v.margem;
-    mReal += m.real; ingReal += x.v.ingresso.real; ingRef += x.v.ingresso.ref;
-    if (m.ref !== null) mMeta += m.ref;
-    if (m.f === null) return;
-    if (m.f < -min) { nAbaixo++; sAbaixo += m.f; } else if (m.f > min) { nAcima++; sAcima += m.f; } else nLinha++;
-  });
-  const mRealPct = ingReal ? mReal / ingReal * 100 : null, mMetaPct = ingReal ? mMeta / ingReal * 100 : null;
-  const dM = mReal - mMeta, dIng = ingReal - ingRef;
+  const neg = validas.filter(function(x) { return x.f < -min; }).sort(function(a, b) { return a.f - b.f; });
+  const pos = validas.filter(function(x) { return x.f > min; }).sort(function(a, b) { return b.f - a.f; });
+  const emLinha = validas.filter(function(x) { return Math.abs(x.f) <= min; });
+  const soma = function(arr, k) { return arr.reduce(function(s, x) { return s + (x[k] || 0); }, 0); };
+  const sNeg = soma(neg, 'f'), sPos = soma(pos, 'f'), saldo = sPos + sNeg;
+  const ing = validas.reduce(function(s, x) { return s + x.r.ingreso; }, 0);
+  const mReal = soma(validas, 'real'), mRef = soma(validas, 'ref');
+  const realPct = Math.abs(ing) >= PAINEL_ING_ZERO ? mReal / ing * 100 : null, refPct = Math.abs(ing) >= PAINEL_ING_ZERO ? mRef / ing * 100 : null;
+  const dTot = mReal - mRef;
   const cls = function(v) { return v < -0.005 ? 'bad' : (v > 0.005 ? 'ok' : 'neutral'); };
+
   const kpis = '<div class="kpi-grid">' +
-    '<div class="kpi-card"><div class="kpi-label">Margem do mes</div><div class="kpi-value">' + (mRealPct !== null ? pctf(mRealPct) : '-') + '</div>' +
-      '<div class="kpi-sub ' + cls(dM) + '">' + painelK(dM) + (mMetaPct !== null ? ' vs ' + pctf(mMetaPct) + ' (' + painelBaseNome() + ')' : '') + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Abaixo do previsto</div><div class="kpi-value">' + nAbaixo + ' <span style="font-size:14px;color:var(--slate);font-weight:600;">projeto(s)</span></div>' +
-      '<div class="kpi-sub bad">' + painelK(sAbaixo) + ' de margem</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Acima do previsto</div><div class="kpi-value">' + nAcima + ' <span style="font-size:14px;color:var(--slate);font-weight:600;">projeto(s)</span></div>' +
-      '<div class="kpi-sub ok">' + painelK(sAcima) + ' de margem</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Ingresso do mes</div><div class="kpi-value">' + painelK(ingReal, true) + '</div>' +
-      '<div class="kpi-sub ' + cls(dIng) + '">' + painelK(dIng) + ' vs ' + painelBaseNome() + (ingRef ? ' (' + painelPctTxt('ingresso', { d: dIng, ref: ingRef }) + ')' : '') + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Margem do mes</div><div class="kpi-value">' + (realPct !== null ? pctf(realPct) : '-') + '</div>' +
+      '<div class="kpi-sub ' + cls(dTot) + '">' + painelK(dTot) + (refPct !== null ? ' vs ' + pctf(refPct) + ' prevista' : '') + '</div></div>' +
+    '<div class="kpi-card" style="border-top:4px solid var(--bad);"><div class="kpi-label">A cobrir (abaixo da meta)</div><div class="kpi-value" style="color:var(--bad);">' + painelK(sNeg) + '</div>' +
+      '<div class="kpi-sub">' + neg.length + ' projeto(s)</div></div>' +
+    '<div class="kpi-card" style="border-top:4px solid var(--ok);"><div class="kpi-label">Folga (acima da meta)</div><div class="kpi-value" style="color:var(--ok);">' + painelK(sPos) + '</div>' +
+      '<div class="kpi-sub">' + pos.length + ' projeto(s)</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Saldo</div><div class="kpi-value" style="color:' + (saldo < -0.005 ? 'var(--bad)' : 'var(--ok)') + ';">' + painelK(saldo) + '</div>' +
+      '<div class="kpi-sub ' + (saldo < -0.005 ? 'bad' : 'ok') + '">' + (!neg.length ? 'Nenhum projeto abaixo da meta' : (saldo >= -0.005 ? 'A folga cobre os desvios' : 'Faltam ' + painelK(-saldo, true) + ' mesmo usando toda a folga')) + '</div></div>' +
+    '</div>';
+
+  const max = Math.max.apply(null, [0].concat(neg.concat(pos).map(function(x) { return Math.abs(x.f); })));
+  const colunas = '<div class="pn-grid">' +
+    '<div class="pn-card pn-col neg"><h3>&#9660; Abaixo da meta <span>' + neg.length + '</span></h3>' +
+      '<div class="pn-sub">Do maior para o menor desvio. Total ' + painelK(sNeg) + '.</div>' +
+      (neg.length ? neg.map(function(x) { return painelItem(x, max, 'neg'); }).join('') : '<div class="pn-vazio">Nenhum projeto abaixo da meta. &#127881;</div>') + '</div>' +
+    '<div class="pn-card pn-col pos"><h3>&#9650; Acima da meta <span>' + pos.length + '</span></h3>' +
+      '<div class="pn-sub">Do maior para o menor desvio. Folga total ' + painelK(sPos) + '.</div>' +
+      (pos.length ? pos.map(function(x) { return painelItem(x, max, 'pos'); }).join('') : '<div class="pn-vazio">Nenhum projeto acima da meta.</div>') + '</div>' +
     '</div>' +
-    '<div class="small-note" style="margin:-16px 0 16px;">' + escHtml(mesNome) + ' &middot; ' + escHtml(CURRENT_GESTOR) + ' &middot; ' + linhas.length + ' projeto(s) com movimento' +
-      (nLinha ? ' &middot; ' + nLinha + ' em linha (desvio de margem ate ' + painelK(min, true) + ')' : '') +
-      (semFicha.length ? ' &middot; <span class="bad-txt" title="' + escHtml(semFicha.map(function(x) { return x.p.code; }).join(', ')) + '">' + semFicha.length + ' sem ficha no mes (fora de margem, custo e ingresso)</span>' : '') +
-      ' &middot; margem comparada com o % de margem ' + (PAINEL.base === 'fc' ? 'do Pre Cierre' : 'da meta PR') + ' sobre o mesmo ingresso.</div>';
+    ((emLinha.length || semFicha.length) ? '<div class="small-note" style="margin:-8px 0 18px;">' +
+      (emLinha.length ? 'Em linha (desvio ate ' + painelK(min, true) + '): ' + emLinha.map(function(x) { return '<a href="#" onclick="painelSelecionar(\'' + x.p.code + '\'); return false;">' + x.p.code + '</a>'; }).join(', ') + '. ' : '') +
+      (semFicha.length ? '<span class="bad-txt">Sem ficha e sem custo lancado (fora do dashboard): ' + semFicha.map(function(x) { return x.p.code; }).join(', ') + '.</span>' : '') +
+      '</div>' : '');
 
-  // ---- Ranking (diverging bars) ----
-  const comF = linhas.filter(function(x) { return x.v[ind].f !== null; });
-  const neg = comF.filter(function(x) { return x.v[ind].f < -min; }).sort(function(a, b) { return a.v[ind].f - b.v[ind].f; });
-  const pos = comF.filter(function(x) { return x.v[ind].f > min; }).sort(function(a, b) { return b.v[ind].f - a.v[ind].f; });
-  const corta = function(arr) { return PAINEL.top ? arr.slice(0, PAINEL.top) : arr; };
-  const negV = corta(neg), posV = corta(pos);
-  const maxR = Math.max.apply(null, [0].concat(negV.concat(posV).map(function(x) { return Math.abs(x.v[ind].f); })));
-  const linhaRank = function(x) {
-    const val = x.v[ind];
-    const dica = x.p.code + ' - ' + x.p.name + '\n' + PAINEL_INDS[ind] + ': realizado ' + brl(val.real) + ' | ' + painelBaseNome() + ' ' + (val.ref === null ? '-' : brl(val.ref)) +
-      '\nDesvio: ' + brl(val.d) + (ind === 'custo' ? ' (custo acima do previsto e desfavoravel)' : '');
-    return '<div class="pn-row' + (PAINEL.sel === x.p.code ? ' sel' : '') + '" onclick="painelSelecionar(\'' + x.p.code + '\')" title="' + escHtml(dica) + '">' +
-      '<div class="pn-lbl"><b>' + x.p.code + '</b><span>' + escHtml(x.p.name) + '</span></div>' + painelBarra(val.f, maxR) +
-      '<div class="pn-val">' + painelK(ind === 'custo' ? val.d : val.f) + '<small>' + painelPctTxt(ind, val) + '</small></div></div>';
-  };
-  const rank = '<div class="pn-card"><h3>Maiores desvios &middot; ' + PAINEL_INDS[ind] + '</h3>' +
-    '<div class="pn-sub">vs ' + painelBaseNome() + (ind === 'custo' ? ' &middot; no custo, valor + = gastou mais que o previsto (desfavoravel)' : '') + '. Clique num projeto para ver o detalhe.</div>' +
-    '<div class="pn-legenda"><span><i style="background:var(--bad)"></i>Desfavoravel</span><span><i style="background:var(--ok)"></i>Favoravel</span></div>' +
-    '<div class="pn-grupo">Abaixo do previsto (' + neg.length + ')</div>' + (negV.length ? negV.map(linhaRank).join('') : '<div class="pn-vazio">Nenhum projeto abaixo do previsto.</div>') +
-    (neg.length > negV.length ? '<div class="pn-vazio">+ ' + (neg.length - negV.length) + ' projeto(s)</div>' : '') +
-    '<div class="pn-grupo">Acima do previsto (' + pos.length + ')</div>' + (posV.length ? posV.map(linhaRank).join('') : '<div class="pn-vazio">Nenhum projeto acima do previsto.</div>') +
-    (pos.length > posV.length ? '<div class="pn-vazio">+ ' + (pos.length - posV.length) + ' projeto(s)</div>' : '') + '</div>';
+  // ---- Detalhe do projeto selecionado: o que explica o desvio ----
+  let det = '';
+  const selX = PAINEL.sel ? linhas.find(function(x) { return x.p.code === PAINEL.sel; }) : null;
+  if (PAINEL.sel && !selX) PAINEL.sel = null;
+  if (selX) {
+    const o = painelOfensores(selX.p, mkey);
+    let frase = '', ponte = '';
+    if (o) {
+      const piores = o.itens.filter(function(it) { return it.impacto < -0.5; }).slice(0, 3);
+      const melhores = o.itens.filter(function(it) { return it.impacto > 0.5; }).sort(function(a, b) { return b.impacto - a.impacto; }).slice(0, 2);
+      frase = (o.desvio < -0.005 ? 'Ficou <b class="bad-txt">' + painelK(-o.desvio, true) + '</b> abaixo' : (o.desvio > 0.005 ? 'Ficou <b class="ok-txt">' + painelK(o.desvio, true) + '</b> acima' : 'Ficou em linha com')) +
+        ' da margem ' + (PAINEL.base === 'fc' ? 'do Pre Cierre' : 'da meta') +
+        (o.meta !== null ? ' (' + pctf(o.meta) + ' sobre ' + painelK(o.ing, true) + ' de ingresso).' : ' (margem prevista de ' + painelK(o.ing - o.permitido) + ' em R$, porque o ingresso do mes e zero).') +
+        (piores.length ? ' Principais ofensores: ' + piores.map(function(it) { return '<b>' + escHtml(it.k) + '</b> (' + painelK(it.impacto) + ')'; }).join(', ') + '.' : '') +
+        (melhores.length ? ' Ajudaram: ' + melhores.map(function(it) { return escHtml(it.k) + ' (' + painelK(it.impacto) + ')'; }).join(', ') + '.' : '');
+      const maxP = Math.max.apply(null, [0].concat(o.itens.map(function(it) { return Math.abs(it.impacto); })));
+      ponte = '<div class="pn-ponte" style="margin-top:8px;">' +
+        '<div class="pn-row pn-head"><div>Categoria de custo</div><div class="pn-num">Podia</div><div class="pn-num">Custou</div><div></div><div class="pn-val" style="font-size:11px;color:var(--slate);">Impacto</div></div>' +
+        o.itens.map(function(it) {
+          return '<div class="pn-row" title="' + escHtml(it.k + ': para ficar na margem prevista, com o peso do ano, podia custar ' + brl(it.podia) + '; custou ' + brl(it.custou) + '.') + '">' +
+            '<div class="pn-lbl">' + escHtml(it.k) + '</div><div class="pn-num">' + painelK(it.podia, true) + '</div><div class="pn-num">' + painelK(it.custou, true) + '</div>' +
+            painelBarra(it.impacto, maxP) + '<div class="pn-val">' + painelK(it.impacto) + '</div></div>';
+        }).join('') +
+        '<div class="pn-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;"><div class="pn-lbl"><b>Total</b></div><div class="pn-num">' + painelK(o.permitido, true) + '</div><div class="pn-num">' + painelK(o.custoEf, true) + '</div><div></div><div class="pn-val ' + (o.desvio < -0.005 ? 'bad-txt' : 'ok-txt') + '">' + painelK(o.desvio) + '</div></div>' +
+        '</div><div class="small-note" style="margin-top:8px;">' + (o.fonte === 'ano'
+          ? '"Podia" = custo que a margem prevista permite, repartido pelo peso de cada categoria nos ' + o.nHist + ' mes(es) anteriores com ficha. Existencia entra com sinal trocado (estoque positivo reduz o custo).'
+          : 'Sem meses anteriores com ficha: o desvio foi repartido pela composicao do proprio mes (nao aponta ofensor, so mostra o peso de cada custo).') + '</div>';
+    } else {
+      frase = selX.semFicha ? 'Sem ficha economica e sem custo lancado neste mes: fica de fora ate a ficha sair ou um custo ser lancado no Fechamento.'
+        : 'Sem margem ' + (PAINEL.base === 'fc' ? 'do Pre Cierre' : 'da meta') + ' neste mes: nao da para explicar a margem.';
+    }
+    const dCusto = selX.custoReal - selX.custoRef;
+    det = '<div class="pn-card" id="pn-detalhe" style="margin-bottom:18px;">' +
+      '<div class="pn-det-top"><div><h3>' + selX.p.code + ' &middot; ' + escHtml(selX.p.name) + '</h3><div class="pn-sub" style="margin:2px 0 0;">vs ' + painelBaseNome() + ' &middot; ' + escHtml(mesNome) + '</div></div>' +
+      '<div class="obs-toolbar" style="margin:0;">' + (selX.f !== null && selX.f < -REALOC_TOL ? '<button type="button" onclick="realocAbrir(\'' + selX.p.code + '\')">&#128161; Regularizar</button>' : '') +
+      '<button type="button" onclick="painelAbrirFechamento(\'' + selX.p.code + '\')">Abrir no Fechamento</button><button type="button" onclick="painelSelecionar(\'' + selX.p.code + '\')">Fechar</button></div></div>' +
+      '<div class="pn-det-stats">' +
+        '<div><span>Desvio de margem</span><b class="' + (selX.f === null ? '' : (selX.f < -0.005 ? 'bad-txt' : 'ok-txt')) + '">' + (selX.f === null ? '-' : painelK(selX.f)) + '</b><em>' + (selX.realPct !== null && selX.refPct !== null ? ppf(selX.realPct - selX.refPct) : '') + '</em></div>' +
+        '<div><span>Margem</span><b>' + (selX.realPct !== null ? pctf(selX.realPct) : painelK(selX.real)) + '</b><em>prevista ' + (selX.refPct !== null ? pctf(selX.refPct) : painelK(selX.ref)) + '</em></div>' +
+        '<div><span>Custo</span><b>' + painelK(selX.custoReal, true) + '</b><em class="' + (dCusto > 0.005 ? 'bad-txt' : 'ok-txt') + '">' + painelK(dCusto) + ' vs previsto (' + painelK(selX.custoRef, true) + ')</em></div>' +
+      '</div><div class="pn-frase">' + frase + '</div>' + ponte + '</div>';
+  }
 
-  // ---- Ofensores consolidados (margem) ----
+  // ---- O que explica o desvio de margem (soma por categoria) ----
   const ofs = {};
-  linhas.forEach(function(x) {
-    const f = x.v.margem.f;
-    if (f === null || (PAINEL.escopo === 'abaixo' && !(f < -min))) return;
+  validas.forEach(function(x) {
+    if (PAINEL.escopo === 'abaixo' && !(x.f < -min)) return;
     const o = painelOfensores(x.p, mkey);
     if (!o) return;
     o.itens.forEach(function(it) {
@@ -7872,87 +7914,17 @@ function renderPainel(mkey) {
   const ofList = Object.values(ofs).filter(function(c) { return Math.abs(c.impacto) >= 0.5; }).sort(function(a, b) { return a.impacto - b.impacto; });
   const maxO = Math.max.apply(null, [0].concat(ofList.map(function(c) { return Math.abs(c.impacto); })));
   const ofHtml = '<div class="pn-card"><h3>O que explica o desvio de margem</h3>' +
-    '<div class="pn-sub">Soma dos projetos ' + (PAINEL.escopo === 'abaixo' ? 'abaixo do previsto' : 'com movimento') + ', por categoria de custo. Cada categoria comparada com o peso que teve no proprio projeto nos meses anteriores do ano.</div>' +
-    painelSeg('escopo', [['abaixo', 'Projetos abaixo'], ['todos', 'Todos os projetos']]) +
+    '<div class="pn-sub">Soma dos projetos ' + (PAINEL.escopo === 'abaixo' ? 'abaixo da meta' : 'do dashboard') + ', por categoria de custo, comparada com o peso de cada categoria no proprio projeto nos meses anteriores do ano. Clique num projeto acima para ver o detalhe dele.</div>' +
+    painelSeg('escopo', [['abaixo', 'Projetos abaixo da meta'], ['todos', 'Todos os projetos']]) +
     '<div style="margin-top:10px;">' + (ofList.length ? ofList.slice(0, 12).map(function(c) {
       const top = c.projs.sort(function(a, b) { return a.v - b.v; });
-      const dica = c.k + ': ' + brl(c.impacto) + '\n' + (c.impacto < 0 ? 'Mais pesaram: ' : 'Mais ajudaram: ') +
-        (c.impacto < 0 ? top : top.slice().reverse()).slice(0, 4).map(function(p) { return p.code + ' ' + painelK(p.v); }).join(', ');
+      const lista = (c.impacto < 0 ? top : top.slice().reverse());
+      const dica = c.k + ': ' + brl(c.impacto) + '\n' + (c.impacto < 0 ? 'Mais pesaram: ' : 'Mais ajudaram: ') + lista.slice(0, 4).map(function(p) { return p.code + ' ' + painelK(p.v); }).join(', ');
       return '<div class="pn-row static" title="' + escHtml(dica) + '"><div class="pn-lbl">' + escHtml(c.k) + '</div>' + painelBarra(c.impacto, maxO) +
-        '<div class="pn-val">' + painelK(c.impacto) + '<small>' + (c.impacto < 0 ? top : top.slice().reverse()).slice(0, 2).map(function(p) { return p.code; }).join(', ') + '</small></div></div>';
+        '<div class="pn-val">' + painelK(c.impacto) + '<small>' + lista.slice(0, 2).map(function(p) { return p.code; }).join(', ') + '</small></div></div>';
     }).join('') : '<div class="pn-vazio">Sem desvio de margem para explicar.</div>') + '</div></div>';
 
-  // ---- Detalhe do projeto selecionado ----
-  let det = '';
-  const selX = PAINEL.sel ? linhas.find(function(x) { return x.p.code === PAINEL.sel; }) : null;
-  if (PAINEL.sel && !selX) PAINEL.sel = null;
-  if (selX) {
-    const o = painelOfensores(selX.p, mkey), m = selX.v.margem;
-    const st = function(rot, k) {
-      const x = selX.v[k];
-      return '<div><span>' + rot + '</span><b>' + painelK(x.real, true) + '</b><em class="' + (x.f === null ? '' : (x.f < -0.005 ? 'bad-txt' : (x.f > 0.005 ? 'ok-txt' : ''))) + '">' +
-        (x.d === null ? '' : painelK(k === 'custo' ? x.d : x.f) + ' ' + painelPctTxt(k, x)) + '</em></div>';
-    };
-    let frase = '', ponte = '';
-    if (o) {
-      const piores = o.itens.filter(function(it) { return it.impacto < -0.5; }).slice(0, 3);
-      const melhores = o.itens.filter(function(it) { return it.impacto > 0.5; }).sort(function(a, b) { return b.impacto - a.impacto; }).slice(0, 2);
-      frase = (o.desvio < -0.005 ? 'Ficou <b class="bad-txt">' + painelK(-o.desvio, true) + '</b> abaixo' : (o.desvio > 0.005 ? 'Ficou <b class="ok-txt">' + painelK(o.desvio, true) + '</b> acima' : 'Ficou em linha com')) +
-        ' da margem ' + (PAINEL.base === 'fc' ? 'do Pre Cierre' : 'da meta') + (o.meta !== null ? ' (' + pctf(o.meta) + ' sobre ' + painelK(o.ing, true) + ' de ingresso).' : ' (margem prevista de ' + painelK(o.ing - o.permitido) + ' em R$, porque o ingresso do mes e zero).') +
-        (piores.length ? ' Principais ofensores: ' + piores.map(function(it) { return '<b>' + escHtml(it.k) + '</b> (' + painelK(it.impacto) + ')'; }).join(', ') + '.' : '') +
-        (melhores.length ? ' Ajudaram: ' + melhores.map(function(it) { return escHtml(it.k) + ' (' + painelK(it.impacto) + ')'; }).join(', ') + '.' : '');
-      const maxP = Math.max.apply(null, [0].concat(o.itens.map(function(it) { return Math.abs(it.impacto); })));
-      ponte = '<div class="pn-ponte" style="margin-top:8px;">' +
-        '<div class="pn-row pn-head"><div>Categoria</div><div class="pn-num">Podia</div><div class="pn-num">Custou</div><div></div><div class="pn-val" style="font-size:11px;color:var(--slate);">Impacto</div></div>' +
-        o.itens.map(function(it) {
-          return '<div class="pn-row" title="' + escHtml(it.k + ': para ficar na margem prevista, com o peso do ano, podia custar ' + brl(it.podia) + '; custou ' + brl(it.custou) + '.') + '">' +
-            '<div class="pn-lbl">' + escHtml(it.k) + '</div><div class="pn-num">' + painelK(it.podia, true) + '</div><div class="pn-num">' + painelK(it.custou, true) + '</div>' +
-            painelBarra(it.impacto, maxP) + '<div class="pn-val">' + painelK(it.impacto) + '</div></div>';
-        }).join('') +
-        '<div class="pn-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:8px;"><div class="pn-lbl"><b>Total</b></div><div class="pn-num">' + painelK(o.permitido, true) + '</div><div class="pn-num">' + painelK(o.custoEf, true) + '</div><div></div><div class="pn-val ' + (o.desvio < -0.005 ? 'bad-txt' : 'ok-txt') + '">' + painelK(o.desvio) + '</div></div>' +
-        '</div><div class="small-note" style="margin-top:8px;">' + (o.fonte === 'ano'
-          ? '"Podia" = custo que a margem prevista permite, repartido pelo peso de cada categoria nos ' + o.nHist + ' mes(es) anteriores com ficha. Existencia entra com sinal trocado (estoque positivo reduz o custo).'
-          : 'Sem meses anteriores com ficha: o desvio foi repartido pela composicao do proprio mes (nao aponta ofensor, so mostra o peso de cada custo).') + '</div>';
-    } else {
-      frase = selX.semFicha ? 'Sem ficha economica neste mes (nem custo nem venda): margem, custo e ingresso ficam de fora ate a ficha sair.'
-        : 'Sem margem ' + (PAINEL.base === 'fc' ? 'do Pre Cierre' : 'da meta') + ' neste mes: nao da para explicar a margem.';
-    }
-    det = '<div class="pn-card" id="pn-detalhe" style="margin-bottom:18px;">' +
-      '<div class="pn-det-top"><div><h3>' + selX.p.code + ' &middot; ' + escHtml(selX.p.name) + '</h3><div class="pn-sub" style="margin:2px 0 0;">vs ' + painelBaseNome() + ' &middot; ' + escHtml(mesNome) + '</div></div>' +
-      '<div class="obs-toolbar" style="margin:0;"><button type="button" onclick="painelAbrirFechamento(\'' + selX.p.code + '\')">Abrir no Fechamento</button><button type="button" onclick="painelSelecionar(\'' + selX.p.code + '\')">Fechar</button></div></div>' +
-      '<div class="pn-det-stats">' +
-        '<div><span>Margem</span><b>' + (m.realPct !== null ? pctf(m.realPct) : '-') + '</b><em class="' + (m.f !== null && m.f < -0.005 ? 'bad-txt' : 'ok-txt') + '">' + (m.refPct !== null ? 'previsto ' + pctf(m.refPct) : '') + '</em></div>' +
-        st('Ingresso', 'ingresso') + st('Faturamento', 'faturamento') + st('Cobro', 'cobro') + st('Custo', 'custo') +
-      '</div><div class="pn-frase">' + frase + '</div>' + ponte + '</div>';
-  }
-
-  // ---- Mapa de desvios (todos os projetos x indicadores) ----
-  const cols = ['ingresso', 'faturamento', 'cobro', 'custo', 'margem'];
-  const maxC = {};
-  cols.forEach(function(k) { maxC[k] = Math.max.apply(null, [0].concat(linhas.map(function(x) { return Math.abs(x.v[k].f || 0); }))); });
-  const ord = PAINEL.ordem, asc = PAINEL.ordemAsc ? 1 : -1;
-  const ordenadas = linhas.slice().sort(function(a, b) {
-    if (ord === 'codigo') return asc * a.p.code.localeCompare(b.p.code);
-    return asc * ((a.v[ord].f === null ? 1e15 : a.v[ord].f) - (b.v[ord].f === null ? 1e15 : b.v[ord].f));
-  });
-  const celula = function(k, x) {
-    const val = x.v[k];
-    if (val.f === null) return '<td>-</td>';
-    const a = Math.abs(val.f) < min || !maxC[k] ? 0 : 0.10 + 0.34 * Math.min(Math.abs(val.f) / maxC[k], 1);
-    const bg = a ? (val.f < 0 ? 'rgba(179,38,30,' + a.toFixed(2) + ')' : 'rgba(30,142,90,' + a.toFixed(2) + ')') : 'transparent';
-    return '<td style="background:' + bg + ';" title="' + escHtml(PAINEL_INDS[k] + ' ' + x.p.code + ': realizado ' + brl(val.real) + ' | ' + painelBaseNome() + ' ' + (val.ref === null ? '-' : brl(val.ref))) + '">' +
-      painelK(k === 'custo' ? val.d : val.f) + '<small>' + painelPctTxt(k, val) + '</small></td>';
-  };
-  const th = function(k, rot) { return '<th class="' + (ord === k ? 'on' : '') + '" onclick="painelOrdenar(\'' + k + '\')">' + rot + (ord === k ? (PAINEL.ordemAsc ? ' &#9650;' : ' &#9660;') : '') + '</th>'; };
-  const mapa = '<div class="pn-card"><h3>Mapa de desvios</h3><div class="pn-sub">Todos os projetos, desvio de cada indicador vs ' + painelBaseNome() +
-    '. Quanto mais forte a cor, maior o desvio na coluna (vermelho = desfavoravel; no custo, + = gastou mais). Clique no titulo para ordenar.</div>' +
-    '<div class="table-wrap"><table class="pn-mapa"><thead><tr>' + th('codigo', 'Projeto') + th('ingresso', 'Ingresso') + th('faturamento', 'Faturamento') + th('cobro', 'Cobro') + th('custo', 'Custo') + th('margem', 'Margem') + '</tr></thead><tbody>' +
-    ordenadas.map(function(x) {
-      return '<tr class="' + (PAINEL.sel === x.p.code ? 'sel' : '') + '" onclick="painelSelecionar(\'' + x.p.code + '\')"><td title="' + escHtml(x.p.name) + '"><b style="color:var(--navy);">' + x.p.code + '</b> <span style="color:var(--slate);">' + escHtml(x.p.name) + '</span></td>' +
-        cols.map(function(k) { return celula(k, x); }).join('') + '</tr>';
-    }).join('') + '</tbody></table></div></div>';
-
-  root.innerHTML = filtros + kpis + det + '<div class="pn-grid">' + rank + ofHtml + '</div>' + mapa;
+  root.innerHTML = filtros + kpis + colunas + det + ofHtml;
 }
 
 function renderAllTabs(mkey) {
@@ -8805,7 +8777,7 @@ function realocAbrir(code) {
   const cands = currentProjects().filter(function(q) { return q.code !== code; }).map(function(q) {
     const rq = computeFechRow(q, mkey);
     return { code: q.code, name: q.name, ingreso: rq.ingreso, diffRS: rq.diffRS, folga: rq.diffRS, valor: 0 };
-  }).filter(function(c) { return c.folga !== null && c.folga > REALOC_TOL && c.ingreso; })
+  }).filter(function(c) { return c.folga !== null && c.folga > REALOC_TOL && c.ingreso && !painelSemFicha(DATA.find(function(x) { return x.code === c.code; }), mkey); })
     .sort(function(a, b) { return b.folga - a.folga; });
   REALOC_DRAFT = { code: code, mkey: mkey, nome: p.name, ingreso: r.ingreso, diffRS: r.diffRS, jaFeito: -realocCusto(code, mkey), deficit: Math.max(0, -r.diffRS), cands: cands };
   realocSugerir('concentrar');
@@ -8815,6 +8787,7 @@ function realocAbrir(code) {
 }
 function realocFechar() {
   document.getElementById('realoc-overlay').classList.remove('show');
+  if (painelAtivo()) renderPainel(painelMkey());
   document.removeEventListener('keydown', realocEsc);
   REALOC_DRAFT = null;
 }
