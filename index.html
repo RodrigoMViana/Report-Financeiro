@@ -5511,7 +5511,9 @@
         <div class="kpi-sub" id="fech-avanco-geral-sub"></div>
       </div>
     </div>
-    <div class="section-title">Fechamento por projeto <span class="count" id="fech-count">18</span></div>
+    <div class="section-title" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">Fechamento por projeto <span class="count" id="fech-count">18</span>
+      <button type="button" id="fech-limpar-btn" onclick="fechLimparMes()" style="margin-left:auto; background:#fff; color:var(--bad); border:1px solid var(--bad); border-radius:8px; font-weight:600; font-size:12px; padding:6px 12px; cursor:pointer;" title="Zera os campos, a parametrizacao, a regularizacao e as transferencias deste gestor no mes -- fica so o custo da ficha (guarda uma copia para restaurar)">&#128465; Limpar fechamento do mes</button>
+    </div>
     <div class="project-filter">
       <div class="ms-combo">
         <input type="text" id="fech-search" placeholder="Filtrar ou selecionar projetos..." autocomplete="off" oninput="filterProgress('fech'); renderFilterDropdown('fech')" onfocus="renderFilterDropdown('fech'); openFilterDropdown('fech')">
@@ -5521,6 +5523,7 @@
     </div>
     <div class="ms-chips" id="fech-ms-chips"></div>
     <div id="fech-projects-list"></div>
+    <div id="fech-lixo"></div>
   </div>
 
   <div id="tab-parametrizacao" class="tab-panel">
@@ -7547,6 +7550,9 @@ function renderFechTab(mkey) {
   updateFechKpis(mkey);
 
   document.getElementById('fech-count').textContent = rows.length;
+  const btnLimparFech = document.getElementById('fech-limpar-btn');
+  if (btnLimparFech) btnLimparFech.style.display = rows.length ? '' : 'none';
+  if (typeof fechLixoRender === 'function') fechLixoRender(mkey);
   if (rows.length === 0) {
     document.getElementById('fech-projects-list').innerHTML = '<div class="no-results" style="display:block;">Nenhum projeto para ' + CURRENT_GESTOR + ' neste mes.</div>';
     return;
@@ -8975,6 +8981,263 @@ async function realocRemover(code, id) {
   await realocGravar(mkey, [code, e.outro], function() {
     [code, e.outro].forEach(function(c) { realocDefinir(c, mkey, realocLista(c, mkey).filter(function(x) { return x.id !== id; })); });
   });
+}
+
+// ---------- Limpar o fechamento do mes (com copia para restaurar) ----------
+// Pedido do usuario: um clique zera tudo do mes nos projetos do gestor e fica so o custo da ficha --
+// campos do Fechamento (Existencia, Outros + itens, MIOPs, Entre Empresas manual, Provisao, Ingresso ajustado),
+// Rateio e Imposto (zerados no mes, como o "Zerar" da Parametrizacao), Regularizacao (os dois lados) e as
+// transferencias DO GESTOR no mes. Comentarios ficam. Antes, a copia vai para '__FECHLIXO__::<gestor>'
+// (month = mes; {limpezas:[{id, t, projetos:{code:{ex, itens, zerado}}, realoc:{code:[...]}, transf:[{id,r}]}]}).
+// Se a copia nao gravar, nada e apagado. Grava no Supabase como o resto do Fechamento (tambem em localhost).
+var FECH_LIXO_PREFIX = '__FECHLIXO__::';
+var FECH_LIXO = {};        // { 'gestor|MKEY': { limpezas: [...] } }
+var FECH_LIXO_VER = {};    // leitura antiga que chega depois de uma gravacao nao sobrescreve
+function fechLixoDefinir(k, obj) { FECH_LIXO[k] = obj; FECH_LIXO_VER[k] = (FECH_LIXO_VER[k] || 0) + 1; }
+var FECH_LIXO_MAX = 10;
+var FECH_CAMPOS_LIMPAR = ['existencia', 'outros', 'miops', 'entreempresas', 'provisao', 'ingajuste'];
+function fechLixoLocalKey(g, mkey) { return NOTES_PREFIX + FECH_LIXO_PREFIX + g + '::' + mkey; }
+
+async function fechLixoCarregar(mkey, forcar) {
+  const g = CURRENT_GESTOR, k = g + '|' + mkey;
+  if (FECH_LIXO[k] && !forcar) return FECH_LIXO[k];
+  const ver = FECH_LIXO_VER[k] || 0;
+  let obj = null;
+  try { obj = JSON.parse(localStorage.getItem(fechLixoLocalKey(g, mkey)) || 'null'); } catch (e) {}
+  if (SUPABASE_CONFIGURED) {
+    try {
+      const { data, error } = await sb.from('notes').select('text').eq('code', FECH_LIXO_PREFIX + g).eq('month', mkey).limit(1);
+      if (!error) { obj = null; try { obj = data && data[0] && data[0].text ? JSON.parse(data[0].text) : null; } catch (e) {} }
+    } catch (e) {}
+  }
+  if ((FECH_LIXO_VER[k] || 0) === ver) fechLixoDefinir(k, (obj && Array.isArray(obj.limpezas)) ? obj : { limpezas: [] });
+  return FECH_LIXO[k];
+}
+
+async function fechLixoGravar(g, mkey, obj) {
+  const text = obj.limpezas.length ? JSON.stringify(obj) : '';
+  try { if (text) localStorage.setItem(fechLixoLocalKey(g, mkey), text); else localStorage.removeItem(fechLixoLocalKey(g, mkey)); } catch (e) {}
+  if (!SUPABASE_CONFIGURED) return { ok: true, local: true };
+  try {
+    const { error } = await sb.from('notes').upsert({ code: FECH_LIXO_PREFIX + g, month: mkey, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+    return { ok: !error };
+  } catch (e) { return { ok: false }; }
+}
+
+// Linhas de 'notes' (e localStorage) que deixam o projeto/mes com os valores dados.
+function fechLinhasProjeto(code, mkey, ex, itens, zerado, agora) {
+  const linhas = [];
+  FECH_CAMPOS_LIMPAR.forEach(function(f) {
+    const txt = (f === 'ingajuste' && ex.ingajusteZero) ? 'ZERO' : String(ex[f] || 0);
+    try { localStorage.setItem(extraLocalKey(code, f, 'fech', mkey), txt); } catch (e) {}
+    linhas.push({ code: extraComposite(code, f, 'fech'), month: mkey, text: txt, updated_at: agora });
+  });
+  const itxt = JSON.stringify(itens || []);
+  try { localStorage.setItem(outrosItemsLocalKey(code, mkey), itxt); } catch (e) {}
+  linhas.push({ code: outrosItemsComposite(code), month: mkey, text: itxt, updated_at: agora });
+  ['rateio', 'imposto'].forEach(function(f) {
+    try { if (zerado[f]) localStorage.setItem(zeroedLocalKey(code, f, mkey), '1'); else localStorage.removeItem(zeroedLocalKey(code, f, mkey)); } catch (e) {}
+    linhas.push({ code: zeroedComposite(code, f), month: mkey, text: zerado[f] ? '1' : '0', updated_at: agora });
+  });
+  return linhas;
+}
+function fechLinhaRealoc(code, mkey, lista, agora) {
+  const txt = JSON.stringify(lista || []);
+  try { localStorage.setItem(realocLocalKey(code, mkey), txt); } catch (e) {}
+  return { code: realocComposite(code), month: mkey, text: txt, updated_at: agora };
+}
+async function fechUpsertVarias(linhas) {
+  if (!SUPABASE_CONFIGURED || !linhas.length) return { ok: true, local: !SUPABASE_CONFIGURED };
+  try {
+    for (let i = 0; i < linhas.length; i += 500) {
+      const { error } = await sb.from('notes').upsert(linhas.slice(i, i + 500), { onConflict: 'code,month' });
+      if (error) return { ok: false };
+    }
+    return { ok: true };
+  } catch (e) { return { ok: false }; }
+}
+
+function fechLixoRender(mkey) {
+  const el = document.getElementById('fech-lixo');
+  if (!el) return;
+  const k = CURRENT_GESTOR + '|' + mkey;
+  const lixo = FECH_LIXO[k];
+  if (!lixo) {
+    el.innerHTML = '';
+    fechLixoCarregar(mkey).then(function() {
+      if (document.getElementById('month-select').value === mkey && CURRENT_GESTOR + '|' + mkey === k) fechLixoRender(mkey);
+    });
+    return;
+  }
+  if (!lixo.limpezas.length) { el.innerHTML = ''; return; }
+  const btn = 'background:#fff; color:var(--navy); border:1px solid var(--border); border-radius:8px; font-weight:600; font-size:12px; padding:5px 12px; cursor:pointer;';
+  el.innerHTML = '<div style="margin-top:18px; border:1px dashed var(--border); border-radius:10px; padding:12px 14px; background:#fff;">' +
+    '<div style="font-weight:700; color:var(--navy); margin-bottom:4px;">&#128465; Fechamentos limpos de ' + escHtml(CURRENT_GESTOR) + ' em ' + TR_MES_NOMES[mkey] + '</div>' +
+    '<div class="small-note" style="margin-bottom:8px;">Copia do que foi zerado com "Limpar fechamento do mes". "Restaurar" volta os campos, a parametrizacao, a regularizacao e as transferencias como estavam.</div>' +
+    lixo.limpezas.map(function(l) {
+      const nProj = Object.keys(l.projetos || {}).length;
+      const nReg = Object.keys(l.realoc || {}).reduce(function(s, c) { return s + (l.realoc[c] || []).length; }, 0) / 2;
+      const nTr = (l.transf || []).length;
+      return '<div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border);">' +
+        '<span style="flex:1; min-width:220px;">Limpo em <b>' + escHtml(trLixoData(l.t)) + '</b> &middot; ' + nProj + ' projeto' + (nProj === 1 ? '' : 's') +
+        (nReg ? ' &middot; ' + Math.round(nReg) + ' regularizac' + (Math.round(nReg) === 1 ? 'ao' : 'oes') : '') +
+        (nTr ? ' &middot; ' + nTr + ' transferencia' + (nTr === 1 ? '' : 's') : '') + '</span>' +
+        '<button type="button" style="' + btn + '" onclick="fechRestaurarLimpeza(\'' + l.id + '\')">&#8634; Restaurar</button>' +
+        '<a href="#" style="font-size:12px; color:var(--neutral);" onclick="fechDescartarLimpeza(\'' + l.id + '\'); return false;">descartar copia</a></div>';
+    }).join('') + '</div>';
+}
+function fechRenderLocal(mkey) {
+  renderFechTab(mkey);
+  loadStatusForMonth('fech', mkey);
+  filterProgress('fech');
+  renderParamTab(mkey);
+  filterProgress('param');
+  if (typeof renderTransfTab === 'function') renderTransfTab(mkey);
+  if (typeof painelAgendar === 'function') painelAgendar();
+}
+
+async function fechLimparMes() {
+  const mkey = document.getElementById('month-select').value;
+  const g = CURRENT_GESTOR;
+  const projs = currentProjects();
+  if (!projs.length) return;
+  const codes = projs.map(function(p) { return p.code; });
+  const meus = {}; codes.forEach(function(c) { meus[c] = true; });
+  const transf = (typeof trLinhasOrdenadas === 'function') ? trLinhasOrdenadas(mkey) : [];
+  // transferencias de OUTROS gestores que mexem nos projetos deste gestor continuam (cada gestor so apaga as suas)
+  const transfOutros = Object.keys(TR_ROWS[mkey] || {}).map(function(id) { return TR_ROWS[mkey][id]; }).filter(function(r) {
+    return !trDoGestor(r) && [r.projorig, r.projdest].some(function(t) { const p = trProjetoSite(t); return p && meus[p.code]; });
+  });
+  let nReg = 0;
+  codes.forEach(function(c) { nReg += realocLista(c, mkey).length; });
+  const ok = await uiConfirm('Limpar o Fechamento de ' + TR_MES_NOMES[mkey] + ' nos ' + codes.length + ' projetos de ' + g + '?\n\n' +
+    'Fica so o custo da ficha. Sao zerados no mes:\n' +
+    '- Existencia, Outros (com os itens), MIOPs, Entre Empresas, Provisao e Ingresso ajustado (volta o da PR/ficha)\n' +
+    '- Rateio e Imposto (como o "Zerar" da Parametrizacao, so neste mes)\n' +
+    '- Regularizacoes' + (nReg ? ' (' + nReg + ' lancamento' + (nReg === 1 ? '' : 's') + ')' : '') + '\n' +
+    '- Transferencias de ' + g + ' no mes (' + transf.length + ')\n\n' +
+    'Os comentarios ficam.' + (transfOutros.length ? ' ' + transfOutros.length + ' transferencia' + (transfOutros.length === 1 ? '' : 's') + ' de outro gestor envolve' + (transfOutros.length === 1 ? '' : 'm') + ' estes projetos e continua' + (transfOutros.length === 1 ? '' : 'm') + '.' : '') +
+    '\n\nUma copia fica guardada abaixo da lista, em "Fechamentos limpos", com o botao Restaurar.',
+    { titulo: 'Limpar fechamento do mes', okTexto: 'Limpar tudo', perigo: true });
+  if (!ok) return;
+  const btn = document.getElementById('fech-limpar-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Limpando...'; }
+  try {
+    // regularizacoes: le o gravado (outro navegador pode ter lancado algo) e junta os dois lados de cada lancamento
+    if (SUPABASE_CONFIGURED) {
+      try {
+        const res = await sb.from('notes').select('code,text').eq('month', mkey).in('code', codes.map(realocComposite));
+        if (!res.error && res.data) res.data.forEach(function(row) { realocDefinir(realocCodigo(row.code), mkey, realocLerTexto(row.text)); });
+      } catch (e) {}
+    }
+    const ids = {}, realocCodes = {};
+    codes.forEach(function(c) { realocLista(c, mkey).forEach(function(e) { ids[e.id] = true; realocCodes[c] = true; realocCodes[e.outro] = true; }); });
+    const realocAntes = {};
+    Object.keys(realocCodes).forEach(function(c) { realocAntes[c] = JSON.parse(JSON.stringify(realocLista(c, mkey))); });
+    // copia
+    const projetos = {};
+    codes.forEach(function(c) {
+      recomputeOutrosSum(c, mkey);
+      const ex = getExtra(c, mkey, 'fech'), z = getZeroed(c, mkey);
+      const exCopia = {};
+      FECH_CAMPOS_LIMPAR.forEach(function(f) { exCopia[f] = ex[f] || 0; });
+      exCopia.ingajusteZero = !!ex.ingajusteZero;
+      projetos[c] = { ex: exCopia, itens: JSON.parse(JSON.stringify(getOutrosItems(c, mkey))), zerado: { rateio: !!z.rateio, imposto: !!z.imposto } };
+    });
+    const limpeza = { id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: new Date().toISOString(), gestor: g,
+      projetos: projetos, realoc: realocAntes, transf: transf.map(function(x) { return { id: x.id, r: x.r }; }) };
+    const lixo = await fechLixoCarregar(mkey, true);
+    const novo = { limpezas: [limpeza].concat(lixo.limpezas).slice(0, FECH_LIXO_MAX) };
+    const rb = await fechLixoGravar(g, mkey, novo);
+    if (!rb.ok) { await uiAlert('Nao foi possivel guardar a copia do fechamento -- nada foi apagado. Tente novamente.', { titulo: 'Limpar fechamento', aviso: true }); return; }
+    fechLixoDefinir(g + '|' + mkey, novo);
+    // zera na memoria e monta as gravacoes
+    const agora = new Date().toISOString();
+    let linhas = [];
+    codes.forEach(function(c) {
+      const ex = getExtra(c, mkey, 'fech');
+      FECH_CAMPOS_LIMPAR.forEach(function(f) { ex[f] = 0; });
+      ex.ingajusteZero = false;
+      if (!OUTROS_ITEMS[c]) OUTROS_ITEMS[c] = {};
+      OUTROS_ITEMS[c][mkey] = [];
+      const z = getZeroed(c, mkey); z.rateio = true; z.imposto = true;
+      linhas = linhas.concat(fechLinhasProjeto(c, mkey, ex, [], z, agora));
+    });
+    Object.keys(realocCodes).forEach(function(c) {
+      realocDefinir(c, mkey, realocLista(c, mkey).filter(function(e) { return !ids[e.id]; }));
+      linhas.push(fechLinhaRealoc(c, mkey, realocLista(c, mkey), agora));
+    });
+    transf.forEach(function(x) { delete TR_ROWS[mkey][x.id]; });
+    if (typeof TR_EDIT_ID !== 'undefined' && TR_EDIT_ID && transf.some(function(x) { return x.id === TR_EDIT_ID; })) trLimparForm();
+    fechRenderLocal(mkey);   // so a tela; renderAllTabs (que rele transferencias do banco) depois de gravar
+    const r1 = await fechUpsertVarias(linhas);
+    const r2 = await trPersistVarios(transf.map(function(x) { return { id: x.id, obj: null }; }), mkey);
+    REDE_RECENTE = {};
+    renderAllTabs(mkey);
+    if (!r1.ok || !r2.ok) await uiAlert('O fechamento foi limpo neste navegador, mas FALHOU ao sincronizar' + (!r1.ok ? ' os campos' : '') + (!r1.ok && !r2.ok ? ' e' : '') + (!r2.ok ? ' as transferencias' : '') + '. Clique em "Limpar fechamento do mes" de novo ou use Restaurar.', { titulo: 'Limpar fechamento', aviso: true });
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#128465; Limpar fechamento do mes'; }
+  }
+}
+
+async function fechRestaurarLimpeza(lid) {
+  const mkey = document.getElementById('month-select').value;
+  const g = CURRENT_GESTOR;
+  const lixo = await fechLixoCarregar(mkey, true);
+  const l = lixo.limpezas.find(function(x) { return x.id === lid; });
+  if (!l) { fechLixoRender(mkey); return; }
+  if (!TR_ROWS[mkey]) TR_ROWS[mkey] = {};
+  const chaves = {};
+  Object.keys(TR_ROWS[mkey]).forEach(function(id) { chaves[trImportChave(TR_ROWS[mkey][id])] = true; });
+  const voltarTr = (l.transf || []).filter(function(x) { return x.r && !TR_ROWS[mkey][x.id] && !chaves[trImportChave(x.r)]; });
+  const ok = await uiConfirm('Restaurar o Fechamento de ' + TR_MES_NOMES[mkey] + ' como estava em ' + trLixoData(l.t) + '?\n\n' +
+    'Campos, itens do Outros, Rateio/Imposto e Ingresso ajustado voltam aos valores da copia (o que foi digitado depois nesses campos e substituido). ' +
+    'Regularizacoes e transferencias voltam somando-se as atuais' + ((l.transf || []).length - voltarTr.length ? ' (' + ((l.transf || []).length - voltarTr.length) + ' transferencia(s) ja na lista ficam de fora)' : '') + '.',
+    { titulo: 'Restaurar fechamento', okTexto: 'Restaurar' });
+  if (!ok) return;
+  const agora = new Date().toISOString();
+  let linhas = [];
+  Object.keys(l.projetos || {}).forEach(function(c) {
+    const s = l.projetos[c];
+    const ex = getExtra(c, mkey, 'fech');
+    FECH_CAMPOS_LIMPAR.forEach(function(f) { ex[f] = (s.ex && s.ex[f]) || 0; });
+    ex.ingajusteZero = !!(s.ex && s.ex.ingajusteZero);
+    if (!OUTROS_ITEMS[c]) OUTROS_ITEMS[c] = {};
+    OUTROS_ITEMS[c][mkey] = JSON.parse(JSON.stringify(s.itens || []));
+    const z = getZeroed(c, mkey); z.rateio = !!(s.zerado && s.zerado.rateio); z.imposto = !!(s.zerado && s.zerado.imposto);
+    linhas = linhas.concat(fechLinhasProjeto(c, mkey, ex, OUTROS_ITEMS[c][mkey], z, agora));
+  });
+  Object.keys(l.realoc || {}).forEach(function(c) {
+    const atual = realocLista(c, mkey);
+    const tem = {}; atual.forEach(function(e) { tem[e.id] = true; });
+    realocDefinir(c, mkey, atual.concat((l.realoc[c] || []).filter(function(e) { return !tem[e.id]; })));
+    linhas.push(fechLinhaRealoc(c, mkey, realocLista(c, mkey), agora));
+  });
+  voltarTr.forEach(function(x) { TR_ROWS[mkey][x.id] = x.r; });
+  const novo = { limpezas: lixo.limpezas.filter(function(x) { return x.id !== lid; }) };
+  fechRenderLocal(mkey);   // so a tela; renderAllTabs (que rele transferencias do banco) depois de gravar
+  const r1 = await fechUpsertVarias(linhas);
+  const r2 = await trPersistVarios(voltarTr.map(function(x) { return { id: x.id, obj: x.r }; }), mkey);
+  REDE_RECENTE = {};
+  renderAllTabs(mkey);
+  if (!r1.ok || !r2.ok) { await uiAlert('Restaurado neste navegador, mas FALHOU ao sincronizar. A copia continua em "Fechamentos limpos" -- tente Restaurar de novo.', { titulo: 'Restaurar fechamento', aviso: true }); return; }
+  const rb = await fechLixoGravar(g, mkey, novo);
+  if (rb.ok) fechLixoDefinir(g + '|' + mkey, novo);
+  fechLixoRender(mkey);
+}
+
+async function fechDescartarLimpeza(lid) {
+  const mkey = document.getElementById('month-select').value;
+  const g = CURRENT_GESTOR;
+  const lixo = await fechLixoCarregar(mkey, true);
+  const l = lixo.limpezas.find(function(x) { return x.id === lid; });
+  if (!l) { fechLixoRender(mkey); return; }
+  if (!(await uiConfirm('Descartar a copia do fechamento limpo em ' + trLixoData(l.t) + '?\nDepois disso ele nao pode mais ser restaurado.', { titulo: 'Descartar copia', okTexto: 'Descartar', perigo: true }))) return;
+  const novo = { limpezas: lixo.limpezas.filter(function(x) { return x.id !== lid; }) };
+  const rb = await fechLixoGravar(g, mkey, novo);
+  if (!rb.ok) { await uiAlert('FALHOU ao descartar a copia. Tente novamente.', { titulo: 'Descartar copia', aviso: true }); return; }
+  fechLixoDefinir(g + '|' + mkey, novo);
+  fechLixoRender(mkey);
 }
 
 function closeOutrosModal() {
@@ -10412,6 +10675,8 @@ async function trExcluir(id) {
 // mostrada em "Listas limpas" com "Restaurar". O prefixo nao casa com o like '__TRANSF__::%' da carga.
 var TR_LIXO_PREFIX = '__TRLIXO__::';
 var TR_LIXO = {};        // { 'gestor|MKEY': { limpezas: [...] } }
+var TR_LIXO_VER = {};
+function trLixoDefinir(k, obj) { TR_LIXO[k] = obj; TR_LIXO_VER[k] = (TR_LIXO_VER[k] || 0) + 1; }
 var TR_LIXO_MAX = 10;    // copias guardadas por gestor e mes
 function trLixoChave(mkey) { return CURRENT_GESTOR + '|' + mkey; }
 function trLixoLocalKey(g, mkey) { return NOTES_PREFIX + TR_LIXO_PREFIX + g + '::' + mkey; }
@@ -10420,6 +10685,7 @@ function trLixoData(t) { try { return new Date(t).toLocaleString('pt-BR', { day:
 async function trLixoCarregar(mkey, forcar) {
   const g = CURRENT_GESTOR, k = g + '|' + mkey;
   if (TR_LIXO[k] && !forcar) return TR_LIXO[k];
+  const ver = TR_LIXO_VER[k] || 0;
   let obj = null;
   try { obj = JSON.parse(localStorage.getItem(trLixoLocalKey(g, mkey)) || 'null'); } catch (e) {}
   if (TR_REMOTE) {
@@ -10428,7 +10694,7 @@ async function trLixoCarregar(mkey, forcar) {
       if (!error) { obj = null; try { obj = data && data[0] && data[0].text ? JSON.parse(data[0].text) : null; } catch (e) {} }
     } catch (e) {}
   }
-  TR_LIXO[k] = (obj && Array.isArray(obj.limpezas)) ? obj : { limpezas: [] };
+  if ((TR_LIXO_VER[k] || 0) === ver) trLixoDefinir(k, (obj && Array.isArray(obj.limpezas)) ? obj : { limpezas: [] });
   return TR_LIXO[k];
 }
 
@@ -10507,7 +10773,7 @@ async function trLimparLista() {
   const novo = { limpezas: [limpeza].concat(lixo.limpezas).slice(0, TR_LIXO_MAX) };
   const rb = await trLixoGravar(g, mkey, novo);
   if (!rb.ok) { rpSetStatus('tr-form-status', 'Nao foi possivel guardar a copia da lista -- nada foi apagado. Tente novamente.', 'bad'); return; }
-  TR_LIXO[g + '|' + mkey] = novo;
+  trLixoDefinir(g + '|' + mkey, novo);
   rows.forEach(function(x) { delete TR_ROWS[mkey][x.id]; });
   if (TR_EDIT_ID && rows.some(function(x) { return x.id === TR_EDIT_ID; })) trLimparForm();
   renderTransfTab(mkey);
@@ -10542,7 +10808,7 @@ async function trRestaurarLimpeza(lid) {
   voltar.forEach(function(x) { TR_ROWS[mkey][x.id] = x.r; });
   const novo = { limpezas: lixo.limpezas.filter(function(x) { return x.id !== lid; }) };
   const rb = await trLixoGravar(g, mkey, novo);
-  TR_LIXO[g + '|' + mkey] = novo;
+  trLixoDefinir(g + '|' + mkey, novo);
   renderTransfTab(mkey);
   trRefreshFech(mkey);
   rpSetStatus('tr-form-status', voltar.length + ' transferencia' + (voltar.length === 1 ? '' : 's') + ' restaurada' + (voltar.length === 1 ? '' : 's') + '.' +
@@ -10559,7 +10825,7 @@ async function trDescartarLimpeza(lid) {
   const novo = { limpezas: lixo.limpezas.filter(function(x) { return x.id !== lid; }) };
   const rb = await trLixoGravar(g, mkey, novo);
   if (!rb.ok) { rpSetStatus('tr-form-status', 'FALHOU ao descartar a copia. Tente novamente.', 'bad'); return; }
-  TR_LIXO[g + '|' + mkey] = novo;
+  trLixoDefinir(g + '|' + mkey, novo);
   trLixoRender(mkey);
 }
 
