@@ -9057,6 +9057,88 @@ async function fechUpsertVarias(linhas) {
   } catch (e) { return { ok: false }; }
 }
 
+// O que foi zerado em uma limpeza, por projeto, montado a partir da copia: { code: [{campo, valor?, txt?, sub?[]}] }.
+// Valores com o sinal do custo do Fechamento (transferencia/regularizacao recebida +, cedida/enviada -).
+var FECH_LIXO_ABRIR = null;   // id da limpeza que acabou de ser feita: lista aberta
+var FECH_CAMPOS_ROTULO = { existencia: 'Existência', outros: 'Outros', miops: 'MIOPs', entreempresas: 'Entre Empresas (manual)', provisao: 'Provisão', ingajuste: 'Ingresso ajustado' };
+function fechLimpezaDetalhe(l, mkey) {
+  const out = {};
+  function add(c, it) { (out[c] = out[c] || []).push(it); }
+  const nz = function(v) { return Math.abs(v || 0) >= 0.005; };
+  Object.keys(l.projetos || {}).forEach(function(c) {
+    const s = l.projetos[c], ex = s.ex || {};
+    FECH_CAMPOS_LIMPAR.forEach(function(f) {
+      const campo = FECH_CAMPOS_ROTULO[f] || f;
+      if (f === 'ingajuste') {
+        if (ex.ingajusteZero) add(c, { campo: campo, txt: 'R$ 0,00 (zerado de propósito)', nota: 'volta o da ficha/PR' });
+        else if (nz(ex.ingajuste)) add(c, { campo: campo, valor: ex.ingajuste, nota: 'volta o da ficha/PR' });
+        return;
+      }
+      if (!nz(ex[f])) return;
+      const it = { campo: campo, valor: ex[f] };
+      if (f === 'outros' && (s.itens || []).length) it.sub = s.itens.filter(function(i) { return nz(parseFloat(i.valor)); }).map(function(i) { return (i.desc || 'sem descrição') + ': ' + brl(parseFloat(i.valor) || 0); });
+      add(c, it);
+    });
+    [['rateio', 'Rateio'], ['imposto', 'Imposto']].forEach(function(par) {
+      if (s.zerado && s.zerado[par[0]]) return;   // ja estava zerado antes da limpeza
+      if (s.calc) { if (nz(s.calc[par[0]])) add(c, { campo: par[1], valor: s.calc[par[0]] }); return; }
+      // copia antiga (sem os valores calculados): estima pelos % da Parametrizacao sobre o ingresso de hoje
+      let est = null;
+      try {
+        const p = DATA.find(function(x) { return x.code === c; });
+        if (p && mkey && p.months && p.months[mkey]) {
+          const ing = resolveIngreso(p, mkey), params = getParams(c);
+          est = par[0] === 'rateio' ? ing * paramRateioFrac(params) : ing * ((params.impostoPct || 0) / 100);
+        }
+      } catch (e) {}
+      if (est === null) add(c, { campo: par[1], txt: 'zerado', nota: 'era calculado pela Parametrização' });
+      else if (nz(est)) add(c, { campo: par[1], valor: est, nota: 'estimado (cópia anterior a esta lista)' });
+    });
+  });
+  Object.keys(l.realoc || {}).forEach(function(c) {
+    (l.realoc[c] || []).forEach(function(e) {
+      add(c, { campo: 'Regularização', valor: e.tipo === 'recebe' ? e.valor : -e.valor, nota: (e.tipo === 'recebe' ? 'recebida de ' : 'enviada para ') + e.outro });
+    });
+  });
+  (l.transf || []).forEach(function(x) {
+    const r = x.r || {};
+    const quem = (r.nome || ('matrícula ' + (r.matricula || '?'))) + ', ' + rpNum(r.horas || 0, 2) + 'h';
+    const dest = trProjetoSite(r.projdest), orig = trProjetoSite(r.projorig);
+    const cd = dest ? dest.code : String(r.projdest || '?'), co = orig ? orig.code : String(r.projorig || '?');
+    add(cd, { campo: 'Transferência', valor: r.custo ? r.custo : null, txt: r.custo ? null : 'sem taxa', nota: 'recebe de ' + co + ' (' + quem + ')' });
+    add(co, { campo: 'Transferência', valor: r.custo ? -r.custo : null, txt: r.custo ? null : 'sem taxa', nota: 'cede para ' + cd + ' (' + quem + ')' });
+  });
+  return out;
+}
+function fechLimpezaDetalheHtml(l, mkey) {
+  const det = fechLimpezaDetalhe(l, mkey);
+  const meus = l.projetos || {};
+  const codes = Object.keys(det).sort(function(a, b) { return (meus[a] ? 0 : 1) - (meus[b] ? 0 : 1) || a.localeCompare(b); });
+  const semNada = Object.keys(meus).filter(function(c) { return !det[c]; }).sort();
+  if (!codes.length) return '<div class="small-note" style="padding:6px 0;">Nenhum campo tinha valor: so o custo da ficha ja estava lancado.</div>';
+  const td = 'padding:3px 8px; border-top:1px solid var(--border); vertical-align:top;';
+  let h = '<table style="width:100%; border-collapse:collapse; font-size:12px; margin-top:6px;"><thead><tr style="text-align:left; color:var(--neutral);">' +
+    '<th style="padding:3px 8px;">Projeto</th><th style="padding:3px 8px;">Campo zerado</th><th style="padding:3px 8px; text-align:right;">Valor antes</th><th style="padding:3px 8px;">Detalhe</th></tr></thead><tbody>';
+  codes.forEach(function(c) {
+    const p = DATA.find(function(x) { return x.code === c; });
+    const itens = det[c];
+    const calc = meus[c] && meus[c].calc;
+    itens.forEach(function(it, i) {
+      h += '<tr>' + (i === 0 ? '<td rowspan="' + itens.length + '" style="' + td + ' font-weight:600; color:var(--navy);">' + escHtml(c) +
+        (p ? '<div class="small-note" style="font-weight:400;">' + escHtml(p.name || '') + '</div>' : '') +
+        (!meus[c] ? '<div class="small-note" style="font-weight:400;">(outro gestor)</div>' : '') +
+        (calc && Math.abs(calc.custo - calc.ficha) >= 0.005 ? '<div class="small-note" style="font-weight:400;">custo ' + brl(calc.custo) + ' &rarr; ' + brl(calc.ficha) + ' (ficha)</div>' : '') + '</td>' : '') +
+        '<td style="' + td + '">' + escHtml(it.campo) + '</td>' +
+        '<td style="' + td + ' text-align:right; white-space:nowrap;">' + (it.valor !== null && it.valor !== undefined ? brl(it.valor) : escHtml(it.txt || '')) + '</td>' +
+        '<td style="' + td + ' color:var(--neutral);">' + escHtml(it.nota || '') +
+        (it.sub && it.sub.length ? '<div>' + it.sub.map(escHtml).join('<br>') + '</div>' : '') + '</td></tr>';
+    });
+  });
+  h += '</tbody></table>';
+  if (semNada.length) h += '<div class="small-note" style="margin-top:6px;">Sem nada lancado alem da ficha (nao mudaram): ' + semNada.map(escHtml).join(', ') + '.</div>';
+  return h;
+}
+
 function fechLixoRender(mkey) {
   const el = document.getElementById('fech-lixo');
   if (!el) return;
@@ -9083,7 +9165,9 @@ function fechLixoRender(mkey) {
         (nReg ? ' &middot; ' + Math.round(nReg) + ' regularizac' + (Math.round(nReg) === 1 ? 'ao' : 'oes') : '') +
         (nTr ? ' &middot; ' + nTr + ' transferencia' + (nTr === 1 ? '' : 's') : '') + '</span>' +
         '<button type="button" style="' + btn + '" onclick="fechRestaurarLimpeza(\'' + l.id + '\')">&#8634; Restaurar</button>' +
-        '<a href="#" style="font-size:12px; color:var(--neutral);" onclick="fechDescartarLimpeza(\'' + l.id + '\'); return false;">descartar copia</a></div>';
+        '<a href="#" style="font-size:12px; color:var(--neutral);" onclick="fechDescartarLimpeza(\'' + l.id + '\'); return false;">descartar copia</a>' +
+        '<details style="flex-basis:100%;"' + (FECH_LIXO_ABRIR === l.id ? ' open' : '') + '><summary style="cursor:pointer; font-size:12px; color:var(--navy); font-weight:600;">Ver campos zerados</summary>' +
+        fechLimpezaDetalheHtml(l, mkey) + '</details></div>';
     }).join('') + '</div>';
 }
 function fechRenderLocal(mkey) {
@@ -9143,6 +9227,11 @@ async function fechLimparMes() {
       FECH_CAMPOS_LIMPAR.forEach(function(f) { exCopia[f] = ex[f] || 0; });
       exCopia.ingajusteZero = !!ex.ingajusteZero;
       projetos[c] = { ex: exCopia, itens: JSON.parse(JSON.stringify(getOutrosItems(c, mkey))), zerado: { rateio: !!z.rateio, imposto: !!z.imposto } };
+      // valores calculados antes de zerar (so para mostrar o que foi zerado; o Restaurar nao usa)
+      const p = DATA.find(function(x) { return x.code === c; });
+      if (p && p.months && p.months[mkey]) {
+        try { const row = computeFechRow(p, mkey); projetos[c].calc = { rateio: row.rateioCalc || 0, imposto: row.impostoCalc || 0, custo: row.custoTotal || 0, ficha: row.custoFicha || 0 }; } catch (e) {}
+      }
     });
     const limpeza = { id: 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), t: new Date().toISOString(), gestor: g,
       projetos: projetos, realoc: realocAntes, transf: transf.map(function(x) { return { id: x.id, r: x.r }; }) };
@@ -9151,6 +9240,7 @@ async function fechLimparMes() {
     const rb = await fechLixoGravar(g, mkey, novo);
     if (!rb.ok) { await uiAlert('Nao foi possivel guardar a copia do fechamento -- nada foi apagado. Tente novamente.', { titulo: 'Limpar fechamento', aviso: true }); return; }
     fechLixoDefinir(g + '|' + mkey, novo);
+    FECH_LIXO_ABRIR = limpeza.id;   // a lista do que foi zerado aparece aberta
     // zera na memoria e monta as gravacoes
     const agora = new Date().toISOString();
     let linhas = [];
@@ -9174,6 +9264,8 @@ async function fechLimparMes() {
     const r2 = await trPersistVarios(transf.map(function(x) { return { id: x.id, obj: null }; }), mkey);
     REDE_RECENTE = {};
     renderAllTabs(mkey);
+    const elLixo = document.getElementById('fech-lixo');
+    if (elLixo && elLixo.scrollIntoView) { try { elLixo.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
     if (!r1.ok || !r2.ok) await uiAlert('O fechamento foi limpo neste navegador, mas FALHOU ao sincronizar' + (!r1.ok ? ' os campos' : '') + (!r1.ok && !r2.ok ? ' e' : '') + (!r2.ok ? ' as transferencias' : '') + '. Clique em "Limpar fechamento do mes" de novo ou use Restaurar.', { titulo: 'Limpar fechamento', aviso: true });
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '&#128465; Limpar fechamento do mes'; }
