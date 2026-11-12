@@ -267,6 +267,59 @@
   table.tr-table a { font-size:12px; margin-left:8px; }
   .rev-kpi-grid { grid-template-columns:repeat(4, 1fr); }
   @media (max-width: 760px) { .rev-kpi-grid { grid-template-columns:1fr 1fr; } }
+  /* Visao da Naira */
+  .na-top { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .na-fonte { font-size:12px; color:var(--slate); line-height:1.5; }
+  .na-filtros { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; background:#fff; border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin-bottom:16px; }
+  .na-filtros .na-fl { font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:.4px; font-weight:600; margin-right:6px; }
+  .na-filtros select { font-size:12.5px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; color:var(--navy); background:#fff; }
+  .na-seg { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; vertical-align:middle; }
+  .na-seg button { background:#fff; border:0; border-right:1px solid var(--border); padding:5px 10px; font-size:12.5px; color:var(--navy); cursor:pointer; }
+  .na-seg button:last-child { border-right:0; }
+  .na-seg button.on { background:var(--navy); color:#fff; font-weight:600; }
+  .na-sec { background:#fff; border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .na-sec h3 { margin:0 0 4px; font-size:15px; color:var(--navy); }
+  .na-sec .small-note { margin-bottom:10px; }
+  .na-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:12px; margin-bottom:16px; }
+  .na-kpi { background:#fff; border:1px solid var(--border); border-radius:12px; padding:14px 16px; }
+  .na-kpi .l { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--slate); font-weight:600; }
+  .na-kpi .v { font-size:22px; font-weight:700; color:var(--navy); margin:4px 0 2px; }
+  .na-kpi .s { font-size:12px; color:var(--slate); line-height:1.45; }
+  .na-ok { color:var(--ok); } .na-bad { color:var(--bad); } .na-warn { color:var(--warn); }
+  .na-wrap { overflow:auto; max-height:600px; }
+  table.na-t { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.na-t th { text-align:left; font-size:11px; color:var(--slate); font-weight:600; padding:6px 8px; border-bottom:2px solid var(--border); white-space:nowrap; position:sticky; top:0; background:#fff; z-index:1; }
+  table.na-t td { padding:5px 8px; border-top:1px solid var(--border); }
+  table.na-t .num { text-align:right; white-space:nowrap; }
+  table.na-t .na-bl { border-left:1px solid var(--border); }
+  table.na-t th.na-mg { text-align:center; border-left:1px solid var(--border); color:var(--navy); }
+  table.na-t tr.na-sub td { font-weight:700; color:var(--navy); background:var(--ice); }
+  table.na-t tr.na-tot td { font-weight:700; color:var(--navy); border-top:2px solid var(--navy); }
+  table.na-t tr.na-sol td:first-child { padding-left:22px; }
+  table.na-t tr.na-click { cursor:pointer; }
+  table.na-t tr.na-click:hover td { background:#f7f9fc; }
+  table.na-t tr.na-sel td { background:#eef4ff; }
+  table.na-t sup { color:var(--warn); font-size:9px; margin-left:2px; }
+  .na-grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(330px,100%),1fr)); gap:16px; }
+  .na-grid2 > .na-sec { min-width:0; }
+  .na-chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .na-chip { border:1px solid var(--border); background:#fff; border-radius:999px; padding:4px 10px; font-size:12px; cursor:pointer; color:var(--slate); display:inline-flex; align-items:center; gap:6px; }
+  .na-chip.on { border-color:var(--navy); color:var(--navy); font-weight:600; }
+  .na-chip i { width:10px; height:10px; border-radius:2px; display:inline-block; background:#d5dbe4; }
+  .na-gr { position:relative; }
+  .na-gr svg { width:100%; height:auto; display:block; }
+  .na-tip { position:absolute; pointer-events:none; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 6px 18px rgba(15,23,42,.12); padding:8px 10px; font-size:12px; display:none; z-index:5; min-width:170px; color:var(--navy); }
+  .na-tip b { display:block; margin-bottom:4px; }
+  .na-tip div { display:flex; justify-content:space-between; gap:12px; color:var(--slate); }
+  .na-tip span.v { color:var(--navy); font-weight:600; }
+  .na-leg { display:flex; flex-wrap:wrap; gap:14px; font-size:12px; color:var(--slate); margin:4px 0 6px; }
+  .na-leg i { display:inline-block; width:16px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
+  .na-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .na-b-ok { background:var(--ok-bg); color:var(--ok); } .na-b-warn { background:var(--warn-bg); color:var(--warn); }
+  .na-b-bad { background:var(--bad-bg); color:var(--bad); } .na-b-n { background:#eef1f5; color:var(--slate); }
+  .na-vazio { padding:28px; text-align:center; color:var(--slate); background:#fff; border:1px dashed var(--border); border-radius:12px; margin-bottom:16px; }
+  .na-tol input { width:56px; padding:3px 6px; border:1px solid var(--border); border-radius:6px; font-size:12.5px; text-align:right; }
+  @media (max-width:700px) { .na-kpi .v { font-size:18px; } .na-sec { padding:12px; } }
   .rp-lock { max-width:420px; margin:40px auto; background:#fff; border:1px solid var(--border); border-radius:12px; padding:28px; text-align:center; }
   .rp-lock h3 { margin:0 0 6px; color:var(--navy); font-size:18px; }
   .rp-lock p { margin:0 0 16px; color:var(--slate); font-size:13px; }
@@ -481,6 +534,17 @@
     </div>
     <button type="button" class="tab-btn" data-tab="faturamento" onclick="showTab('faturamento')">Faturamento</button>
     <button type="button" class="tab-btn" data-tab="cobro" onclick="showTab('cobro')">Cobro</button>
+    <div class="tab-group" data-group="na">
+      <button type="button" class="tab-btn tab-group-btn" onclick="showTab('naexec')">&#128274; Naira<span class="tab-sub" id="tab-sub-na"></span></button>
+      <button type="button" class="tab-caret" onclick="tabMenuToggle('na', event)" aria-label="Escolher aba da visao da Naira" aria-haspopup="true">&#9662;</button>
+      <div class="tab-menu" id="tab-menu-na" role="menu">
+        <button type="button" role="menuitem" data-tab="naexec" onclick="showTab('naexec')">Analise executiva</button>
+        <button type="button" role="menuitem" data-tab="nareview" onclick="showTab('nareview')">Review fechamento</button>
+        <button type="button" role="menuitem" data-tab="nafat" onclick="showTab('nafat')">Faturamento</button>
+        <button type="button" role="menuitem" data-tab="nacob" onclick="showTab('nacob')">Cobro</button>
+        <button type="button" role="menuitem" data-tab="naind" onclick="showTab('naind')">Indicadores</button>
+      </div>
+    </div>
   </div>
 
   <div id="tab-geral" class="tab-panel">
@@ -5494,6 +5558,13 @@
     <div id="painel-root"></div>
   </div>
 
+  <!-- Visao da Naira (AAPP + Sanidad): conteudo montado por naRenderAtivo -->
+  <div id="tab-naexec" class="tab-panel"><div id="na-root-naexec"></div></div>
+  <div id="tab-nareview" class="tab-panel"><div id="na-root-nareview"></div></div>
+  <div id="tab-nafat" class="tab-panel"><div id="na-root-nafat"></div></div>
+  <div id="tab-nacob" class="tab-panel"><div id="na-root-nacob"></div></div>
+  <div id="tab-naind" class="tab-panel"><div id="na-root-naind"></div></div>
+
   <div id="tab-fechamento" class="tab-panel active">
     <div class="small-note" id="fech-consolidado-note" style="margin-bottom:10px;"></div>
     <div class="kpi-grid kpi-grid-3">
@@ -6952,10 +7023,12 @@ function clearProjectFilter() {
 // Revisao). O botao do grupo mostra ao lado o nome da aba aberta quando for diferente do nome do grupo.
 var TAB_GRUPOS = {
   fech: { nome: 'Fechamento', abas: ['fechamento', 'painel', 'parametrizacao', 'transferencias'] },
-  rev: { nome: 'Revisao', abas: ['geral', 'dedicacao', 'rateio', 'revisao'] }
+  rev: { nome: 'Revisao', abas: ['geral', 'dedicacao', 'rateio', 'revisao'] },
+  na: { nome: 'Naira', abas: ['naexec', 'nareview', 'nafat', 'nacob', 'naind'] }
 };
 var TAB_NOMES = { geral: 'Comparativo', faturamento: 'Faturamento', cobro: 'Cobro', fechamento: 'Fechamento', painel: 'Dashboard', parametrizacao: 'Parametrizacao',
-  dedicacao: 'Dedicacao', transferencias: 'Transferencias', rateio: 'Rateio', revisao: 'Revisao' };
+  dedicacao: 'Dedicacao', transferencias: 'Transferencias', rateio: 'Rateio', revisao: 'Revisao',
+  naexec: 'Analise executiva', nareview: 'Review fechamento', nafat: 'Faturamento', nacob: 'Cobro', naind: 'Indicadores' };
 
 function tabMenuFechar() {
   document.querySelectorAll('.tab-group.menu-open').forEach(function(g) { g.classList.remove('menu-open'); });
@@ -6989,6 +7062,7 @@ function showTab(name) {
   if (name === 'revisao' && typeof renderRevisaoTab === 'function') renderRevisaoTab(document.getElementById('month-select').value);
   if (name === 'dedicacao') renderDedicacaoTab(document.getElementById('month-select').value);
   if (name === 'painel') { renderPainel(document.getElementById('month-select').value); painelVivoLigar(); }
+  if (/^na/.test(name) && typeof naRenderAtivo === 'function') naRenderAtivo();
 }
 
 function computeProgressRow(p, mkey, prefix, metaField, fichaField) {
@@ -8003,6 +8077,7 @@ function renderAllTabs(mkey) {
   filterProgress('param');
   const painelEl = document.getElementById('tab-painel');
   if (painelEl && painelEl.classList.contains('active')) renderPainel(mkey);
+  if (typeof naRenderAtivo === 'function') naRenderAtivo();
 }
 
 // ---------- Parametrizacao: render, edicao e zerar em massa ----------
@@ -14101,6 +14176,1002 @@ renderAllTabs(document.getElementById('month-select').value);
   // Bibliotecas de planilha em segundo plano, depois que a pagina ja esta pronta.
   setTimeout(function() { garantirXLSX().catch(function() {}); garantirJSZip().catch(function() {}); }, 4000);
 })();
+</script>
+
+<script>
+// ===================== Visao da Naira: AAPP + Sanidad (grupo de abas "Naira", trancado com senha) =====================
+// Fonte: o Pre Cierre (aba FC, TODOS os projetos de AAPP e Sanidad) e a ficha economica (resumo), enviados pela
+// propria Naira -- separados dos dados dos 3 gestores (nao mexe em DATA/PC_CACHE/FICHA).
+// Cada Pre Cierre fica guardado pelo mes que ele preve (1o mes FCST da aba FC): e o "previsto" daquele mes. O real
+// de um mes vem da ficha (se ela tem o mes) ou do Pre Cierre mais novo em que o mes ja e REAL.
+// Divisao pela coluna R (Solucao): Vertical = Educacional, CEDEX, Seguranca, Tributario, Produto Saude; Horizontal =
+// Pratica; o resto = Outros (decisao do usuario). Mercado = coluna B (Administraciones Publicas / Sanidad).
+// Gravacao cifrada (AES-GCM + gzip, como o cofre da Revisao) com a senha da Naira:
+// '__NAIRA__::cfg' (month ALL: indice), '__NAIRA__::pc' (month = mes do Pre Cierre), '__NAIRA__::ficha' (ALL).
+// Em localhost so grava no navegador (NA_REMOTE), como Rateio/Transferencias.
+var NA_TABS = ['naexec', 'nareview', 'nafat', 'nacob', 'naind'];
+var NA_PREFIX = '__NAIRA__::';
+var NA_REMOTE = RP_REMOTE;
+var NA_MODE = 'loading';     // loading | setup | login | unlocked
+var NA_CHECADO = false;
+var NA_KEY = null, NA_SALT = null, NA_CFG_BLOB = null;
+var NA = null;               // { cfg: {criado, snaps: {MES: {t, arquivo, n}}, fichaT}, snaps: {MES: snap}, ficha: {t, projetos} }
+var NA_CACHE = {};
+var NA_INFO = {};            // code -> {merc, div, sol, st, n} do Pre Cierre usado na tela
+var NA_MSG = null;           // {txt, cls}
+var NA_GR = {};
+var NA_K = { ing: 'ingresos', cst: 'coste', mg: 'margen', mov: 'mov_existencias', exi: 'existencias', deu: 'clientes', dpf: 'dpf', fat: 'facturacion', cob: 'cobros' };
+var NA_MES_IDX = {}; MESES.forEach(function(m, i) { NA_MES_IDX[m] = i; });
+var NA_VERT = { 'EDUCACIONAL': 'Educacional', 'CEDEX': 'CEDEX', 'SEGURANCA': 'Segurança', 'TRIBUTARIO': 'Tributário', 'PRODUTO SAUDE': 'Produto Saúde' };
+var NA_HOR = { 'PRATICA': 'Prática' };
+var NA_DIV_ROT = { V: 'Vertical', H: 'Horizontal', O: 'Outros' };
+var NA_MERC_ROT = { AAPP: 'AAPP', SAN: 'Sanidad', OUT: 'Outro' };
+var NA_CORES = ['#2563eb', '#ea7a1e', '#0f9d8a', '#8b5cf6', '#db2777', '#64748b'];
+var NA_F = { mercado: 'todos', divisao: 'geral', solucao: '', status: 'todos', metrica: 'ing', projeto: '', todos: false,
+  bi: { nafat: ['dpf', 'ing'], nacob: ['deu', 'fat'] }, tolIng: 5, tolMg: 2 };
+try { Object.assign(NA_F, JSON.parse(localStorage.getItem('pr_na_filtros') || '{}')); } catch (e) {}
+function naSalvarFiltros() { try { localStorage.setItem('pr_na_filtros', JSON.stringify(NA_F)); } catch (e) {} }
+
+// ---------- gravacao ----------
+function naLocalKey(code, month) { return NOTES_PREFIX + code + '::' + month; }
+async function naLerTexto(code, month) {
+  if (NA_REMOTE) {
+    try {
+      const { data, error } = await sb.from('notes').select('text').eq('code', code).eq('month', month).maybeSingle();
+      if (!error && data && data.text) return data.text;
+    } catch (e) {}
+  }
+  try { return localStorage.getItem(naLocalKey(code, month)); } catch (e) { return null; }
+}
+async function naGravarTexto(code, month, text) {
+  let localOk = true;
+  try { if (text) localStorage.setItem(naLocalKey(code, month), text); else localStorage.removeItem(naLocalKey(code, month)); } catch (e) { localOk = false; }
+  if (!NA_REMOTE) return { ok: localOk, local: true };
+  try {
+    const { error } = await sb.from('notes').upsert({ code: code, month: month, text: text, updated_at: new Date().toISOString() }, { onConflict: 'code,month' });
+    return { ok: !error };
+  } catch (e) { return { ok: false }; }
+}
+async function naGravarCifrado(code, month, obj) { return naGravarTexto(code, month, await rpEncrypt(obj, NA_KEY, NA_SALT, true)); }
+async function naLerCifrado(code, month) {
+  const t = await naLerTexto(code, month);
+  if (!t) return null;
+  return rpAbrir(JSON.parse(t), NA_KEY);
+}
+
+// ---------- senha ----------
+async function naChecar() {
+  NA_CHECADO = true;
+  NA_MODE = 'loading';
+  naRenderAtivo();
+  const blob = await naLerTexto(NA_PREFIX + 'cfg', 'ALL');
+  if (NA_MODE !== 'loading') return;
+  NA_CFG_BLOB = blob;
+  NA_MODE = blob ? 'login' : 'setup';
+  naRenderAtivo();
+}
+function naLockHtml() {
+  const setup = NA_MODE === 'setup';
+  return '<div class="rp-lock"><h3>&#128274; Visao da Naira (AAPP + Sanidad)</h3>' +
+    '<p>' + (NA_MODE === 'loading' ? 'Carregando...' : setup ? 'Primeiro acesso: defina a senha desta visao. Guarde-a bem -- sem ela os dados enviados aqui nao podem ser recuperados.' : 'Area restrita. Informe a senha da visao da Naira.') + '</p>' +
+    '<input type="password" id="na-pass" placeholder="Senha" autocomplete="' + (setup ? 'new-password' : 'current-password') + '" onkeydown="if(event.key===\'Enter\') naEntrar()">' +
+    (setup ? '<input type="password" id="na-pass2" placeholder="Confirme a senha" autocomplete="new-password" onkeydown="if(event.key===\'Enter\') naEntrar()">' : '') +
+    '<button type="button" onclick="naEntrar()"' + (NA_MODE === 'loading' ? ' disabled' : '') + '>' + (setup ? 'Definir senha' : 'Entrar') + '</button>' +
+    '<div class="email-status" id="na-lock-status"></div></div>';
+}
+function naLockStatus(txt, cls) { const el = document.getElementById('na-lock-status'); if (el) { el.className = 'email-status show' + (cls ? ' ' + cls : ''); el.textContent = txt; } }
+async function naEntrar() {
+  const pass = (document.getElementById('na-pass') || {}).value || '';
+  if (!window.crypto || !crypto.subtle) { naLockStatus('Navegador sem suporte a criptografia (precisa de https).', 'bad'); return; }
+  if (NA_MODE === 'setup') {
+    const pass2 = (document.getElementById('na-pass2') || {}).value || '';
+    if (pass.length < 6) { naLockStatus('Use pelo menos 6 caracteres.', 'bad'); return; }
+    if (pass !== pass2) { naLockStatus('As senhas nao conferem.', 'bad'); return; }
+    NA_SALT = crypto.getRandomValues(new Uint8Array(16));
+    NA_KEY = await rpDeriveKey(pass, NA_SALT);
+    NA = { cfg: { criado: new Date().toISOString(), snaps: {}, fichaT: null }, snaps: {}, ficha: null };
+    const r = await naGravarCifrado(NA_PREFIX + 'cfg', 'ALL', NA.cfg);
+    if (!r.ok) { NA = null; NA_KEY = null; naLockStatus('Nao foi possivel gravar. Tente novamente.', 'bad'); return; }
+  } else if (NA_MODE === 'login') {
+    naLockStatus('Verificando...', null);
+    try {
+      const r = await rpDecrypt(NA_CFG_BLOB, pass);
+      NA_KEY = r.key; NA_SALT = r.salt;
+      NA = { cfg: r.data || {}, snaps: {}, ficha: null };
+      if (!NA.cfg.snaps) NA.cfg.snaps = {};
+    } catch (e) { naLockStatus('Senha incorreta.', 'bad'); return; }
+    naLockStatus('Carregando os dados...', null);
+    await naCarregarDados();
+  } else return;
+  NA_MODE = 'unlocked';
+  naRenderAtivo();
+}
+async function naCarregarDados() {
+  const snaps = {};
+  await Promise.all(Object.keys(NA.cfg.snaps || {}).map(async function(m) {
+    try { const s = await naLerCifrado(NA_PREFIX + 'pc', m); if (s && s.projetos) snaps[m] = s; } catch (e) {}
+  }));
+  NA.snaps = snaps;
+  NA.ficha = null;
+  if (NA.cfg.fichaT) { try { NA.ficha = await naLerCifrado(NA_PREFIX + 'ficha', 'ALL'); } catch (e) {} }
+  NA_CACHE = {};
+}
+// indice gravado (outro navegador pode ter enviado algo): junta com o da memoria, o mais novo de cada mes
+async function naCfgReler() {
+  try {
+    const t = await naLerTexto(NA_PREFIX + 'cfg', 'ALL');
+    if (!t) return;
+    const c = await rpAbrir(JSON.parse(t), NA_KEY);
+    Object.keys(c.snaps || {}).forEach(function(m) {
+      const a = NA.cfg.snaps[m], b = c.snaps[m];
+      if (!a || (b && b.t > a.t)) NA.cfg.snaps[m] = b;
+    });
+    Object.keys(NA.cfg.snaps).forEach(function(m) { if (c.removidos && c.removidos[m] && c.removidos[m] > NA.cfg.snaps[m].t) delete NA.cfg.snaps[m]; });
+    if (c.fichaT && (!NA.cfg.fichaT || c.fichaT > NA.cfg.fichaT)) NA.cfg.fichaT = c.fichaT;
+    NA.cfg.removidos = Object.assign({}, c.removidos || {}, NA.cfg.removidos || {});
+  } catch (e) {}
+}
+async function naAtualizar(btn) {
+  if (NA_MODE !== 'unlocked') return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Atualizando...'; }
+  await naCfgReler();
+  await naCarregarDados();
+  NA_MSG = { txt: 'Atualizado ' + new Date().toLocaleTimeString('pt-BR') + '.', cls: 'ok' };
+  naRenderAtivo();
+}
+function naBloquear() { NA = null; NA_KEY = null; NA_SALT = null; NA_CACHE = {}; NA_MSG = null; naChecar(); }
+function naMsg(txt, cls) { NA_MSG = { txt: txt, cls: cls || '' }; const el = document.getElementById('na-status'); if (el) { el.className = 'email-status show' + (cls ? ' ' + cls : ''); el.textContent = txt; } }
+
+// ---------- leitura do Pre Cierre ----------
+function naR2(v) { return typeof v === 'number' && isFinite(v) ? Math.round(v * 100) / 100 : 0; }
+function naMercado(v) { const n = revNorm(v); return /SANIDAD/.test(n) ? 'SAN' : /ADMINISTRACIONES|PUBLICA/.test(n) ? 'AAPP' : 'OUT'; }
+function naDivisao(sol) { const n = revNorm(sol); return NA_VERT[n] ? 'V' : NA_HOR[n] ? 'H' : 'O'; }
+function naSolRot(sol) {
+  const n = revNorm(sol);
+  if (NA_VERT[n]) return NA_VERT[n];
+  if (NA_HOR[n]) return NA_HOR[n];
+  if (!n || n === '0' || n === 'NULL') return '(sem solucao)';
+  return String(sol).trim();
+}
+function naLerPreCierre(wb, nome) {
+  const ws = wb.Sheets['FC'];
+  if (!ws) throw new Error('aba FC nao encontrada');
+  const rows = xlsxSheetRows(ws);
+  const colmap = mapPrecierreColumnsJS(rows);
+  if (!colmap.fc || !colmap.poa) throw new Error('colunas REAL/FC e POA nao encontradas na aba FC');
+  const fcCols = MESES_ES_PC.map(function(m) { return colmap.fc[m]; });
+  const poaCols = MESES_ES_PC.map(function(m) { return colmap.poa[m]; });
+  if (fcCols.some(function(c) { return !c; }) || poaCols.some(function(c) { return !c; })) throw new Error('meses (Enero..Diciembre) nao encontrados no cabecalho da aba FC');
+  const status = {};
+  MESES.forEach(function(m, i) { status[m] = colmap.fc_status[MESES_ES_PC[i]] === 'REAL' ? 'REAL' : 'FCST'; });
+  const mes = MESES.find(function(m) { return status[m] === 'FCST'; }) || 'DEZ';
+  const index = buildPrecierreIndexJS(rows);
+  const projetos = {};
+  let conferido = false;
+  Object.keys(index).forEach(function(code) {
+    const c = String(code == null ? '' : code).trim();
+    if (!c || c === 'null' || c === 'undefined' || c === '0') return;
+    const start = index[code];
+    const b = [];
+    for (let r = start; r <= start + 12; r++) b.push(rows[r - 1] || []);
+    // conferencia do formato: a 3a linha do bloco e "Ingresos" (coluna AA)
+    if (!conferido) {
+      if (!/ingres/i.test(String(b[PC_CONCEPT_OFFSETS.ingresos][26] || ''))) throw new Error('formato inesperado na aba FC (linha de Ingresos nao encontrada no bloco do projeto ' + c + ')');
+      conferido = true;
+    }
+    const d = b[0];
+    const p = { n: String(d[6] == null ? '' : d[6]).trim(), merc: naMercado(d[1]), sol: String(d[17] == null ? '' : d[17]).trim(),
+      st: String(d[15] == null ? '' : d[15]).trim(), g: String(d[19] == null ? '' : d[19]).trim(), cli: String(d[8] == null ? '' : d[8]).trim(),
+      fc: {}, fca: {}, poa: {}, poaa: {} };
+    Object.keys(NA_K).forEach(function(k) {
+      const row = b[PC_CONCEPT_OFFSETS[NA_K[k]]] || [];
+      p.fc[k] = fcCols.map(function(col) { return naR2(row[col - 1]); });
+      p.poa[k] = poaCols.map(function(col) { return naR2(row[col - 1]); });
+      p.fca[k] = colmap.fc_ano ? naR2(row[colmap.fc_ano - 1]) : 0;
+      p.poaa[k] = colmap.poa_ano ? naR2(row[colmap.poa_ano - 1]) : 0;
+    });
+    projetos[c] = p;
+  });
+  if (!Object.keys(projetos).length) throw new Error('nenhum projeto encontrado na aba FC');
+  return { mes: mes, status: status, arquivo: nome, t: new Date().toISOString(), projetos: projetos };
+}
+async function naSubirPC(inp) {
+  const files = Array.from(inp.files || []);
+  inp.value = '';
+  if (!files.length || !NA) return;
+  naMsg('Lendo ' + files.length + ' Pre Cierre...');
+  try { await garantirXLSX(); } catch (e) { naMsg('Nao foi possivel carregar o leitor de planilhas: ' + e.message, 'bad'); return; }
+  const lidos = [], erros = [];
+  for (const f of files) {
+    try {
+      naMsg('Lendo ' + f.name + ' (arquivo grande: pode levar ate 1 minuto)...');
+      const wb = XLSX.read(new Uint8Array(await f.arrayBuffer()), { type: 'array' });
+      lidos.push(naLerPreCierre(wb, f.name));
+    } catch (e) { erros.push(f.name + ': ' + e.message); }
+  }
+  if (!lidos.length) { naMsg('Nenhum Pre Cierre lido. ' + erros.join(' | '), 'bad'); return; }
+  const porMes = {};
+  lidos.forEach(function(s) { porMes[s.mes] = s; });   // dois arquivos do mesmo mes: fica o ultimo
+  const meses = Object.keys(porMes).sort(function(a, b) { return NA_MES_IDX[a] - NA_MES_IDX[b]; });
+  await naCfgReler();
+  const subst = meses.filter(function(m) { return NA.cfg.snaps[m]; });
+  if (!(await uiConfirm('Guardar ' + meses.map(function(m) { return 'Pre Cierre de ' + TR_MES_NOMES[m] + ' (' + porMes[m].arquivo + ', ' + Object.keys(porMes[m].projetos).length + ' projetos)'; }).join('\n') +
+    '?\n\nO mes de cada arquivo e o 1o mes em previsao (FCST) da aba FC.' + (subst.length ? '\n\nJa existe Pre Cierre guardado para ' + subst.map(function(m) { return TR_MES_NOMES[m]; }).join(', ') + ': sera substituido.' : ''),
+    { titulo: 'Pre Cierre da visao da Naira', okTexto: 'Guardar' }))) { naMsg('Envio cancelado.'); return; }
+  const ok = [];
+  for (const m of meses) {
+    naMsg('Gravando ' + TR_MES_NOMES[m] + '...');
+    const r = await naGravarCifrado(NA_PREFIX + 'pc', m, porMes[m]);
+    if (!r.ok) { erros.push(porMes[m].arquivo + ': falhou ao gravar'); continue; }
+    NA.snaps[m] = porMes[m];
+    NA.cfg.snaps[m] = { t: porMes[m].t, arquivo: porMes[m].arquivo, n: Object.keys(porMes[m].projetos).length };
+    ok.push(m);
+  }
+  const rc = await naGravarCifrado(NA_PREFIX + 'cfg', 'ALL', NA.cfg);
+  NA_CACHE = {};
+  naMsg((ok.length ? 'Pre Cierre guardado: ' + ok.map(function(m) { return TR_MES_NOMES[m]; }).join(', ') + '.' : '') + (rc.ok ? '' : ' FALHOU ao gravar o indice -- envie de novo.') + (erros.length ? ' Problemas: ' + erros.join(' | ') : ''), erros.length || !rc.ok ? 'bad' : 'ok');
+  naRenderAtivo();
+}
+async function naRemoverSnap(m) {
+  if (!NA || !NA.cfg.snaps[m]) return;
+  if (!(await uiConfirm('Remover o Pre Cierre de ' + TR_MES_NOMES[m] + ' (' + (NA.cfg.snaps[m].arquivo || '') + ') da visao da Naira?', { titulo: 'Remover Pre Cierre', okTexto: 'Remover', perigo: true }))) return;
+  await naCfgReler();
+  delete NA.cfg.snaps[m];
+  NA.cfg.removidos = NA.cfg.removidos || {};
+  NA.cfg.removidos[m] = new Date().toISOString();
+  delete NA.snaps[m];
+  const r = await naGravarCifrado(NA_PREFIX + 'cfg', 'ALL', NA.cfg);
+  if (r.ok) await naGravarTexto(NA_PREFIX + 'pc', m, '');
+  NA_CACHE = {};
+  naMsg(r.ok ? 'Pre Cierre de ' + TR_MES_NOMES[m] + ' removido.' : 'FALHOU ao remover. Tente novamente.', r.ok ? 'ok' : 'bad');
+  naRenderAtivo();
+}
+
+// ---------- leitura da ficha economica (mesmo leitor das fichas do site + "Variacao de Existencias") ----------
+function naFichaExistencias(html) {
+  const out = {};
+  let cur = null;
+  fichaLinhasTabela(html).forEach(function(row) {
+    if (row[0] === 'Proyecto:' || row[0] === 'Projeto:') { const m = FICHA_CODE_RE.exec(row[1] || ''); cur = m ? m[1] : (row[1] || ''); return; }
+    if (!cur || out[cur] || row.length < 15) return;
+    if (/^Varia\S* de Exist/i.test(row[0] || '')) out[cur] = row.slice(2, 14).map(parseFichaNum);
+  });
+  return out;
+}
+async function naSubirFicha(inp) {
+  const files = Array.from(inp.files || []);
+  inp.value = '';
+  if (!files.length || !NA) return;
+  naMsg('Lendo ' + files.length + ' ficha(s)...');
+  const novos = {}, rejeitados = [];
+  let erros = 0, ignorados = 0;
+  // a ficha resumo traz tambem centros de custo internos (disponibilidade, repercussoes...): so entram os codigos
+  // que estao em algum Pre Cierre guardado
+  const noPC = {};
+  Object.keys(NA.snaps).forEach(function(m) { Object.keys(NA.snaps[m].projetos).forEach(function(c) { noPC[c] = true; }); });
+  const filtra = Object.keys(noPC).length > 0;
+  for (const f of files) {
+    try {
+      const raw = new TextDecoder('iso-8859-1').decode(await f.arrayBuffer());
+      const html = extractHtmlPart(raw);
+      if (!html) { erros++; continue; }
+      const parsed = parseFichaHtml(html), exi = naFichaExistencias(html);
+      // meses fechados = os anteriores ao mes em que a ficha foi extraida (data no nome: "Resumo_24072026133508");
+      // o mes da extracao vem parcial e nao conta como real
+      const md = /(\d{2})(\d{2})(20\d{2})\d{6}/.exec(f.name);
+      const dt = md ? new Date(+md[3], +md[2] - 1, +md[1]) : new Date();
+      const ate = dt.getMonth() === 0 ? 11 : dt.getMonth() - 1;
+      Object.keys(parsed).forEach(function(code) {
+        const r = parsed[code];
+        if (filtra && !noPC[code]) { ignorados++; return; }
+        if (r.problemas.length) { rejeitados.push(code + ': ' + r.problemas.join('; ')); delete novos[code]; return; }
+        const m = {};
+        MESES.forEach(function(mk, i) {
+          const o = r.months[mk] || {};
+          const num = function(v) { return v === undefined || v === null || v === '' ? null : naR2(parseFichaNum(v)); };
+          m[mk] = { ing: num(o.ing), cst: num(o.cst), fat: num(o.fat), cob: num(o.cob), dpf: num(o.dpf), deu: num(o.div), mov: exi[code] ? naR2(exi[code][i]) : null };
+        });
+        novos[code] = { n: r.name, m: m, t: new Date().toISOString(), ate: ate, extraida: dt.toISOString().slice(0, 10) };
+      });
+    } catch (e) { erros++; }
+  }
+  const codes = Object.keys(novos);
+  if (!codes.length) { naMsg('Nenhum projeto lido nas fichas.' + (rejeitados.length ? ' Com problema: ' + rejeitados.join(' | ') : ''), 'bad'); return; }
+  await naCfgReler();
+  if (NA.cfg.fichaT && !NA.ficha) { try { NA.ficha = await naLerCifrado(NA_PREFIX + 'ficha', 'ALL'); } catch (e) {} }
+  const ficha = NA.ficha || { projetos: {} };
+  let antigas = 0;
+  codes.forEach(function(c) {
+    const at = ficha.projetos[c];
+    if (at && at.extraida && at.extraida > novos[c].extraida) { antigas++; return; }   // ja tem ficha mais nova do projeto
+    ficha.projetos[c] = novos[c];
+  });
+  ficha.t = new Date().toISOString();
+  naMsg('Gravando ' + codes.length + ' projetos da ficha...');
+  const r = await naGravarCifrado(NA_PREFIX + 'ficha', 'ALL', ficha);
+  if (!r.ok) { naMsg('FALHOU ao gravar a ficha. Tente novamente.', 'bad'); return; }
+  NA.ficha = ficha;
+  NA.cfg.fichaT = ficha.t;
+  const rc = await naGravarCifrado(NA_PREFIX + 'cfg', 'ALL', NA.cfg);
+  NA_CACHE = {};
+  naMsg('Ficha: ' + (codes.length - antigas) + ' projeto(s) atualizados.' + (ignorados ? ' ' + ignorados + ' codigo(s) da ficha nao estao no Pre Cierre (centros de custo internos etc.) e foram ignorados.' : '') +
+    (filtra ? '' : ' Suba tambem o Pre Cierre: so com ele os projetos ganham mercado e divisao.') +
+    (antigas ? ' ' + antigas + ' projeto(s) ja tinham ficha extraida depois desta e ficaram como estavam.' : '') +
+    (rejeitados.length ? ' NAO lidos (conferencia falhou): ' + rejeitados.join(' | ') : '') + (erros ? ' ' + erros + ' arquivo(s) nao reconhecidos.' : '') + (rc.ok ? '' : ' FALHOU ao gravar o indice.'),
+    rejeitados.length || erros || !rc.ok ? 'warn' : 'ok');
+  naRenderAtivo();
+}
+
+// ---------- valores ----------
+function naSnapsOrdenados() {
+  if (NA_CACHE.ord) return NA_CACHE.ord;
+  return (NA_CACHE.ord = Object.keys(NA.snaps).sort(function(a, b) { return NA_MES_IDX[a] - NA_MES_IDX[b]; }).map(function(m) { return NA.snaps[m]; }));
+}
+// Pre Cierre usado na tela: o do mes selecionado; sem ele, o mais novo ate o mes; sem esse, o mais antigo
+function naBase(mkey) {
+  if (!NA) return null;
+  const lst = naSnapsOrdenados();
+  if (!lst.length) return null;
+  if (NA.snaps[mkey]) return NA.snaps[mkey];
+  const ant = lst.filter(function(s) { return NA_MES_IDX[s.mes] <= NA_MES_IDX[mkey]; });
+  return ant.length ? ant[ant.length - 1] : lst[0];
+}
+function naFichaAte(p) { return typeof p.ate === 'number' ? p.ate : 11; }
+function naFichaFechado(m) {
+  if (!NA.ficha) return false;
+  if (!NA_CACHE.fichaMeses) {
+    const s = {};
+    Object.keys(NA.ficha.projetos).forEach(function(c) {
+      const p = NA.ficha.projetos[c];
+      MESES.forEach(function(mk, i) { const o = p.m[mk]; if (o && naFichaAte(p) >= i && (Math.abs(o.ing || 0) + Math.abs(o.cst || 0) + Math.abs(o.fat || 0) + Math.abs(o.cob || 0)) >= 1) s[mk] = true; });
+    });
+    NA_CACHE.fichaMeses = s;
+  }
+  return !!NA_CACHE.fichaMeses[m];
+}
+// Pre Cierre mais novo em que o mes ja e REAL
+function naSnapReal(m) {
+  const k = 'real|' + m;
+  if (k in NA_CACHE) return NA_CACHE[k];
+  const lst = naSnapsOrdenados().filter(function(s) { return s.status[m] === 'REAL'; });
+  return (NA_CACHE[k] = lst.length ? lst[lst.length - 1] : null);
+}
+function naFechado(m) { return naFichaFechado(m) || !!naSnapReal(m); }
+// Real do mes: ficha > Pre Cierre em que o mes e REAL. mg = ingresso + variacao de existencias - custo (= Margen do Pre Cierre).
+function naReal(code, m, k) {
+  const i = NA_MES_IDX[m];
+  const s = naSnapReal(m);
+  const pc = s && s.projetos[code] ? s.projetos[code] : null;
+  const fp = NA.ficha && NA.ficha.projetos[code];
+  const f = fp && naFichaAte(fp) >= i && naFichaFechado(m) ? fp.m[m] : null;
+  if (f) {
+    if (k === 'mg') {
+      if (f.ing === null || f.cst === null) return pc ? pc.fc.mg[i] : null;
+      const mov = f.mov !== null ? f.mov : (pc ? pc.fc.mov[i] : 0);
+      return naR2(f.ing + mov - f.cst);
+    }
+    if (k !== 'exi' && f[k] !== null && f[k] !== undefined) return f[k];
+  }
+  return pc ? pc.fc[k][i] : null;
+}
+// Previsto para o mes: o Pre Cierre do proprio mes; sem ele, a previsao mais recente feita antes
+function naPrev(code, m, k) {
+  const i = NA_MES_IDX[m];
+  let s = NA.snaps[m];
+  if (!(s && s.projetos[code])) {
+    s = null;
+    const lst = naSnapsOrdenados();
+    for (let j = lst.length - 1; j >= 0; j--) {
+      const x = lst[j];
+      if (NA_MES_IDX[x.mes] <= i && x.status[m] === 'FCST' && x.projetos[code]) { s = x; break; }
+    }
+  }
+  return s ? s.projetos[code].fc[k][i] : null;
+}
+// Real se o mes ja fechou (e ha dado), senao a previsao
+function naAuto(code, m, k) {
+  if (naFechado(m)) { const r = naReal(code, m, k); if (r !== null) return { v: r, real: true }; }
+  const p = naPrev(code, m, k);
+  return p === null ? null : { v: p, real: false };
+}
+// soma num conjunto de projetos; modo: 'auto' | 'real' | 'prev'. Devolve {v, real} ou null se nenhum tem valor
+function naSomaMes(codes, m, k, modo) {
+  let v = 0, n = 0, real = true;
+  codes.forEach(function(c) {
+    let o;
+    if (modo === 'real') { const r = naFechado(m) ? naReal(c, m, k) : null; o = r === null ? null : { v: r, real: true }; }
+    else if (modo === 'prev') { const p = naPrev(c, m, k); o = p === null ? null : { v: p, real: false }; }
+    else o = naAuto(c, m, k);
+    if (!o) return;
+    v += o.v; n++;
+    if (!o.real) real = false;
+  });
+  return n ? { v: v, real: modo === 'prev' ? false : real } : null;
+}
+function naMesAnt(m) { const i = NA_MES_IDX[m]; return i > 0 ? MESES[i - 1] : null; }
+function naDiv0(a, b) { return a === null || b === null || a === undefined || b === undefined || Math.abs(b) < 0.005 ? null : a / b; }
+
+// ---------- universo e filtros ----------
+function naUniverso(base) {
+  NA_INFO = {};
+  Object.keys(base.projetos).forEach(function(c) {
+    const p = base.projetos[c];
+    NA_INFO[c] = { merc: p.merc, div: naDivisao(p.sol), sol: naSolRot(p.sol), st: p.st, n: p.n };
+  });
+  return Object.keys(base.projetos).sort();
+}
+function naFiltrar(codes, ign) {
+  ign = ign || {};
+  return codes.filter(function(c) {
+    const i = NA_INFO[c];
+    if (!i) return false;
+    if (NA_F.status === 'ativos' && i.st !== 'Activo') return false;
+    if (NA_F.status === 'inativos' && i.st === 'Activo') return false;
+    if (!ign.merc && NA_F.mercado !== 'todos' && i.merc !== NA_F.mercado) return false;
+    if (!ign.div && NA_F.divisao !== 'geral' && i.div !== NA_F.divisao) return false;
+    if (!ign.sol && NA_F.solucao && i.sol !== NA_F.solucao) return false;
+    return true;
+  });
+}
+function naFiltroRot() {
+  const p = [NA_F.mercado === 'todos' ? 'AAPP + Sanidad' : NA_MERC_ROT[NA_F.mercado]];
+  if (NA_F.divisao !== 'geral') p.push(NA_DIV_ROT[NA_F.divisao]);
+  if (NA_F.solucao) p.push(NA_F.solucao);
+  if (NA_F.status !== 'todos') p.push(NA_F.status === 'ativos' ? 'ativos' : 'finalizados/cancelados');
+  return p.join(' · ');
+}
+
+// ---------- formatacao ----------
+function naR(v) { return v === null || v === undefined || !isFinite(v) ? '—' : (v < -0.5 ? '-' : '') + 'R$ ' + Math.round(Math.abs(v)).toLocaleString('pt-BR'); }
+function naK(v) {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  const a = Math.abs(v), s = v < 0 ? '-' : '';
+  if (a >= 1e6) return s + 'R$ ' + (a / 1e6).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' mi';
+  if (a >= 1e3) return s + 'R$ ' + (a / 1e3).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' mil';
+  return s + 'R$ ' + Math.round(a).toLocaleString('pt-BR');
+}
+function naPct(v, d) { d = d === undefined ? 1 : d; return v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) + '%'; }
+function naPp(v) { return v === null || v === undefined || !isFinite(v) ? '—' : (v > 0.05 ? '+' : '') + v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' pp'; }
+function naX(v) { return v === null || v === undefined || !isFinite(v) ? '—' : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function naSinal(v, bomPositivo, txt) {
+  if (v === null || v === undefined || !isFinite(v)) return '—';
+  const cls = Math.abs(v) < 0.5 ? '' : ((v > 0) === (bomPositivo !== false) ? 'na-ok' : 'na-bad');
+  return '<span class="' + cls + '">' + (v > 0.5 && txt.charAt(0) !== '+' ? '+' : '') + txt + '</span>';
+}
+function naDifR(v, bomPositivo) { return naSinal(v, bomPositivo, naR(v)); }
+function naDifK(v, bomPositivo) { return naSinal(v, bomPositivo, naK(v)); }
+// valor {v, real}: previsao marcada com "p"
+function naRv(o) { return o ? naR(o.v) + (o.real ? '' : '<sup title="Previsao do Pre Cierre (mes ainda sem fechamento)">p</sup>') : '—'; }
+function naNum(o) { return o ? o.v : null; }
+function naKv(o) { return o ? naK(o.v) + (o.real ? '' : '<sup style="color:var(--warn); font-size:11px;" title="Inclui previsao do Pre Cierre (projeto sem ficha no mes ou mes sem fechamento)">p</sup>') : '—'; }
+
+// ---------- grafico de linhas (12 meses), com dica ao passar o mouse ----------
+// cfg: { series: [{nome, cor, vals: [12], prev: [12 bool], ref: bool}], fmt: fn (eixo), fmtTip: fn }
+function naTicks(min, max) {
+  const span = max - min || 1, passo0 = span / 4, mag = Math.pow(10, Math.floor(Math.log10(passo0)));
+  const passo = [1, 2, 2.5, 5, 10].map(function(f) { return f * mag; }).find(function(p) { return p >= passo0; }) || 10 * mag;
+  const t = [];
+  for (let v = Math.floor(min / passo) * passo; v <= max + passo * 0.001; v += passo) t.push(Math.round(v / passo) * passo);
+  return t;
+}
+function naGrafico(id, cfg) {
+  NA_GR[id] = cfg;
+  const W = 760, H = 250, L = 74, R = 14, T = 12, B = 26;
+  let min = 0, max = 0;
+  cfg.series.forEach(function(s) { s.vals.forEach(function(v) { if (v !== null && v !== undefined && isFinite(v)) { min = Math.min(min, v); max = Math.max(max, v); } }); });
+  if (max === min) max = min + 1;
+  const ticks = naTicks(min, max);
+  min = Math.min(min, ticks[0]); max = Math.max(max, ticks[ticks.length - 1]);
+  const bw = (W - L - R) / 12;
+  const x = function(i) { return L + bw * (i + 0.5); };
+  const y = function(v) { return T + (H - T - B) * (1 - (v - min) / (max - min)); };
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escHtml(cfg.titulo || 'grafico') + '">';
+  ticks.forEach(function(t) {
+    svg += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(t) + '" y2="' + y(t) + '" stroke="' + (t === 0 ? '#b8c2d0' : '#edf0f5') + '" stroke-width="1"/>' +
+      '<text x="' + (L - 8) + '" y="' + (y(t) + 4) + '" text-anchor="end" font-size="11" fill="#5c6b7a">' + escHtml(cfg.fmt(t)) + '</text>';
+  });
+  MESES.forEach(function(m, i) { svg += '<text x="' + x(i) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="11" fill="#5c6b7a">' + m + '</text>'; });
+  svg += '<line id="' + id + '-g" x1="0" x2="0" y1="' + T + '" y2="' + (H - B) + '" stroke="#94a3b8" stroke-dasharray="3 3" style="display:none"/>';
+  cfg.series.forEach(function(s) {
+    const sw = s.ref ? 1.5 : 2;
+    for (let i = 0; i < 11; i++) {
+      const a = s.vals[i], b = s.vals[i + 1];
+      if (a === null || b === null || a === undefined || b === undefined) continue;
+      const tr = s.prev && (s.prev[i] || s.prev[i + 1]);
+      svg += '<line x1="' + x(i) + '" y1="' + y(a) + '" x2="' + x(i + 1) + '" y2="' + y(b) + '" stroke="' + s.cor + '" stroke-width="' + sw + '" stroke-linecap="round"' + (tr ? ' stroke-dasharray="5 4"' : '') + (s.ref ? ' opacity="0.85"' : '') + '/>';
+    }
+    s.vals.forEach(function(v, i) {
+      if (v === null || v === undefined) return;
+      svg += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="' + (s.ref ? 2.5 : 3.5) + '" fill="' + (s.prev && s.prev[i] ? '#fff' : s.cor) + '" stroke="' + (s.prev && s.prev[i] ? s.cor : '#fff') + '" stroke-width="' + (s.prev && s.prev[i] ? 1.5 : 2) + '"/>';
+    });
+  });
+  MESES.forEach(function(m, i) {
+    svg += '<rect x="' + (L + bw * i) + '" y="' + T + '" width="' + bw + '" height="' + (H - T - B) + '" fill="transparent" onmousemove="naGrDica(\'' + id + '\',' + i + ',event)" onmouseleave="naGrSair(\'' + id + '\')"/>';
+  });
+  svg += '</svg>';
+  const temPrev = cfg.series.some(function(s) { return s.prev && s.prev.some(Boolean); });
+  const leg = '<div class="na-leg">' + cfg.series.map(function(s) { return '<span><i style="background:' + s.cor + (s.ref ? ';height:2px' : '') + '"></i>' + escHtml(s.nome) + '</span>'; }).join('') +
+    (temPrev ? '<span style="color:var(--neutral);">tracejado / ponto vazado = previsao</span>' : '') + '</div>';
+  return leg + '<div class="na-gr" id="' + id + '">' + svg + '<div class="na-tip" id="' + id + '-tip"></div></div>';
+}
+function naGrDica(id, i, ev) {
+  const cfg = NA_GR[id], box = document.getElementById(id), tip = document.getElementById(id + '-tip'), g = document.getElementById(id + '-g');
+  if (!cfg || !box || !tip) return;
+  const W = 760, L = 74, R = 14, bw = (W - L - R) / 12, gx = L + bw * (i + 0.5);
+  if (g) { g.setAttribute('x1', gx); g.setAttribute('x2', gx); g.style.display = ''; }
+  const fmt = cfg.fmtTip || cfg.fmt;
+  tip.innerHTML = '<b>' + TR_MES_NOMES[MESES[i]] + '</b>' + cfg.series.map(function(s) {
+    const v = s.vals[i];
+    return '<div><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + s.cor + ';margin-right:5px;"></i>' + escHtml(s.nome) + (s.prev && s.prev[i] ? ' (prev.)' : '') + '</span><span class="v">' + (v === null || v === undefined ? '—' : escHtml(fmt(v))) + '</span></div>';
+  }).join('');
+  tip.style.display = 'block';
+  const r = box.getBoundingClientRect();
+  let left = ev.clientX - r.left + 14;
+  if (left + tip.offsetWidth > r.width) left = ev.clientX - r.left - tip.offsetWidth - 14;
+  tip.style.left = Math.max(0, left) + 'px';
+  tip.style.top = Math.max(0, ev.clientY - r.top - tip.offsetHeight / 2) + 'px';
+}
+function naGrSair(id) {
+  const tip = document.getElementById(id + '-tip'), g = document.getElementById(id + '-g');
+  if (tip) tip.style.display = 'none';
+  if (g) g.style.display = 'none';
+}
+
+// ---------- cabecalho, filtros e tabela por divisao x mercado ----------
+function naSeg(campo, opcoes, atual) {
+  return '<div class="na-seg">' + opcoes.map(function(o) {
+    return '<button type="button" class="' + (o[0] === atual ? 'on' : '') + '" onclick="naSetF(\'' + campo + '\',\'' + o[0] + '\')">' + o[1] + '</button>';
+  }).join('') + '</div>';
+}
+function naSetF(campo, v) {
+  NA_F[campo] = v;
+  if (campo === 'divisao' || campo === 'mercado') NA_F.solucao = '';
+  if (campo !== 'projeto' && campo !== 'metrica') NA_F.projeto = '';
+  naSalvarFiltros();
+  naRenderAtivo();
+}
+function naCabecalho(mkey, base) {
+  const lst = naSnapsOrdenados();
+  const fonte = !base ? 'Nenhum Pre Cierre enviado ainda.' :
+    'Pre Cierre usado: <b>' + TR_MES_NOMES[base.mes] + '</b> (' + escHtml(base.arquivo) + ')' + (base.mes !== mkey ? ' <span class="na-warn">-- nao ha Pre Cierre de ' + TR_MES_NOMES[mkey] + '</span>' : '') +
+    ' &middot; Ficha economica: ' + (NA.ficha ? 'enviada ' + escHtml(trLixoData(NA.ficha.t)) + ' (' + Object.keys(NA.ficha.projetos).length + ' projetos)' : '<span class="na-warn">nao enviada</span>');
+  const guardados = lst.length ? '<details style="display:inline-block;"><summary style="cursor:pointer;">' + lst.length + ' Pre Cierre guardado(s): ' + lst.map(function(s) { return s.mes; }).join(', ') + '</summary>' +
+    lst.map(function(s) { return '<div style="padding:2px 0;">' + TR_MES_NOMES[s.mes] + ' &middot; ' + escHtml(s.arquivo) + ' &middot; ' + Object.keys(s.projetos).length + ' projetos &middot; ' + escHtml(trLixoData(s.t)) +
+      ' &middot; <a href="#" style="color:var(--neutral);" onclick="naRemoverSnap(\'' + s.mes + '\'); return false;">remover</a></div>'; }).join('') + '</details>' : '';
+  let h = '<div class="na-top"><div class="na-fonte">' + fonte + (guardados ? '<br>' + guardados : '') + '</div>' +
+    '<div class="obs-toolbar" style="margin:0;">' +
+    '<button type="button" onclick="document.getElementById(\'na-in-pc\').click()">Subir Pre Cierre</button>' +
+    '<button type="button" onclick="document.getElementById(\'na-in-ficha\').click()">Subir fichas</button>' +
+    '<button type="button" onclick="naAtualizar(this)">&#8635; Atualizar</button>' +
+    '<button type="button" onclick="naBloquear()">&#128274; Bloquear</button>' +
+    '<input type="file" id="na-in-pc" accept=".xlsx,.xlsb,.xlsm" multiple style="display:none" onchange="naSubirPC(this)">' +
+    '<input type="file" id="na-in-ficha" accept=".xls,.html,.htm" multiple style="display:none" onchange="naSubirFicha(this)">' +
+    '</div></div>' +
+    '<span class="email-status' + (NA_MSG ? ' show ' + NA_MSG.cls : '') + '" id="na-status" style="margin-bottom:8px;">' + (NA_MSG ? escHtml(NA_MSG.txt) : '') + '</span>';
+  if (!base) return h;
+  // solucoes disponiveis com o mercado/divisao escolhidos
+  const sols = {};
+  naFiltrar(Object.keys(NA_INFO), { sol: true }).forEach(function(c) { sols[NA_INFO[c].sol] = true; });
+  h += '<div class="na-filtros">' +
+    '<span><span class="na-fl">Mercado</span>' + naSeg('mercado', [['todos', 'Consolidado'], ['AAPP', 'AAPP'], ['SAN', 'Sanidad']], NA_F.mercado) + '</span>' +
+    '<span><span class="na-fl">Divisao</span>' + naSeg('divisao', [['geral', 'Geral'], ['V', 'Vertical'], ['H', 'Horizontal'], ['O', 'Outros']], NA_F.divisao) + '</span>' +
+    '<span><span class="na-fl">Solucao</span><select onchange="naSetF(\'solucao\', this.value)"><option value="">Todas</option>' +
+    Object.keys(sols).sort().map(function(s) { return '<option' + (s === NA_F.solucao ? ' selected' : '') + ' value="' + escHtml(s) + '">' + escHtml(s) + '</option>'; }).join('') + '</select></span>' +
+    '<span><span class="na-fl">Status</span><select onchange="naSetF(\'status\', this.value)">' +
+    [['todos', 'Todos'], ['ativos', 'Ativos'], ['inativos', 'Finalizados/cancelados']].map(function(o) { return '<option value="' + o[0] + '"' + (o[0] === NA_F.status ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></span>' +
+    '</div>';
+  return h;
+}
+// Linhas: Vertical (+ solucoes), Horizontal, Outros (+ solucoes), Geral. Colunas: AAPP | Sanidad | Consolidado,
+// cada uma com subCols (cellFn devolve as celulas para um conjunto de projetos).
+function naMatrizHtml(codes, subCols, cellFn) {
+  const mercs = [['AAPP', 'AAPP'], ['SAN', 'Sanidad'], ['todos', 'Consolidado']];
+  const linhas = naLinhasDiv(codes);
+  let h = '<div class="na-wrap"><table class="na-t"><thead><tr><th rowspan="2">Divisao / solucao</th>' +
+    mercs.map(function(m) { return '<th class="na-mg" colspan="' + subCols.length + '">' + m[1] + '</th>'; }).join('') + '</tr><tr>' +
+    mercs.map(function() { return subCols.map(function(s, i) { return '<th class="num' + (i === 0 ? ' na-bl' : '') + '">' + s + '</th>'; }).join(''); }).join('') + '</tr></thead><tbody>';
+  linhas.forEach(function(l) {
+    h += '<tr class="' + l.cls + '"><td>' + escHtml(l.rot) + ' <span class="small-note" style="font-weight:400;">(' + l.cs.length + ')</span></td>';
+    mercs.forEach(function(m) {
+      const sub = m[0] === 'todos' ? l.cs : l.cs.filter(function(c) { return NA_INFO[c].merc === m[0]; });
+      const cels = cellFn(sub);
+      cels.forEach(function(v, i) { h += '<td class="num' + (i === 0 ? ' na-bl' : '') + '">' + v + '</td>'; });
+    });
+    h += '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+function naKpi(rot, val, sub) { return '<div class="na-kpi"><div class="l">' + rot + '</div><div class="v">' + val + '</div><div class="s">' + (sub || '') + '</div></div>'; }
+function naVazio(txt) { return '<div class="na-vazio">' + txt + '</div>'; }
+
+// ---------- montagem ----------
+function naAbaAtiva() {
+  return NA_TABS.find(function(t) { const p = document.getElementById('tab-' + t); return p && p.classList.contains('active'); }) || null;
+}
+function naRenderAtivo() {
+  const aba = naAbaAtiva();
+  if (!aba) return;
+  NA_TABS.forEach(function(t) { if (t !== aba) { const r = document.getElementById('na-root-' + t); if (r && r.innerHTML) { r.innerHTML = ''; r.removeAttribute('data-na'); } } });
+  const el = document.getElementById('na-root-' + aba);
+  if (!el) return;
+  if (!NA_CHECADO) { naChecar(); return; }
+  if (NA_MODE !== 'unlocked') {
+    if (el.getAttribute('data-na') !== NA_MODE) { el.innerHTML = naLockHtml(); el.setAttribute('data-na', NA_MODE); }   // nao apaga a senha que esta sendo digitada
+    return;
+  }
+  el.setAttribute('data-na', 'unlocked');
+  const mkey = document.getElementById('month-select').value;
+  NA_GR = {};
+  try {
+    ({ naexec: naRenderExec, nareview: naRenderReview, nafat: naRenderProg, nacob: naRenderProg, naind: naRenderInd })[aba](el, mkey, aba);
+  } catch (e) {
+    console.error(e);
+    el.innerHTML = naCabecalho(mkey, null) + '<div class="email-status show bad">Erro ao montar a tela: ' + escHtml(e.message) + '</div>';
+  }
+}
+function naInicio(el, mkey) {
+  const base = naBase(mkey);
+  if (!base) { el.innerHTML = naCabecalho(mkey, null) + naVazio('Suba o Pre Cierre (pode ser mais de um: cada arquivo fica guardado pelo mes que ele preve) e a ficha economica (resumo com todos os projetos) para montar a visao.'); return null; }
+  const todos = naUniverso(base);
+  return { base: base, todos: todos, codes: naFiltrar(todos) };
+}
+function naLinhasDiv(codes) {
+  const linhas = [];
+  ['V', 'H', 'O'].forEach(function(dv) {
+    const cs = codes.filter(function(c) { return NA_INFO[c].div === dv; });
+    if (!cs.length) return;
+    linhas.push({ rot: NA_DIV_ROT[dv], cs: cs, cls: 'na-sub' });
+    const sols = {};
+    cs.forEach(function(c) { sols[NA_INFO[c].sol] = true; });
+    const ls = Object.keys(sols).sort();
+    if (ls.length > 1 || dv !== 'H') ls.forEach(function(s) { linhas.push({ rot: s, cs: cs.filter(function(c) { return NA_INFO[c].sol === s; }), cls: 'na-sol' }); });
+  });
+  linhas.push({ rot: 'Geral', cs: codes, cls: 'na-tot' });
+  return linhas;
+}
+function naProjCel(c) { return '<b>' + escHtml(c) + '</b><div class="small-note" style="max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + escHtml(NA_INFO[c].n) + '">' + escHtml(NA_INFO[c].n) + '</div>'; }
+function naMercSol(c) { return '<td>' + NA_MERC_ROT[NA_INFO[c].merc] + '</td><td>' + escHtml(NA_INFO[c].sol) + '</td>'; }
+function naMaisLinhas(total, mostrando) {
+  if (total <= mostrando && !NA_F.todos) return '';
+  return '<div style="margin-top:8px;"><a href="#" onclick="NA_F.todos=!NA_F.todos; naSalvarFiltros(); naRenderAtivo(); return false;">' + (NA_F.todos ? 'mostrar so os 20 primeiros' : 'mostrar todos (' + total + ')') + '</a></div>';
+}
+function naProjSelect(codes) {
+  return '<select onchange="naSetF(\'projeto\', this.value)" style="font-size:12.5px; padding:4px 6px; border:1px solid var(--border); border-radius:8px; color:var(--navy); max-width:100%;">' +
+    '<option value="">Consolidado do filtro (' + escHtml(naFiltroRot()) + ')</option>' +
+    codes.map(function(c) { return '<option value="' + escHtml(c) + '"' + (c === NA_F.projeto ? ' selected' : '') + '>' + escHtml(c + ' - ' + NA_INFO[c].n) + '</option>'; }).join('') + '</select>';
+}
+
+// ===== ABA 1: Analise executiva (ano 2026: Pre Cierre x POA) =====
+var NA_METRICAS = [['ing', 'Ingresso'], ['cst', 'Custo'], ['mg', 'Margem'], ['mgp', 'Margem %'], ['fat', 'Faturamento'], ['cob', 'Cobro']];
+function naRenderExec(el, mkey) {
+  const ini = naInicio(el, mkey);
+  if (!ini) return;
+  const base = ini.base, codes = ini.codes;
+  const ano = function(cs, k, lado) { return cs.reduce(function(s, c) { const p = base.projetos[c]; return s + ((lado === 'poa' ? p.poaa[k] : p.fca[k]) || 0); }, 0); };
+  const mgp = function(cs, lado) { const i = ano(cs, 'ing', lado); return i > 0 ? ano(cs, 'mg', lado) / i * 100 : null; };
+  const reais = MESES.filter(function(m) { return base.status[m] === 'REAL'; });
+  let h = naCabecalho(mkey, base);
+  h += '<div class="small-note" style="margin-bottom:10px;">Ano 2026 pelo Pre Cierre de ' + TR_MES_NOMES[base.mes] + ' (' + (reais.length ? 'real de JAN a ' + reais[reais.length - 1] + ' + previsao do resto do ano' : 'previsao') + ') &times; POA. Filtro: <b>' + escHtml(naFiltroRot()) + '</b> &middot; ' + codes.length + ' projetos.</div>';
+  const kp = function(rot, k, bom) {
+    const pc = ano(codes, k, 'pc'), poa = ano(codes, k, 'poa'), d = pc - poa;
+    return naKpi(rot + ' 2026', naK(pc), 'POA ' + naK(poa) + '<br>Diferenca ' + naDifK(d, bom) + (Math.abs(poa) >= 1 ? ' (' + naPct(d / Math.abs(poa) * 100) + ')' : ''));
+  };
+  const mpc = mgp(codes, 'pc'), mpoa = mgp(codes, 'poa'), dpp = mpc !== null && mpoa !== null ? mpc - mpoa : null;
+  h += '<div class="na-kpis">' + kp('Ingresso', 'ing', true) + kp('Custo', 'cst', false) + kp('Margem', 'mg', true) +
+    naKpi('Margem % 2026', naPct(mpc), 'POA ' + naPct(mpoa) + '<br>Diferenca ' + (dpp === null ? '—' : naSinal(dpp, true, naPp(dpp)))) +
+    kp('Faturamento', 'fat', true) + kp('Cobro', 'cob', true) + '</div>';
+  const k = NA_F.metrica, rotK = (NA_METRICAS.find(function(x) { return x[0] === k; }) || NA_METRICAS[0])[1], bom = k !== 'cst';
+  h += '<div class="na-sec"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;"><h3>' + rotK + ' 2026 por mercado e divisao</h3>' + naSeg('metrica', NA_METRICAS, k) + '</div>' +
+    '<div class="small-note">Pre Cierre (real + previsao) &times; POA no ano. Mostra todos os mercados e divisoes; aqui so vale o filtro de status.</div>';
+  const codesM = naFiltrar(ini.todos, { merc: true, div: true, sol: true });
+  if (k === 'mgp') h += naMatrizHtml(codesM, ['Pre Cierre', 'POA', 'Dif.'], function(cs) {
+    const a = mgp(cs, 'pc'), b = mgp(cs, 'poa');
+    return [naPct(a), naPct(b), a !== null && b !== null ? naSinal(a - b, true, naPp(a - b)) : '—'];
+  });
+  else h += naMatrizHtml(codesM, ['Pre Cierre', 'POA', 'Dif.', 'Dif. %'], function(cs) {
+    const a = ano(cs, k, 'pc'), b = ano(cs, k, 'poa');
+    return [naK(a), naK(b), naDifK(a - b, bom), Math.abs(b) >= 1 ? naPct((a - b) / Math.abs(b) * 100) : '—'];
+  });
+  h += '</div>';
+  // mes a mes
+  const serie = function(arr, lado) {
+    return MESES.map(function(m, i) {
+      if (k === 'mgp') {
+        const ing = codes.reduce(function(s, c) { return s + (base.projetos[c][lado].ing[i] || 0); }, 0), mg = codes.reduce(function(s, c) { return s + (base.projetos[c][lado].mg[i] || 0); }, 0);
+        return ing > 0 ? mg / ing * 100 : null;
+      }
+      return codes.reduce(function(s, c) { return s + (base.projetos[c][lado][k][i] || 0); }, 0);
+    });
+  };
+  const fmt = k === 'mgp' ? function(v) { return naPct(v, 0); } : naK;
+  h += '<div class="na-sec"><h3>' + rotK + ' mes a mes: Pre Cierre &times; POA</h3><div class="small-note">' + escHtml(naFiltroRot()) + '. Passe o mouse para ver os valores.</div>' +
+    naGrafico('na-gr-exec', { titulo: rotK, fmt: fmt, fmtTip: k === 'mgp' ? function(v) { return naPct(v); } : naR, series: [
+      { nome: 'Pre Cierre ' + base.mes, cor: NA_CORES[0], vals: serie(null, 'fc'), prev: MESES.map(function(m) { return base.status[m] === 'FCST'; }) },
+      { nome: 'POA', cor: '#64748b', vals: serie(null, 'poa'), ref: true }
+    ] }) + '</div>';
+  // projetos
+  const linhas = codes.map(function(c) {
+    const p = base.projetos[c];
+    if (k === 'mgp') {
+      const a = p.fca.ing > 0 ? p.fca.mg / p.fca.ing * 100 : null, b = p.poaa.ing > 0 ? p.poaa.mg / p.poaa.ing * 100 : null;
+      return { c: c, a: a, b: b, d: a !== null && b !== null ? a - b : null, vazio: Math.abs(p.fca.ing) < 1 && Math.abs(p.poaa.ing) < 1 };
+    }
+    return { c: c, a: p.fca[k], b: p.poaa[k], d: p.fca[k] - p.poaa[k], vazio: Math.abs(p.fca[k]) < 1 && Math.abs(p.poaa[k]) < 1 };
+  }).filter(function(l) { return !l.vazio; });
+  linhas.sort(function(x, y) { if (x.d === null) return 1; if (y.d === null) return -1; return bom ? x.d - y.d : y.d - x.d; });
+  const mostra = NA_F.todos ? linhas : linhas.slice(0, 20);
+  h += '<div class="na-sec"><h3>Projetos: ' + rotK.toLowerCase() + ' 2026 contra o POA</h3><div class="small-note">Pior diferenca primeiro. ' + linhas.length + ' projetos com valor.</div>' +
+    '<div class="na-wrap"><table class="na-t"><thead><tr><th>Projeto</th><th>Mercado</th><th>Solucao</th><th class="num">Pre Cierre</th><th class="num">POA</th><th class="num">Dif.</th>' + (k === 'mgp' ? '' : '<th class="num">Dif. %</th>') + '</tr></thead><tbody>' +
+    mostra.map(function(l) {
+      return '<tr><td>' + naProjCel(l.c) + '</td>' + naMercSol(l.c) +
+        (k === 'mgp' ? '<td class="num">' + naPct(l.a) + '</td><td class="num">' + naPct(l.b) + '</td><td class="num">' + (l.d === null ? '—' : naSinal(l.d, true, naPp(l.d))) + '</td>'
+          : '<td class="num">' + naR(l.a) + '</td><td class="num">' + naR(l.b) + '</td><td class="num">' + naDifR(l.d, bom) + '</td><td class="num">' + (Math.abs(l.b) >= 1 ? naPct(l.d / Math.abs(l.b) * 100) : '—') + '</td>') + '</tr>';
+    }).join('') + '</tbody></table></div>' + naMaisLinhas(linhas.length, mostra.length) + '</div>';
+  el.innerHTML = h;
+}
+
+// ===== ABA 2: Review fechamento (previsto no Pre Cierre do mes x fechamento) =====
+function naSetTol(campo, v) { const n = parseFloat(String(v).replace(',', '.')); if (isFinite(n) && n >= 0) { NA_F[campo] = n; naSalvarFiltros(); } naRenderAtivo(); }
+// Projeto "no alvo" no mes: ingresso real dentro de +-tolIng% do previsto e margem % dentro de +-tolMg pp.
+function naAvaliar(code, m) {
+  if (!naFechado(m)) return null;
+  const pi = naPrev(code, m, 'ing'), ri = naReal(code, m, 'ing');
+  if (pi === null || ri === null) return null;
+  const pm = naPrev(code, m, 'mg') || 0, rm = naReal(code, m, 'mg') || 0;
+  if (Math.abs(pi) < 1 && Math.abs(ri) < 1 && Math.abs(pm) < 1 && Math.abs(rm) < 1) return null;   // sem movimento: nao conta
+  const di = ri - pi;
+  const okIng = Math.abs(di) < 1 || (Math.abs(pi) >= 1 && Math.abs(di) <= NA_F.tolIng / 100 * Math.abs(pi));
+  const pmp = pi > 0 ? pm / pi * 100 : null, rmp = ri > 0 ? rm / ri * 100 : null;
+  let pp = null, okMg;
+  if (pmp !== null && rmp !== null) { pp = rmp - pmp; okMg = Math.abs(pp) <= NA_F.tolMg; }
+  else { const dm = rm - pm; okMg = Math.abs(dm) < 1 || Math.abs(dm) <= NA_F.tolIng / 100 * Math.max(Math.abs(pm), 1); }
+  return { pi: pi, ri: ri, di: di, dpct: Math.abs(pi) >= 1 ? di / Math.abs(pi) * 100 : null, pm: pm, rm: rm, pmp: pmp, rmp: rmp, pp: pp, okIng: okIng, okMg: okMg, ok: okIng && okMg };
+}
+function naHist(code, m) {
+  let n = 0, ok = 0;
+  for (let i = 0; i <= NA_MES_IDX[m]; i++) { const e = naAvaliar(code, MESES[i]); if (e) { n++; if (e.ok) ok++; } }
+  return { n: n, ok: ok, pct: n ? ok / n * 100 : null };
+}
+function naConfBadge(pct, n) {
+  if (pct === null || !n) return '<span class="na-badge na-b-n">sem historico</span>';
+  const cls = pct >= 80 ? 'na-b-ok' : pct >= 50 ? 'na-b-warn' : 'na-b-bad', rot = pct >= 80 ? 'Alta' : pct >= 50 ? 'Media' : 'Baixa';
+  return '<span class="na-badge ' + cls + '">' + rot + ' ' + naPct(pct, 0) + '</span>';
+}
+function naDesviosCard(rot, k, codes, m, bom) {
+  const itens = [];
+  let tp = 0, tr = 0;
+  codes.forEach(function(c) {
+    const p = naPrev(c, m, k), r = naReal(c, m, k);
+    if (p === null || r === null) return;
+    tp += p; tr += r;
+    if (Math.abs(r - p) >= 1) itens.push({ c: c, p: p, r: r, d: r - p });
+  });
+  itens.sort(function(a, b) { return Math.abs(b.d) - Math.abs(a.d); });
+  return '<div class="na-sec" style="margin:0;"><h3>' + rot + '</h3><div class="small-note">Previsto ' + naK(tp) + ' &middot; real ' + naK(tr) + ' &middot; dif. ' + naDifK(tr - tp, bom) + '</div>' +
+    (itens.length ? '<div class="na-wrap"><table class="na-t"><thead><tr><th>Projeto</th><th class="num">Previsto</th><th class="num">Real</th><th class="num">Dif.</th></tr></thead><tbody>' +
+      itens.slice(0, 8).map(function(i) { return '<tr><td>' + naProjCel(i.c) + '</td><td class="num">' + naR(i.p) + '</td><td class="num">' + naR(i.r) + '</td><td class="num">' + naDifR(i.d, bom) + '</td></tr>'; }).join('') + '</tbody></table></div>'
+      : '<div class="small-note">Sem desvios.</div>') + '</div>';
+}
+function naRenderReview(el, mkey) {
+  const ini = naInicio(el, mkey);
+  if (!ini) return;
+  const base = ini.base, codes = ini.codes, m = mkey;
+  let h = naCabecalho(mkey, base);
+  h += '<div class="small-note" style="margin-bottom:10px;"><b>Previsto</b> = Pre Cierre de ' + TR_MES_NOMES[m] + ' (feito antes do fechamento; sem ele, a previsao mais recente anterior). <b>Real</b> = ficha economica (ou o Pre Cierre seguinte, em que o mes ja e real). Filtro: <b>' + escHtml(naFiltroRot()) + '</b>.</div>';
+  if (!NA.snaps[m]) {
+    const ant = naSnapsOrdenados().filter(function(s) { return NA_MES_IDX[s.mes] < NA_MES_IDX[m]; });
+    h += '<div class="email-status show warn" style="margin-bottom:10px;">Nao ha Pre Cierre de ' + TR_MES_NOMES[m] + '. ' + (ant.length ? 'O previsto usa a previsao do Pre Cierre de ' + TR_MES_NOMES[ant[ant.length - 1].mes] + '.' : 'Suba o Pre Cierre de ' + TR_MES_NOMES[m] + ' para ter o previsto.') + '</div>';
+  }
+  if (!naFechado(m)) { el.innerHTML = h + naVazio(TR_MES_NOMES[m] + ' ainda sem fechamento: suba a ficha economica com ' + TR_MES_NOMES[m] + ' (ou o Pre Cierre do mes seguinte, em que ' + m + ' ja e real).'); return; }
+  h += '<div class="na-filtros na-tol" style="margin-top:-6px;"><span class="na-fl">Tolerancia para "no alvo"</span>Ingresso &plusmn; <input value="' + NA_F.tolIng + '" onchange="naSetTol(\'tolIng\', this.value)"> % &nbsp; e &nbsp; margem &plusmn; <input value="' + NA_F.tolMg + '" onchange="naSetTol(\'tolMg\', this.value)"> pp</div>';
+  const ev = {};
+  codes.forEach(function(c) { const e = naAvaliar(c, m); if (e) ev[c] = e; });
+  const ce = Object.keys(ev), nOk = ce.filter(function(c) { return ev[c].ok; }).length;
+  const hist = {};
+  let hn = 0, hok = 0;
+  codes.forEach(function(c) { hist[c] = naHist(c, m); hn += hist[c].n; hok += hist[c].ok; });
+  const sp = function(f) { return ce.reduce(function(s, c) { return s + f(ev[c]); }, 0); };
+  const pi = sp(function(e) { return e.pi; }), ri = sp(function(e) { return e.ri; }), pm = sp(function(e) { return e.pm; }), rm = sp(function(e) { return e.rm; });
+  const pmp = pi > 0 ? pm / pi * 100 : null, rmp = ri > 0 ? rm / ri * 100 : null;
+  const tot = function(k) { const p = naSomaMes(codes, m, k, 'prev'), r = naSomaMes(codes, m, k, 'real'); return { p: p ? p.v : null, r: r ? r.v : null }; };
+  const fat = tot('fat'), cob = tot('cob'), mov = tot('mov');
+  const kpiPR = function(rot, o, bom) { return naKpi(rot, naK(o.r), 'Previsto ' + naK(o.p) + '<br>Dif. ' + (o.p === null || o.r === null ? '—' : naDifK(o.r - o.p, bom))); };
+  h += '<div class="na-kpis">' +
+    naKpi('Confiabilidade do mes', ce.length ? naPct(nOk / ce.length * 100, 0) : '—', nOk + ' de ' + ce.length + ' projetos no alvo') +
+    naKpi('Confiabilidade acumulada', hn ? naPct(hok / hn * 100, 0) : '—', hok + ' de ' + hn + ' projeto-mes no alvo (JAN a ' + m + ', meses com previsto e real)') +
+    kpiPR('Ingresso ' + m, { p: pi, r: ri }, true) +
+    naKpi('Margem % ' + m, naPct(rmp), 'Previsto ' + naPct(pmp) + '<br>Dif. ' + (pmp !== null && rmp !== null ? naSinal(rmp - pmp, true, naPp(rmp - pmp)) : '—')) +
+    kpiPR('Existencia (variacao) ' + m, mov, true) + kpiPR('Faturamento ' + m, fat, true) + kpiPR('Cobro ' + m, cob, true) + '</div>';
+  // por divisao x mercado
+  const codesM = naFiltrar(ini.todos, { merc: true, div: true, sol: true });
+  const evM = {};
+  codesM.forEach(function(c) { const e = naAvaliar(c, m); if (e) evM[c] = e; });
+  h += '<div class="na-sec"><h3>Confiabilidade por mercado e divisao (' + m + ')</h3><div class="small-note">Projetos com previsto e real no mes; "no alvo" pela tolerancia acima. Mostra todos os mercados e divisoes (so o filtro de status vale aqui).</div>' +
+    naMatrizHtml(codesM, ['Avaliados', 'No alvo', 'Confiab.'], function(cs) {
+      const a = cs.filter(function(c) { return evM[c]; }), o = a.filter(function(c) { return evM[c].ok; });
+      return [a.length, o.length, a.length ? naConfBadge(o.length / a.length * 100, a.length) : '—'];
+    }) + '</div>';
+  // desvios
+  h += '<h3 style="color:var(--navy); margin:18px 0 8px;">Principais desvios de ' + TR_MES_NOMES[m] + ' (real &minus; previsto)</h3><div class="na-grid2" style="margin-bottom:16px;">' +
+    naDesviosCard('Ingresso', 'ing', codes, m, true);
+  const mgItens = ce.filter(function(c) { return ev[c].pp !== null; }).map(function(c) { const e = ev[c]; return { c: c, e: e, imp: e.pp / 100 * e.ri }; })
+    .filter(function(x) { return Math.abs(x.e.pp) >= 0.05; }).sort(function(a, b) { return Math.abs(b.imp) - Math.abs(a.imp); });
+  h += '<div class="na-sec" style="margin:0;"><h3>Margem %</h3><div class="small-note">Previsto ' + naPct(pmp) + ' &middot; real ' + naPct(rmp) + '. Ordem pelo impacto em R$ (dif. pp &times; ingresso real).</div>' +
+    (mgItens.length ? '<div class="na-wrap"><table class="na-t"><thead><tr><th>Projeto</th><th class="num">Previsto</th><th class="num">Real</th><th class="num">Dif.</th><th class="num">Impacto</th></tr></thead><tbody>' +
+      mgItens.slice(0, 8).map(function(x) { return '<tr><td>' + naProjCel(x.c) + '</td><td class="num">' + naPct(x.e.pmp) + '</td><td class="num">' + naPct(x.e.rmp) + '</td><td class="num">' + naSinal(x.e.pp, true, naPp(x.e.pp)) + '</td><td class="num">' + naDifR(x.imp, true) + '</td></tr>'; }).join('') + '</tbody></table></div>'
+      : '<div class="small-note">Sem desvios.</div>') + '</div>';
+  h += naDesviosCard('Existencia (variacao no mes)', 'mov', codes, m, true) + naDesviosCard('Faturamento', 'fat', codes, m, true) + naDesviosCard('Cobro', 'cob', codes, m, true) + '</div>';
+  // projeto a projeto
+  const linhas = codes.filter(function(c) { return ev[c] || hist[c].n; });
+  linhas.sort(function(a, b) {
+    const ea = ev[a], eb = ev[b];
+    if (!ea !== !eb) return ea ? -1 : 1;
+    if (ea && eb && ea.ok !== eb.ok) return ea.ok ? 1 : -1;
+    return (hist[a].pct === null ? 101 : hist[a].pct) - (hist[b].pct === null ? 101 : hist[b].pct) || Math.abs((eb && eb.dpct) || 0) - Math.abs((ea && ea.dpct) || 0);
+  });
+  const mostra = NA_F.todos ? linhas : linhas.slice(0, 20);
+  h += '<div class="na-sec"><h3>Confiabilidade projeto a projeto</h3><div class="small-note">Fora do alvo e menor confiabilidade primeiro. Historico = meses de JAN a ' + m + ' com previsto e real (comeca no 1o Pre Cierre guardado). Alta &ge; 80%, Media &ge; 50%.</div>' +
+    '<div class="na-wrap"><table class="na-t"><thead><tr><th>Projeto</th><th>Solucao</th><th class="num">Ingresso prev.</th><th class="num">Ingresso real</th><th class="num">Dif.</th><th class="num">Margem prev.</th><th class="num">Margem real</th><th class="num">Dif.</th><th>' + m + '</th><th class="num">Historico</th><th>Confiabilidade</th></tr></thead><tbody>' +
+    mostra.map(function(c) {
+      const e = ev[c], hi = hist[c];
+      return '<tr><td>' + naProjCel(c) + '</td><td>' + escHtml(NA_INFO[c].sol) + '</td>' +
+        (e ? '<td class="num">' + naR(e.pi) + '</td><td class="num">' + naR(e.ri) + '</td><td class="num">' + naSinal(e.di, true, e.dpct === null ? naR(e.di) : naPct(e.dpct)) + '</td>' +
+          '<td class="num">' + naPct(e.pmp) + '</td><td class="num">' + naPct(e.rmp) + '</td><td class="num">' + (e.pp === null ? '—' : naSinal(e.pp, true, naPp(e.pp))) + '</td>' +
+          '<td>' + (e.ok ? '<span class="na-badge na-b-ok">no alvo</span>' : '<span class="na-badge na-b-bad">fora' + (!e.okIng ? ' (ingresso)' : ' (margem)') + '</span>') + '</td>'
+          : '<td class="num" colspan="6" style="color:var(--neutral);">sem previsto/real no mes</td><td>—</td>') +
+        '<td class="num">' + hi.ok + '/' + hi.n + '</td><td>' + naConfBadge(hi.pct, hi.n) + '</td></tr>';
+    }).join('') + '</tbody></table></div>' + naMaisLinhas(linhas.length, mostra.length) + '</div>';
+  el.innerHTML = h;
+}
+
+// ===== ABAS 3 e 4: Faturamento e Cobro (com BI por projeto) =====
+var NA_PROG = {
+  nafat: { saldo: 'dpf', saldoRot: 'DPF', fluxo: 'fat', fluxoRot: 'Faturamento', metaRot: 'Meta faturamento', base: 'ing', baseRot: 'Ingresso', acimaRot: 'DPF acima do corrente',
+    nota: '<b>DPF acima do corrente</b> (atual) = DPF do fim do mes &minus; ingresso do mes: a parte do DPF que vem de meses anteriores. (anterior) = o mesmo calculo no mes anterior.' },
+  nacob: { saldo: 'deu', saldoRot: 'Deuda', fluxo: 'cob', fluxoRot: 'Cobro', metaRot: 'Meta cobro', base: 'fat', baseRot: 'Faturamento', acimaRot: 'Divida acima do corrente',
+    nota: '<b>Divida acima do corrente</b> (atual) = Deuda do fim do mes &minus; faturamento do mes: o que esta a receber de faturas de meses anteriores. (anterior) = o mesmo calculo no mes anterior.' }
+};
+function naProgCalc(cs, m, cfg) {
+  const ma = naMesAnt(m);
+  const saldo = naSomaMes(cs, m, cfg.saldo, 'auto'), meta = naSomaMes(cs, m, cfg.fluxo, 'prev'), real = naSomaMes(cs, m, cfg.fluxo, 'real');
+  const bAnt = ma ? naSomaMes(cs, ma, cfg.base, 'auto') : null, bAt = naSomaMes(cs, m, cfg.base, 'auto'), sAnt = ma ? naSomaMes(cs, ma, cfg.saldo, 'auto') : null;
+  return { saldo: saldo, meta: meta, real: real, pct: meta && real && meta.v > 0.5 ? real.v / meta.v * 100 : null, bAnt: bAnt, bAt: bAt,
+    acima: saldo && bAt ? { v: saldo.v - bAt.v, real: saldo.real && bAt.real } : null,
+    acimaAnt: sAnt && bAnt ? { v: sAnt.v - bAnt.v, real: sAnt.real && bAnt.real } : null };
+}
+function naPctBadge(p) {
+  if (p === null) return '—';
+  return '<span class="na-badge ' + (p >= 100 ? 'na-b-ok' : p >= 50 ? 'na-b-warn' : 'na-b-bad') + '">' + naPct(p, 0) + '</span>';
+}
+function naProgCels(o) {
+  return ['<td class="num">' + naRv(o.saldo) + '</td>', '<td class="num">' + naR(naNum(o.meta)) + '</td>', '<td class="num">' + naR(naNum(o.real)) + '</td>', '<td class="num">' + naPctBadge(o.pct) + '</td>',
+    '<td class="num na-bl">' + naRv(o.bAnt) + '</td>', '<td class="num">' + naRv(o.bAt) + '</td>', '<td class="num na-bl">' + naRv(o.acima) + '</td>', '<td class="num">' + naRv(o.acimaAnt) + '</td>'].join('');
+}
+function naProgHead(cfg, m, primeira) {
+  const ma = naMesAnt(m) || '—';
+  return '<tr><th>' + primeira + '</th><th class="num">' + cfg.saldoRot + ' (fim ' + m + ')</th><th class="num">' + cfg.metaRot + '<br>(Pre Cierre)</th><th class="num">' + cfg.fluxoRot + '<br>realizado</th><th class="num">% atingido</th>' +
+    '<th class="num na-bl">' + cfg.baseRot + '<br>anterior (' + ma + ')</th><th class="num">' + cfg.baseRot + '<br>atual (' + m + ')</th><th class="num na-bl">' + cfg.acimaRot + '<br>(atual)</th><th class="num">' + cfg.acimaRot + '<br>(anterior)</th></tr>';
+}
+function naBiToggle(aba, k) {
+  const l = (NA_F.bi[aba] || []).slice(), i = l.indexOf(k);
+  if (i === -1) l.push(k); else if (l.length > 1) l.splice(i, 1);
+  NA_F.bi[aba] = l;
+  naSalvarFiltros();
+  naRenderAtivo();
+}
+function naBiDefs(aba, base) {
+  const cfg = NA_PROG[aba];
+  const auto = function(k) { return function(cs, m) { return naSomaMes(cs, m, k, 'auto'); }; };
+  const poa = function(cs, m) { const i = NA_MES_IDX[m]; return { v: cs.reduce(function(s, c) { return s + (base.projetos[c].poa[cfg.fluxo][i] || 0); }, 0), real: true }; };
+  return [
+    [cfg.saldo, cfg.saldoRot, auto(cfg.saldo)],
+    [cfg.base, cfg.baseRot, auto(cfg.base)],
+    ['meta', cfg.metaRot + ' (Pre Cierre)', function(cs, m) { const o = naSomaMes(cs, m, cfg.fluxo, 'prev'); return o ? { v: o.v, real: true } : null; }],
+    ['real', cfg.fluxoRot + ' realizado', function(cs, m) { return naSomaMes(cs, m, cfg.fluxo, 'real'); }],
+    ['acima', cfg.acimaRot, function(cs, m) { const a = naSomaMes(cs, m, cfg.saldo, 'auto'), b = naSomaMes(cs, m, cfg.base, 'auto'); return a && b ? { v: a.v - b.v, real: a.real && b.real } : null; }],
+    ['poa', 'POA ' + cfg.fluxoRot.toLowerCase(), poa]
+  ];
+}
+function naRenderProg(el, mkey, aba) {
+  const ini = naInicio(el, mkey);
+  if (!ini) return;
+  const cfg = NA_PROG[aba], base = ini.base, codes = ini.codes, m = mkey;
+  let h = naCabecalho(mkey, base);
+  h += '<div class="small-note" style="margin-bottom:10px;">' + TR_MES_NOMES[m] + ' &middot; Filtro: <b>' + escHtml(naFiltroRot()) + '</b>. Meta = previsto no Pre Cierre do mes; realizado = ficha economica. Valores com <sup style="color:var(--warn);">p</sup> sao (ou incluem) previsao do Pre Cierre: mes sem fechamento ou projeto sem ficha no mes. ' + cfg.nota + '</div>';
+  const tot = naProgCalc(codes, m, cfg);
+  const dAc = tot.acima && tot.acimaAnt ? tot.acima.v - tot.acimaAnt.v : null;
+  h += '<div class="na-kpis">' +
+    naKpi(cfg.saldoRot + ' (fim ' + m + ')', naKv(tot.saldo), cfg.saldoRot + ' mes anterior: ' + (naMesAnt(m) ? naKv(naSomaMes(codes, naMesAnt(m), cfg.saldo, 'auto')) : '—')) +
+    naKpi(cfg.fluxoRot + ' ' + m + ' realizado', naK(naNum(tot.real)), 'Meta ' + naK(naNum(tot.meta)) + ' &middot; ' + naPctBadge(tot.pct) + '<br>So projetos com fechamento no mes') +
+    naKpi(cfg.baseRot + ' ' + m, naKv(tot.bAt), 'Anterior (' + (naMesAnt(m) || '—') + '): ' + naKv(tot.bAnt)) +
+    naKpi(cfg.acimaRot, naKv(tot.acima), 'Anterior: ' + naKv(tot.acimaAnt) + (dAc === null ? '' : '<br>Variacao ' + naDifK(dAc, false))) + '</div>';
+  // por mercado
+  const codesSemMerc = naFiltrar(ini.todos, { merc: true });
+  h += '<div class="na-sec"><h3>Por mercado</h3><div class="small-note">Com os filtros de divisao, solucao e status.</div><div class="na-wrap"><table class="na-t"><thead>' + naProgHead(cfg, m, 'Mercado') + '</thead><tbody>' +
+    [['AAPP', 'AAPP'], ['SAN', 'Sanidad'], ['todos', 'Consolidado']].map(function(mm) {
+      const cs = mm[0] === 'todos' ? codesSemMerc : codesSemMerc.filter(function(c) { return NA_INFO[c].merc === mm[0]; });
+      return '<tr class="' + (mm[0] === 'todos' ? 'na-tot' : '') + '"><td>' + mm[1] + ' <span class="small-note">(' + cs.length + ')</span></td>' + naProgCels(naProgCalc(cs, m, cfg)) + '</tr>';
+    }).join('') + '</tbody></table></div></div>';
+  // por divisao
+  h += '<div class="na-sec"><h3>Por divisao</h3><div class="small-note">Mercado: ' + (NA_F.mercado === 'todos' ? 'consolidado' : NA_MERC_ROT[NA_F.mercado]) + '.</div><div class="na-wrap"><table class="na-t"><thead>' + naProgHead(cfg, m, 'Divisao / solucao') + '</thead><tbody>' +
+    naLinhasDiv(naFiltrar(ini.todos, { div: true, sol: true })).map(function(l) { return '<tr class="' + l.cls + '"><td>' + escHtml(l.rot) + ' <span class="small-note" style="font-weight:400;">(' + l.cs.length + ')</span></td>' + naProgCels(naProgCalc(l.cs, m, cfg)) + '</tr>'; }).join('') +
+    '</tbody></table></div></div>';
+  // BI
+  const sel = NA_F.projeto && codes.indexOf(NA_F.projeto) !== -1 ? NA_F.projeto : '';
+  const alvo = sel ? [sel] : codes;
+  const defs = naBiDefs(aba, base), ativos = NA_F.bi[aba] || [defs[0][0]];
+  h += '<div class="na-sec" id="na-bi"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;"><h3>Comportamento mes a mes' + (sel ? ': ' + escHtml(sel + ' - ' + NA_INFO[sel].n) : '') + '</h3>' + naProjSelect(codes) + '</div>' +
+    '<div class="small-note">Escolha os itens (pode mais de um) ou clique num projeto da lista abaixo. Meses fechados = real; os demais = previsao do Pre Cierre.</div>' +
+    '<div class="na-chips">' + defs.map(function(d, i) {
+      const on = ativos.indexOf(d[0]) !== -1, cor = d[0] === 'poa' ? '#64748b' : NA_CORES[i];
+      return '<button type="button" class="na-chip' + (on ? ' on' : '') + '" onclick="naBiToggle(\'' + aba + '\',\'' + d[0] + '\')"><i style="' + (on ? 'background:' + cor : '') + '"></i>' + escHtml(d[1]) + '</button>';
+    }).join('') + '</div>' +
+    naGrafico('na-gr-' + aba, { titulo: 'comportamento', fmt: naK, fmtTip: naR, series: defs.map(function(d, i) {
+      if (ativos.indexOf(d[0]) === -1) return null;
+      const os = MESES.map(function(mm) { return d[2](alvo, mm); });
+      return { nome: d[1], cor: d[0] === 'poa' ? '#64748b' : NA_CORES[i], ref: d[0] === 'poa', vals: os.map(function(o) { return o ? o.v : null; }), prev: os.map(function(o) { return !!(o && !o.real); }) };
+    }).filter(Boolean) }) + '</div>';
+  // projeto a projeto
+  const linhas = codes.map(function(c) { return { c: c, o: naProgCalc([c], m, cfg) }; }).filter(function(l) {
+    const o = l.o;
+    return [o.saldo, o.meta, o.real, o.bAnt, o.bAt].some(function(x) { return x && Math.abs(x.v) >= 1; });
+  });
+  linhas.sort(function(a, b) { return (naNum(b.o.acima) || 0) - (naNum(a.o.acima) || 0); });
+  const mostra = NA_F.todos ? linhas : linhas.slice(0, 20);
+  h += '<div class="na-sec"><h3>Projeto a projeto</h3><div class="small-note">Maior ' + cfg.acimaRot.toLowerCase() + ' primeiro. Clique no projeto para ver o comportamento no grafico acima.</div><div class="na-wrap"><table class="na-t"><thead>' + naProgHead(cfg, m, 'Projeto') + '</thead><tbody>' +
+    mostra.map(function(l) { return '<tr class="na-click' + (l.c === sel ? ' na-sel' : '') + '" onclick="naSetF(\'projeto\',\'' + l.c + '\'); setTimeout(function(){ var b=document.getElementById(\'na-bi\'); if(b) b.scrollIntoView({behavior:\'smooth\', block:\'start\'}); }, 30);"><td>' + naProjCel(l.c) + '</td>' + naProgCels(l.o) + '</tr>'; }).join('') +
+    '<tr class="na-tot"><td>Total do filtro</td>' + naProgCels(tot) + '</tr></tbody></table></div>' + naMaisLinhas(linhas.length, mostra.length) + '</div>';
+  el.innerHTML = h;
+}
+
+// ===== ABA 5: Indicadores (DPF / Ingresso e Deuda / Faturamento) =====
+function naIndCalc(cs, m) {
+  const dpf = naSomaMes(cs, m, 'dpf', 'auto'), ing = naSomaMes(cs, m, 'ing', 'auto'), deu = naSomaMes(cs, m, 'deu', 'auto'), fat = naSomaMes(cs, m, 'fat', 'auto');
+  return { dpf: dpf, ing: ing, deu: deu, fat: fat,
+    rDpf: dpf && ing && ing.v > 0.5 ? dpf.v / ing.v : null, rDeu: deu && fat && fat.v > 0.5 ? deu.v / fat.v : null,
+    real: !!(dpf && ing && deu && fat && dpf.real && ing.real && deu.real && fat.real) };
+}
+function naRenderInd(el, mkey) {
+  const ini = naInicio(el, mkey);
+  if (!ini) return;
+  const base = ini.base, codes = ini.codes, m = mkey, ma = naMesAnt(m);
+  let h = naCabecalho(mkey, base);
+  h += '<div class="small-note" style="margin-bottom:10px;"><b>DPF &divide; Ingresso</b> do mes = quantos meses de ingresso estao no DPF (produzido e ainda nao faturado). <b>Deuda &divide; Faturamento</b> do mes = quantos meses de faturamento estao a receber. Quanto menor, melhor. Filtro: <b>' + escHtml(naFiltroRot()) + '</b>.</div>';
+  const at = naIndCalc(codes, m), an = ma ? naIndCalc(codes, ma) : null;
+  const kInd = function(rot, r, rAnt, num, den, rn, rd) {
+    const d = r !== null && rAnt !== null ? r - rAnt : null;
+    return naKpi(rot + ' ' + m, naX(r) + (at.real ? '' : '<sup style="color:var(--warn); font-size:11px;" title="previsao">p</sup>'),
+      rn + ' ' + naKv(num) + ' &divide; ' + rd + ' ' + naKv(den) + '<br>Mes anterior: ' + naX(rAnt) + (d === null ? '' : ' (' + naSinal(d, false, (d > 0 ? '+' : '') + naX(d)) + ')'));
+  };
+  h += '<div class="na-kpis">' + kInd('DPF / Ingresso', at.rDpf, an ? an.rDpf : null, at.dpf, at.ing, 'DPF', 'Ingresso') +
+    kInd('Deuda / Faturamento', at.rDeu, an ? an.rDeu : null, at.deu, at.fat, 'Deuda', 'Faturamento') + '</div>';
+  const sel = NA_F.projeto && codes.indexOf(NA_F.projeto) !== -1 ? NA_F.projeto : '';
+  const alvo = sel ? [sel] : codes;
+  const os = MESES.map(function(mm) { return naIndCalc(alvo, mm); });
+  h += '<div class="na-sec" id="na-bi"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;"><h3>Comportamento mes a mes' + (sel ? ': ' + escHtml(sel + ' - ' + NA_INFO[sel].n) : '') + '</h3>' + naProjSelect(codes) + '</div>' +
+    '<div class="small-note">Escolha o mercado e a divisao no filtro acima, ou um projeto. Meses fechados = real; os demais = previsao do Pre Cierre.</div>' +
+    naGrafico('na-gr-ind', { titulo: 'indicadores', fmt: function(v) { return naX(v); }, series: [
+      { nome: 'DPF / Ingresso', cor: NA_CORES[0], vals: os.map(function(o) { return o.rDpf; }), prev: os.map(function(o) { return !o.real; }) },
+      { nome: 'Deuda / Faturamento', cor: NA_CORES[1], vals: os.map(function(o) { return o.rDeu; }), prev: os.map(function(o) { return !o.real; }) }
+    ] }) + '</div>';
+  const codesM = naFiltrar(ini.todos, { merc: true, div: true, sol: true });
+  h += '<div class="na-sec"><h3>Por mercado e divisao (' + m + ')</h3><div class="small-note">Mostra todos os mercados e divisoes (so o filtro de status vale aqui).</div>' +
+    naMatrizHtml(codesM, ['DPF/Ing.', 'Deuda/Fat.'], function(cs) { const o = naIndCalc(cs, m); return [naX(o.rDpf), naX(o.rDeu)]; }) + '</div>';
+  const linhas = codes.map(function(c) { return { c: c, o: naIndCalc([c], m) }; }).filter(function(l) {
+    return [l.o.dpf, l.o.ing, l.o.deu, l.o.fat].some(function(x) { return x && Math.abs(x.v) >= 1; });
+  });
+  linhas.sort(function(a, b) { const x = a.o.rDpf, y = b.o.rDpf; if (x === null) return 1; if (y === null) return -1; return y - x; });
+  const mostra = NA_F.todos ? linhas : linhas.slice(0, 20);
+  h += '<div class="na-sec"><h3>Projeto a projeto (' + m + ')</h3><div class="small-note">Maior DPF / Ingresso primeiro. Clique no projeto para ver o comportamento no grafico.</div><div class="na-wrap"><table class="na-t"><thead><tr><th>Projeto</th><th>Mercado</th><th>Solucao</th>' +
+    '<th class="num na-bl">DPF</th><th class="num">Ingresso</th><th class="num">DPF / Ing.</th><th class="num na-bl">Deuda</th><th class="num">Faturamento</th><th class="num">Deuda / Fat.</th></tr></thead><tbody>' +
+    mostra.map(function(l) {
+      const o = l.o;
+      return '<tr class="na-click' + (l.c === sel ? ' na-sel' : '') + '" onclick="naSetF(\'projeto\',\'' + l.c + '\'); setTimeout(function(){ var b=document.getElementById(\'na-bi\'); if(b) b.scrollIntoView({behavior:\'smooth\', block:\'start\'}); }, 30);"><td>' + naProjCel(l.c) + '</td>' + naMercSol(l.c) +
+        '<td class="num na-bl">' + naRv(o.dpf) + '</td><td class="num">' + naRv(o.ing) + '</td><td class="num"><b>' + naX(o.rDpf) + '</b></td>' +
+        '<td class="num na-bl">' + naRv(o.deu) + '</td><td class="num">' + naRv(o.fat) + '</td><td class="num"><b>' + naX(o.rDeu) + '</b></td></tr>';
+    }).join('') + '</tbody></table></div>' + naMaisLinhas(linhas.length, mostra.length) + '</div>';
+  el.innerHTML = h;
+}
 </script>
 
 </body>
