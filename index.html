@@ -14463,6 +14463,16 @@ async function naRemoverSnap(m) {
 }
 
 // ---------- leitura da ficha economica (mesmo leitor das fichas do site + "Variacao de Existencias") ----------
+// Data de extracao no nome da ficha: "Resumo_12112026084512" (DDMMAAAAhhmmss) ou "20261112..." (AAAAMMDD).
+// So aceita data valida (mes 1-12, dia 1-31, ano 2020-2099); senao null (vale a data do envio).
+function naFichaDataNome(nome) {
+  const ok = function(a, m, d) { return a >= 2020 && a <= 2099 && m >= 1 && m <= 12 && d >= 1 && d <= 31 ? new Date(a, m - 1, d) : null; };
+  let r = /(\d{2})(\d{2})(20\d{2})(\d{6})(?!\d)/.exec(nome);
+  if (r) { const d = ok(+r[3], +r[2], +r[1]); if (d) return d; }
+  r = /(20\d{2})(\d{2})(\d{2})(?:\d{6})?(?!\d)/.exec(nome);
+  if (r) { const d = ok(+r[1], +r[2], +r[3]); if (d) return d; }
+  return null;
+}
 function naFichaExistencias(html) {
   const out = {};
   let cur = null;
@@ -14493,8 +14503,7 @@ async function naSubirFicha(inp) {
       const parsed = parseFichaHtml(html), exi = naFichaExistencias(html);
       // meses fechados = os anteriores ao mes em que a ficha foi extraida (data no nome: "Resumo_24072026133508");
       // o mes da extracao vem parcial e nao conta como real
-      const md = /(\d{2})(\d{2})(20\d{2})\d{6}/.exec(f.name);
-      const dt = md ? new Date(+md[3], +md[2] - 1, +md[1]) : new Date();
+      const dt = naFichaDataNome(f.name) || new Date();
       const ate = dt.getMonth() === 0 ? 11 : dt.getMonth() - 1;
       Object.keys(parsed).forEach(function(code0) {
         const r = parsed[code0];
@@ -14597,8 +14606,10 @@ function naPrev(code, m, k) {
   return s ? s.projetos[code].fc[k][i] : null;
 }
 // Real se o mes ja fechou (e ha dado), senao a previsao
+// Mes fechado (ja tem ficha): so a ficha -- projeto sem ficha fica de fora, nao entra com a previsao (decisao do
+// usuario: realizado = ficha). Mes aberto: previsao do Pre Cierre.
 function naAuto(code, m, k) {
-  if (naFechado(m)) { const r = naReal(code, m, k); if (r !== null) return { v: r, real: true }; }
+  if (naFechado(m)) { const r = naReal(code, m, k); return r === null ? null : { v: r, real: true }; }
   const p = naPrev(code, m, k);
   return p === null ? null : { v: p, real: false };
 }
@@ -14680,7 +14691,7 @@ function naDifK(v, bomPositivo) { return naSinal(v, bomPositivo, naK(v)); }
 // valor {v, real}: previsao marcada com "p"
 function naRv(o) { return o ? naR(o.v) + (o.real ? '' : '<sup title="Previsao do Pre Cierre (mes ainda sem fechamento)">p</sup>') : '—'; }
 function naNum(o) { return o ? o.v : null; }
-function naKv(o) { return o ? naK(o.v) + (o.real ? '' : '<sup style="color:var(--warn); font-size:11px;" title="Inclui previsao do Pre Cierre (projeto sem ficha no mes ou mes sem fechamento)">p</sup>') : '—'; }
+function naKv(o) { return o ? naK(o.v) + (o.real ? '' : '<sup style="color:var(--warn); font-size:11px;" title="Previsao do Pre Cierre (mes ainda sem ficha economica)">p</sup>') : '—'; }
 
 // ---------- grafico de linhas (12 meses), com dica ao passar o mouse ----------
 // cfg: { series: [{nome, cor, vals: [12], prev: [12 bool], ref: bool}], fmt: fn (eixo), fmtTip: fn }
@@ -14767,12 +14778,24 @@ function naSetF(campo, v) {
   naSalvarFiltros();
   naRenderAtivo();
 }
+function naFichaMesesTxt() {
+  const f = MESES.filter(naFechado);
+  return f.length ? ', fechada de ' + f[0] + ' a ' + f[f.length - 1] : ', sem mes fechado';
+}
+// projetos ativos do Pre Cierre, com valor no ano, que nao estao na ficha (ficam fora do realizado)
+function naSemFichaHtml() {
+  if (!NA.ficha) return '';
+  const sem = Object.keys(NA_INFO).filter(function(c) { return NA_INFO[c].st === 'Activo' && !NA.ficha.projetos[c] && naProjComValor(c); }).sort();
+  if (!sem.length) return '';
+  return ' &middot; <span class="na-warn" style="cursor:help;" title="Ficam fora do realizado (meses com ficha). Inclua na ficha resumo: ' + escHtml(sem.map(function(c) { return c + ' ' + NA_INFO[c].n; }).join(' | ')) + '">' +
+    sem.length + ' projeto(s) ativo(s) sem ficha: ' + escHtml(sem.slice(0, 8).join(', ')) + (sem.length > 8 ? '...' : '') + '</span>';
+}
 function naCabecalho(mkey, base) {
   const lst = naSnapsOrdenados();
   const fonte = !base ? 'Nenhum Pre Cierre enviado ainda.' :
     'Pre Cierre usado: <b>' + TR_MES_NOMES[base.mes] + '</b> (' + escHtml(base.arquivo) + ')' + (base.mes !== mkey ? ' <span class="na-warn">-- nao ha Pre Cierre de ' + TR_MES_NOMES[mkey] + '</span>' : '') +
     (mkey !== document.getElementById('month-select').value ? ' <span class="na-warn">&middot; mostrando ' + TR_MES_NOMES[mkey] + ': ainda nao ha Pre Cierre de ' + TR_MES_NOMES[document.getElementById('month-select').value] + '</span>' : '') +
-    ' &middot; Ficha economica: ' + (NA.ficha ? 'enviada ' + escHtml(trLixoData(NA.ficha.t)) + ' (' + Object.keys(NA.ficha.projetos).length + ' projetos)' : '<span class="na-warn">nao enviada</span>');
+    ' &middot; Ficha economica: ' + (NA.ficha ? 'enviada ' + escHtml(trLixoData(NA.ficha.t)) + ' (' + Object.keys(NA.ficha.projetos).length + ' projetos' + naFichaMesesTxt() + ')' + naSemFichaHtml() : '<span class="na-warn">nao enviada</span>');
   const guardados = lst.length ? '<details style="display:inline-block;"><summary style="cursor:pointer;">' + lst.length + ' Pre Cierre guardado(s): ' + lst.map(function(s) { return s.mes; }).join(', ') + '</summary>' +
     lst.map(function(s) { return '<div style="padding:2px 0;">' + TR_MES_NOMES[s.mes] + ' &middot; ' + escHtml(s.arquivo) + ' &middot; ' + Object.keys(s.projetos).length + ' projetos &middot; ' + escHtml(trLixoData(s.t)) +
       (MESES.some(function(m) { return s.status[m] === 'FCST'; }) ? '' : ' &middot; <span class="na-bad">sem meses de previsao (lido errado): remova e envie de novo</span>') +
@@ -15228,7 +15251,7 @@ function naRenderProg(el, mkey, aba) {
   if (!ini) return;
   const cfg = NA_PROG[aba], base = ini.base, codes = ini.codes, m = mkey;
   let h = naCabecalho(mkey, base);
-  h += '<div class="small-note" style="margin-bottom:10px;">' + TR_MES_NOMES[m] + ' &middot; Filtro: <b>' + escHtml(naFiltroRot()) + '</b>. Meta = previsto no Pre Cierre do mes; realizado = ficha economica. Valores com <sup style="color:var(--warn);">p</sup> sao (ou incluem) previsao do Pre Cierre: mes sem fechamento ou projeto sem ficha no mes. ' + cfg.nota + '</div>';
+  h += '<div class="small-note" style="margin-bottom:10px;">' + TR_MES_NOMES[m] + ' &middot; Filtro: <b>' + escHtml(naFiltroRot()) + '</b>. Meta = previsto no Pre Cierre do mes; realizado = ficha economica. Valores com <sup style="color:var(--warn);">p</sup> sao previsao do Pre Cierre (mes ainda sem ficha). Nos meses com ficha, projeto que nao esta na ficha fica de fora. ' + cfg.nota + '</div>';
   const tot = naProgCalc(codes, m, cfg);
   const dAc = tot.acima && tot.acimaAnt ? tot.acima.v - tot.acimaAnt.v : null;
   h += '<div class="na-kpis">' +
@@ -15300,7 +15323,7 @@ function naRenderInd(el, mkey) {
   const alvo = sel ? [sel] : codes;
   const os = MESES.map(function(mm) { return naIndCalc(alvo, mm); });
   h += '<div class="na-sec" id="na-bi"><div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between;"><h3>Comportamento mes a mes' + (sel ? ': ' + escHtml(sel + ' - ' + NA_INFO[sel].n) : '') + '</h3>' + naProjSelect(codes) + '</div>' +
-    '<div class="small-note">Escolha o mercado e a divisao no filtro acima, ou um projeto. Meses fechados = real; os demais = previsao do Pre Cierre.</div>' +
+    '<div class="small-note">Escolha o mercado e a divisao no filtro acima, ou um projeto. Meses com ficha = real (so projetos que estao na ficha); os demais = previsao do Pre Cierre.</div>' +
     naGrafico('na-gr-ind', { titulo: 'indicadores', fmt: function(v) { return naX(v); }, series: [
       { nome: 'DPF / Ingresso', cor: NA_CORES[0], vals: os.map(function(o) { return o.rDpf; }), prev: os.map(function(o) { return !o.real; }) },
       { nome: 'Deuda / Faturamento', cor: NA_CORES[1], vals: os.map(function(o) { return o.rDeu; }), prev: os.map(function(o) { return !o.real; }) }
