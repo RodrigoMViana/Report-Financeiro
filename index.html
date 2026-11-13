@@ -14479,7 +14479,7 @@ async function naSubirFicha(inp) {
   if (!files.length || !NA) return;
   naMsg('Lendo ' + files.length + ' ficha(s)...');
   const novos = {}, rejeitados = [];
-  let erros = 0, ignorados = 0;
+  let erros = 0, ignorados = 0, semVendas = 0;
   // a ficha resumo traz tambem centros de custo internos (disponibilidade, repercussoes...): so entram os codigos
   // que estao em algum Pre Cierre guardado
   const noPC = {};
@@ -14501,6 +14501,8 @@ async function naSubirFicha(inp) {
         // codigo fora do padrao 99AP999 (ex.: "AP0073 SIGRH AP", "5AP082 ..."): o leitor devolve codigo + nome
         const code = String(code0).trim().split(/\s+/)[0];
         if (filtra && !noPC[code]) { ignorados++; return; }
+        // sem a linha de Vendas e sem outro problema = codigo interno (produtivo interno, custos): so conta
+        if (r.problemas.length === 1 && String(r.problemas[0]).endsWith("nao encontrada(s): Vendas")) { semVendas++; delete novos[code]; return; }
         if (r.problemas.length) { rejeitados.push(code + ': ' + r.problemas.join('; ')); delete novos[code]; return; }
         const m = {};
         MESES.forEach(function(mk, i) {
@@ -14534,8 +14536,10 @@ async function naSubirFicha(inp) {
   naMsg('Ficha: ' + (codes.length - antigas) + ' projeto(s) atualizados.' + (ignorados ? ' ' + ignorados + ' codigo(s) da ficha nao estao no Pre Cierre (centros de custo internos etc.) e foram ignorados.' : '') +
     (filtra ? '' : ' Suba tambem o Pre Cierre: so com ele os projetos ganham mercado e divisao.') +
     (antigas ? ' ' + antigas + ' projeto(s) ja tinham ficha extraida depois desta e ficaram como estavam.' : '') +
-    (rejeitados.length ? ' NAO lidos (conferencia falhou): ' + rejeitados.join(' | ') : '') + (erros ? ' ' + erros + ' arquivo(s) nao reconhecidos.' : '') + (rc.ok ? '' : ' FALHOU ao gravar o indice.'),
+    (semVendas ? ' ' + semVendas + ' codigo(s) sem linha de Vendas (internos) ignorados.' : '') +
+    (rejeitados.length ? ' ' + rejeitados.length + ' projeto(s) NAO lidos (conferencia falhou).' : '') + (erros ? ' ' + erros + ' arquivo(s) nao reconhecidos.' : '') + (rc.ok ? '' : ' FALHOU ao gravar o indice.'),
     rejeitados.length || erros || !rc.ok ? 'warn' : 'ok');
+  if (rejeitados.length) await uiAlert('Estes projetos NAO foram atualizados, porque a leitura da ficha nao passou na conferencia:\n\n- ' + rejeitados.join('\n- '), { titulo: 'Fichas com problema' });
   naRenderAtivo();
 }
 
@@ -14767,6 +14771,7 @@ function naCabecalho(mkey, base) {
   const lst = naSnapsOrdenados();
   const fonte = !base ? 'Nenhum Pre Cierre enviado ainda.' :
     'Pre Cierre usado: <b>' + TR_MES_NOMES[base.mes] + '</b> (' + escHtml(base.arquivo) + ')' + (base.mes !== mkey ? ' <span class="na-warn">-- nao ha Pre Cierre de ' + TR_MES_NOMES[mkey] + '</span>' : '') +
+    (mkey !== document.getElementById('month-select').value ? ' <span class="na-warn">&middot; mostrando ' + TR_MES_NOMES[mkey] + ': ainda nao ha Pre Cierre de ' + TR_MES_NOMES[document.getElementById('month-select').value] + '</span>' : '') +
     ' &middot; Ficha economica: ' + (NA.ficha ? 'enviada ' + escHtml(trLixoData(NA.ficha.t)) + ' (' + Object.keys(NA.ficha.projetos).length + ' projetos)' : '<span class="na-warn">nao enviada</span>');
   const guardados = lst.length ? '<details style="display:inline-block;"><summary style="cursor:pointer;">' + lst.length + ' Pre Cierre guardado(s): ' + lst.map(function(s) { return s.mes; }).join(', ') + '</summary>' +
     lst.map(function(s) { return '<div style="padding:2px 0;">' + TR_MES_NOMES[s.mes] + ' &middot; ' + escHtml(s.arquivo) + ' &middot; ' + Object.keys(s.projetos).length + ' projetos &middot; ' + escHtml(trLixoData(s.t)) +
@@ -14834,12 +14839,21 @@ function naModoAplicar() {
   if (on && !ativa) showTab(NA_ULTIMA);
   else if (!on && ativa) showTab('fechamento');
 }
+// Mes usado na visao da Naira: o do topo, se ja ha Pre Cierre dele; senao o do ultimo Pre Cierre guardado ate ele
+// (ex.: em novembro, sem o Pre Cierre de novembro, a visao fica em outubro -- pedido do usuario). Pre Cierre lido
+// errado (sem meses de previsao) nao conta.
+function naMesRef(sel) {
+  if (!NA || NA.snaps[sel]) return sel;
+  const ok = naSnapsOrdenados().filter(function(s) { return NA_MES_IDX[s.mes] <= NA_MES_IDX[sel] && MESES.some(function(m) { return s.status[m] === 'FCST'; }); });
+  return ok.length ? ok[ok.length - 1].mes : sel;
+}
 function naRenderAtivo() {
   const aba = naAbaAtiva();
   if (!aba || CURRENT_GESTOR !== 'Naira') return;
   if (NA_ULTIMA !== aba) { NA_ULTIMA = aba; try { localStorage.setItem('pr_na_aba', aba); } catch (e) {} }
   const sub = document.getElementById('header-sub');
-  if (sub) sub.textContent = 'Visao executiva AAPP + Sanidad (Naira) · mes de referencia: ' + MESES_NOMES_PC[document.getElementById('month-select').value] + '/2026';
+  const sel = document.getElementById('month-select').value, mref = NA_MODE === 'unlocked' ? naMesRef(sel) : sel;
+  if (sub) sub.textContent = 'Visao executiva AAPP + Sanidad (Naira) · mes de referencia: ' + MESES_NOMES_PC[mref] + '/2026' + (mref !== sel ? ' (ainda sem Pre Cierre de ' + MESES_NOMES_PC[sel] + ')' : '');
   NA_TABS.forEach(function(t) { if (t !== aba) { const r = document.getElementById('na-root-' + t); if (r && r.innerHTML) { r.innerHTML = ''; r.removeAttribute('data-na'); } } });
   const el = document.getElementById('na-root-' + aba);
   if (!el) return;
@@ -14849,7 +14863,7 @@ function naRenderAtivo() {
     return;
   }
   el.setAttribute('data-na', 'unlocked');
-  const mkey = document.getElementById('month-select').value;
+  const mkey = mref;
   NA_GR = {};
   try {
     ({ naexec: naRenderExec, nareview: naRenderReview, nafat: naRenderProg, nacob: naRenderProg, naind: naRenderInd })[aba](el, mkey, aba);
